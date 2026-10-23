@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass
+from typing import Callable
 from datetime import datetime, timezone
 
 from psycopg_pool import ConnectionPool
@@ -74,6 +76,8 @@ class AppState:
         self.pool = pool
         self.broker = Broker()
         self.recalculations = 0
+        # Вызываются после каждого пересчёта: (прошлый результат, новый результат, причина).
+        self.listeners: list[Callable] = []
         # Изменения данных и настроек выполняются по одному: чтение → запись → пересчёт.
         self.write_lock = threading.RLock()
         self._lock = threading.Lock()
@@ -99,6 +103,7 @@ class AppState:
                 transitions = db.transitions(conn)
             settings, settings_version = found if found else (default_settings(), 0)
             result = evaluate(snapshot, settings)
+            previous = self._current.result if self._current else None
             version = (self._current.version + 1) if self._current else 1
             self._current = Current(
                 version=version,
@@ -120,4 +125,9 @@ class AppState:
             "expectedLossEur": round(s.expected_loss / 100, 2),
             "levels": s.levels,
         })
+        for listener in self.listeners:
+            try:
+                listener(previous, result, reason)
+            except Exception:  # уведомления не должны ломать пересчёт
+                logging.getLogger("radar").exception("Ошибка обработчика пересчёта")
         return self._current

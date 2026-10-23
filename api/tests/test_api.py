@@ -142,3 +142,22 @@ def test_login_rate_limit(client):
     for _ in range(5):
         assert client.post("/api/v1/auth/login", json={"login": "nobody", "password": "x"}).status_code == 401
     assert client.post("/api/v1/auth/login", json={"login": "nobody", "password": "x"}).status_code == 429
+
+
+def test_telegram_bot_requires_link_code_and_alerts(client, auth):
+    from app.telegram import TelegramBot
+    bot = TelegramBot("0:test", "link-code-123", client.app.state.radar, "http://localhost:8080")
+    assert "код доступа" in bot.handle(1001, "u", "/top")
+    assert "код доступа" in bot.handle(1001, "u", "/start wrong-code")
+    assert "Готово" in bot.handle(1001, "u", "/start link-code-123")
+    assert "Под угрозой" in bot.handle(1001, "u", "/summary")
+    assert "score" in bot.handle(1001, "u", "/client 5")
+
+    radar = client.app.state.radar
+    before = radar.current.result
+    client.patch("/api/v1/model/settings", headers=auth, json={"thresholds": {"high": 31}})
+    bot.on_recalculated(before, radar.current.result, "settings")
+    chat_id, text = bot._outbox.get_nowait()
+    assert chat_id == 1001 and "В высокий риск перешли" in text
+    client.patch("/api/v1/model/settings", headers=auth, json={"thresholds": {"high": 60}})
+    assert "отключены" in bot.handle(1001, "u", "/stop")

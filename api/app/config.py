@@ -22,6 +22,8 @@ class Config:
     oidc_client_id: str | None
     oidc_client_secret: str | None
     public_url: str
+    telegram_token: str | None
+    telegram_link_code: str | None
 
 
 def _path(value: str | None) -> Path | None:
@@ -32,6 +34,9 @@ def load_config() -> Config:
     password = os.environ.get("ADMIN_PASSWORD", "")
     if len(password) < 8:
         raise RuntimeError("ADMIN_PASSWORD не задан или короче 8 символов")
+    link_code = os.environ.get("TELEGRAM_LINK_CODE") or None
+    if os.environ.get("TELEGRAM_BOT_TOKEN") and (not link_code or len(link_code) < 8):
+        raise RuntimeError("Для бота нужен TELEGRAM_LINK_CODE не короче 8 символов")
     token = os.environ.get("METRICS_TOKEN", "")
     if len(token) < 16:
         raise RuntimeError("METRICS_TOKEN не задан или короче 16 символов")
@@ -49,4 +54,6 @@ def load_config() -> Config:
         oidc_client_id=os.environ.get("OIDC_CLIENT_ID") or None,
         oidc_client_secret=os.environ.get("OIDC_CLIENT_SECRET") or None,
         public_url=os.environ.get("PUBLIC_URL", "http://localhost:8080").rstrip("/"),
+        telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,
+        telegram_link_code=link_code,
     )

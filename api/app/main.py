@@ -16,6 +16,7 @@ from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
 from app.state import AppState
+from app.telegram import TelegramBot
 
 log = logging.getLogger("radar")
 
@@ -61,9 +62,15 @@ async def lifespan(app: FastAPI):
     app.state.radar = radar
     app.state.login_limiter = LoginLimiter()
     app.state.metrics_registry = metrics.build_registry(radar)
+    bot = None
+    if config.telegram_token and config.telegram_link_code:
+        bot = TelegramBot(config.telegram_token, config.telegram_link_code, radar, config.public_url)
+        bot.start()
     try:
         yield
     finally:
+        if bot:
+            bot.stop()
         pool.close()
 
 

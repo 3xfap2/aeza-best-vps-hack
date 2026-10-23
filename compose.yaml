@@ -35,6 +35,8 @@ services:
       OIDC_ISSUER: http://dex:5556/dex
       OIDC_PUBLIC_ISSUER: http://localhost:5556/dex
       OIDC_CLIENT_ID: churn-radar
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_LINK_CODE: ${TELEGRAM_LINK_CODE:-}
     depends_on:
       db:
         condition: service_healthy
