@@ -98,6 +98,8 @@ export default function Overview() {
           <RadarCard customers={data!.customers} total={s.expectedLoss} />
           <ChartCard timeline={data!.timeline} />
 
+          <CausesCard summary={s} />
+
           <section className="ro-card ro-top5" aria-labelledby="t5-t">
             <div className="ro-cardhead"><h2 id="t5-t">Топ-5 клиентов по сумме под угрозой</h2>
               <Link className="ro-link" to="/app/customers?sort=expectedLoss">Все клиенты<Icon name="chev" /></Link></div>
@@ -200,6 +202,65 @@ function ChartCard({ timeline }: { timeline: Timeline }) {
         <div><span className="ro-small">Средний день, прогноз</span><b>{eur0(forecast.length ? sum(forecast) / forecast.length : 0)}</b></div>
       </div>
       <p className="ro-small">{timeline.summary} Для удалений из исходного снимка дата восстановлена по правилу «срок + 5 дней», остальные — из журнала переходов.</p>
+    </section>
+  )
+}
+
+const KIND_TITLE = {
+  involuntary: ['Недобровольный отток', 'клиент мог бы остаться, но не прошла оплата — напомнить и помочь оплатить'],
+  voluntary: ['Добровольный отток', 'клиент сам выключил автопродление или сервер — узнать причину и предложить вариант'],
+} as const
+
+function CausesCard({ summary }: { summary: Summary }) {
+  const [rate, setRate] = useState(30)
+  const atRisk = summary.causes.reduce((a, g) => a + g.expectedLoss, 0)
+  const kinds = (['involuntary', 'voluntary'] as const).map((k) => {
+    const items = summary.causes.filter((g) => g.kind === k)
+    return { k, items, loss: items.reduce((a, g) => a + g.expectedLoss, 0), count: items.reduce((a, g) => a + g.customers, 0) }
+  })
+  const max = Math.max(...summary.causes.map((g) => g.expectedLoss), 1)
+  return (
+    <section className="ro-card causes" aria-labelledby="cause-t">
+      <div className="ro-cardhead"><h2 id="cause-t">За что мы теряем деньги</h2>
+        <span className="ro-small">клиенты высокого и среднего риска по главной причине</span></div>
+      {summary.causes.length === 0 ? <p className="ro-small">Клиентов под риском нет.</p> : (
+        <div className="causes__grid">
+          {kinds.map(({ k, items, loss, count }) => (
+            <div key={k} className="causes__kind">
+              <div className="causes__head">
+                <b>{KIND_TITLE[k][0]}</b>
+                <span className="ro-mono">{eur(loss)} · {count} кл. · {atRisk ? Math.round(loss / atRisk * 100) : 0} %</span>
+              </div>
+              <p className="ro-small">{KIND_TITLE[k][1]}</p>
+              {items.length === 0 ? <p className="ro-small">—</p> : (
+                <ul>
+                  {items.map((g) => (
+                    <li key={g.feature}>
+                      <div className="causes__row">
+                        <span>{g.title}</span>
+                        <span className="ro-mono">{eur(g.expectedLoss)} · {g.customers}</span>
+                      </div>
+                      <div className={`causes__bar causes__bar--${k}`}><i style={{ width: `${g.expectedLoss / max * 100}%` }} /></div>
+                      <div className="causes__links">
+                        <Link className="ro-link" to={`/app/customers?cause=${g.feature}&sort=expectedLoss`}>Список</Link>
+                        <a className="ro-link" href={`/api/v1/customers/export.csv?cause=${g.feature}&sort=expectedLoss`}>CSV для обзвона</a>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+          <div className="causes__roi ro-panel">
+            <label htmlFor="roi" className="ro-label">Если удержать</label>
+            <div className="causes__roiv"><b className="ro-display">{rate} %</b><span className="ro-small">клиентов под риском</span></div>
+            <input id="roi" className="ro-range" type="range" min={0} max={100} step={5} value={rate}
+              style={{ ['--p' as string]: `${rate}%` }} onChange={(e) => setRate(Number(e.target.value))} />
+            <p className="ro-text">сохраним <b className="ro-mono">{eur(atRisk * rate / 100)}</b> выручки за {summary.horizonDays} дней</p>
+            <p className="ro-small">Ориентир рынка: напоминания об оплате возвращают 20–50 % неуспешных платежей. Расчёт: ожидаемая потеря клиентов под риском × доля удержанных.</p>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

@@ -206,3 +206,14 @@ def test_new_feature_is_picked_up_everywhere(client, auth):
         # признак убрали из кода — сохранённый вес не мешает загрузке настроек и пересчёту
         client.app.state.radar.recalculate("test")
         assert "withdrawable_balance" not in client.get("/api/v1/model/settings", headers=auth).json()["settings"]["features"]
+
+
+def test_cause_filter_and_csv(client, auth):
+    summary = client.get("/api/v1/analytics/summary", headers=auth).json()
+    assert summary["causes"], "у данных кейса есть клиенты под риском"
+    top = summary["causes"][0]
+    page = client.get(f"/api/v1/customers?cause={top['feature']}&pageSize=200", headers=auth).json()
+    assert page["total"] == top["customers"]
+    csv = client.get(f"/api/v1/customers/export.csv?cause={top['feature']}", headers=auth)
+    assert csv.status_code == 200 and csv.text.count("\n") == top["customers"] + 1
+    assert "churn_radar_expected_loss_by_cause_eur" in client.get("/metrics", headers=auth).text

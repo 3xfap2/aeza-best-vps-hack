@@ -48,6 +48,13 @@ class RadarCollector:
         at_risk.add_metric([horizon], eur(s.revenue_at_risk))
         yield at_risk
 
+        by_cause = GaugeMetricFamily("churn_radar_expected_loss_by_cause_eur",
+                                     "Ожидаемая потеря клиентов высокого и среднего риска по главной причине, EUR",
+                                     labels=["cause", "kind"])
+        for g in s.causes:
+            by_cause.add_metric([g["feature"], g["kind"]], eur(g["expected_loss"]))
+        yield by_cause
+
         yield GaugeMetricFamily("churn_radar_services_at_risk", "Услуги со score не ниже порога среднего риска",
                                 value=s.services_at_risk)
         yield GaugeMetricFamily("churn_radar_data_quality_issues", "Найденные противоречия в данных",

@@ -148,3 +148,15 @@ def test_snapshot_validation_reports_field():
     raw["services"][0]["ownerId"] = 999
     with pytest.raises(ValidationError, match=r"services\[0\]\.ownerId"):
         SnapshotIn.model_validate(raw)
+
+
+def test_causes_split_involuntary_and_voluntary():
+    accounts = [account(1, balance=0), account(2)]
+    services = [service(1, owner=1, status="prolong_wait", expires_in_days=-6),  # удаление просрочено: 60 баллов
+                service(2, owner=2, autoprolong=False, expires_in_days=1)]
+    r = evaluate(snap(accounts, services), default_settings())
+    causes = {g["feature"]: g for g in r.summary.causes}
+    assert causes["prolong_wait"]["kind"] == "involuntary" and causes["prolong_wait"]["customers"] == 1
+    assert causes["expiring_no_autoprolong"]["kind"] == "voluntary"
+    assert sum(g["expected_loss"] for g in r.summary.causes) == pytest.approx(
+        sum(c.expected_loss for c in r.customers if c.level in ("high", "medium")))

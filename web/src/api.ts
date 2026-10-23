@@ -37,6 +37,7 @@ export interface Summary {
   levels: Record<Level, number>; levelLoss: Record<Level, number>
   expectedLoss: number; worstCase: number; revenueAtRisk: number; balanceAtRisk: number
   servicesAtRisk: number; qualityIssues: number; explanation: string
+  causes: { feature: string; title: string; kind: 'involuntary' | 'voluntary'; customers: number; expectedLoss: number }[]
   version: number; computedAt: string; durationMs: number
 }
 export interface TimelinePoint {
@@ -107,6 +108,11 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+export const CAUSE_TITLE: Record<string, string> = {
+  prolong_wait: 'Ждёт оплаты', insufficient_funds: 'Не хватает средств', unpaid_transactions: 'Неоплаченные счета',
+  expiring_no_autoprolong: 'Истекает без автопродления', suspended: 'Сервер выключен',
 }
 
 export const LEVEL_TITLE: Record<Level, string> = {

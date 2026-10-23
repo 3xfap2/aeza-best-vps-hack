@@ -129,10 +129,19 @@ class SummaryOut(BaseModel):
     balanceAtRisk: float = Field(description="Доступные деньги на счетах клиентов высокого и среднего риска, €")
     servicesAtRisk: int
     qualityIssues: int
+    causes: list[CauseOut] = Field(description="Клиенты высокого и среднего риска по главной причине")
     explanation: str
     version: int
     computedAt: datetime
     durationMs: float
+
+
+class CauseOut(BaseModel):
+    feature: str
+    title: str
+    kind: Literal["involuntary", "voluntary"] = Field(description="involuntary — не прошла оплата; voluntary — решение клиента")
+    customers: int
+    expectedLoss: float
 
 
 class TimelinePointOut(BaseModel):
@@ -230,6 +239,8 @@ def summary_out(result: EngineResult, version: int, computed_at: datetime, durat
         balanceAtRisk=eur(s.balance_at_risk),
         servicesAtRisk=s.services_at_risk,
         qualityIssues=s.quality_issues,
+        causes=[CauseOut(feature=g["feature"], title=g["title"], kind=g["kind"], customers=g["customers"],
+                         expectedLoss=eur(g["expected_loss"])) for g in s.causes],
         explanation=(
             f"Ожидаемая потеря — сколько выручки за {s.horizon_days} дн. бизнес, скорее всего, не получит: "
             "для каждой действующей услуги цена, приведённая к горизонту, умножается на вероятность непродления "

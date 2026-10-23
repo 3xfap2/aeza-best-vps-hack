@@ -236,6 +236,23 @@
               ],
               "title": "Hasissues"
             }
+          },
+          {
+            "name": "cause",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cause"
+            }
           }
         ],
         "responses": {
@@ -371,6 +388,25 @@
               "title": "Hasissues"
             },
             "description": "Только клиенты с противоречиями в данных"
+          },
+          {
+            "name": "cause",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Главная причина риска (ключ признака) — клиенты высокого и среднего риска",
+              "title": "Cause"
+            },
+            "description": "Главная причина риска (ключ признака) — клиенты высокого и среднего риска"
           },
           {
             "name": "page",
@@ -1257,6 +1293,44 @@
           "enabled"
         ],
         "title": "AutoprolongEvent"
+      },
+      "CauseOut": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "involuntary",
+              "voluntary"
+            ],
+            "title": "Kind",
+            "description": "involuntary — не прошла оплата; voluntary — решение клиента"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "title",
+          "kind",
+          "customers",
+          "expectedLoss"
+        ],
+        "title": "CauseOut"
       },
       "ContributionOut": {
         "properties": {
@@ -2519,6 +2593,14 @@
             "type": "integer",
             "title": "Qualityissues"
           },
+          "causes": {
+            "items": {
+              "$ref": "#/components/schemas/CauseOut"
+            },
+            "type": "array",
+            "title": "Causes",
+            "description": "Клиенты высокого и среднего риска по главной причине"
+          },
           "explanation": {
             "type": "string",
             "title": "Explanation"
@@ -2550,6 +2632,7 @@
           "balanceAtRisk",
           "servicesAtRisk",
           "qualityIssues",
+          "causes",
           "explanation",
           "version",
           "computedAt",

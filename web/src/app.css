@@ -156,3 +156,25 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 /* email и ID в таблицах — одной строкой */
 .ro-table .ro-mono, .ro-table .row-link { white-space: nowrap; }
 .contribs__svc { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+
+/* --- за что теряем деньги --- */
+.causes { grid-column: 1 / -1; padding: 24px; display: grid; gap: 16px; }
+.causes__grid { display: grid; grid-template-columns: 1fr 1fr minmax(240px, .8fr); gap: 24px; align-items: start; }
+.causes__kind { display: grid; gap: 8px; }
+.causes__kind p { margin: 0; }
+.causes__head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+.causes__kind ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 12px; }
+.causes__row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.causes__bar { height: 8px; border-radius: 4px; background: var(--neutral-100); overflow: hidden; margin: 4px 0; }
+.causes__bar i { display: block; height: 100%; border-radius: 4px; }
+.causes__bar--involuntary i { background: var(--risk-high); }
+.causes__bar--voluntary i { background: repeating-linear-gradient(-45deg, var(--risk-mid) 0 3px, var(--risk-mid-bg) 3px 5px); }
+.causes__links { display: flex; gap: 16px; font-size: 13px; }
+.causes__roi { padding: 20px; display: grid; gap: 10px; }
+.causes__roi p { margin: 0; }
+.causes__roiv { display: flex; align-items: baseline; gap: 10px; }
+.causes__roiv b { font-size: 40px; line-height: 1; }
+.cause-chip { font: inherit; font-size: 14px; min-height: 36px; padding: 0 12px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--marker); background: var(--marker-100); color: var(--ink); }
+@media (max-width: 1100px) { .causes__grid { grid-template-columns: 1fr 1fr; } .causes__roi { grid-column: 1 / -1; } }
+@media (max-width: 860px) { .causes__grid { grid-template-columns: 1fr; } }

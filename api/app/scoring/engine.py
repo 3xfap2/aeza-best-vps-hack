@@ -73,6 +73,11 @@ class CustomerResult:
     actions: list[str]
     quality_issues: list[str]
 
+    @property
+    def main_cause(self) -> str | None:
+        """Признак с наибольшим вкладом — по нему клиент попадает в кампанию удержания."""
+        return self.contributions[0].feature if self.contributions else None
+
 
 @dataclass
 class TimelinePoint:
@@ -98,6 +103,11 @@ class Summary:
     balance_at_risk: int
     services_at_risk: int
     quality_issues: int
+    causes: list[dict]
+
+
+# Недобровольный отток — клиент мог бы остаться, но не прошла оплата; добровольный — решение клиента.
+INVOLUNTARY = frozenset({"prolong_wait", "insufficient_funds", "unpaid_transactions"})
 
 
 @dataclass
@@ -306,7 +316,24 @@ def _summarize(customers: list[CustomerResult], settings: ModelSettings, as_of: 
             if r.score is not None and r.score >= settings.thresholds.medium
         ),
         quality_issues=sum(len(c.quality_issues) for c in customers),
+        causes=_causes(at_risk),
     )
+
+
+def _causes(at_risk: list[CustomerResult]) -> list[dict]:
+    """Клиенты высокого и среднего риска по главной причине: кому какую кампанию запускать."""
+    titles = {f.key: f.title for f in FEATURES}
+    groups: dict[str, dict] = {}
+    for c in at_risk:
+        key = c.main_cause
+        if key is None:
+            continue
+        g = groups.setdefault(key, {"feature": key, "title": titles.get(key, key),
+                                    "kind": "involuntary" if key in INVOLUNTARY else "voluntary",
+                                    "customers": 0, "expected_loss": 0.0})
+        g["customers"] += 1
+        g["expected_loss"] += c.expected_loss
+    return sorted(groups.values(), key=lambda g: -g["expected_loss"])
 
 
 def timeline(result: EngineResult, snapshot: Snapshot, transitions: list[Transition]) -> list[TimelinePoint]:

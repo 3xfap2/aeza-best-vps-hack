@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { api, LEVEL_TITLE, type CustomerPage, type Level } from '../api'
+import { api, CAUSE_TITLE, LEVEL_TITLE, type CustomerPage, type Level } from '../api'
 import { useLiveData } from '../live'
 import { Empty, ErrorBox, eur, RiskBadge, ScoreBar, Skeleton, useChanged } from '../ui'
 import { StatusLine } from './Shell'
@@ -21,12 +21,14 @@ export default function Customers() {
   const levels = params.getAll('level') as Level[]
   const page = Number(params.get('page') ?? 1)
   const hasIssues = params.get('hasIssues') === '1'
+  const cause = params.get('cause')
   const [q, setQ] = useState(params.get('q') ?? '')
 
   const query = new URLSearchParams({ sort, order, page: String(page), pageSize: '25' })
   levels.forEach((l) => query.append('level', l))
   if (params.get('q')) query.set('q', params.get('q')!)
   if (hasIssues) query.set('hasIssues', 'true')
+  if (cause) query.set('cause', cause)
   const qs = query.toString()
 
   const { data, error, loading } = useLiveData(() => api<CustomerPage>(`/api/v1/customers?${qs}`), [qs])
@@ -78,6 +80,10 @@ export default function Customers() {
             <button key={l} type="button" aria-pressed={levels.includes(l)} onClick={() => toggleLevel(l)}>{LEVEL_TITLE[l]}</button>
           ))}
         </div>
+        {cause && (
+          <button type="button" className="cause-chip" onClick={() => update({ cause: null, page: null })}
+            aria-label="Снять фильтр по причине">Причина: {CAUSE_TITLE[cause] ?? cause} ×</button>
+        )}
         <label className="check">
           <input type="checkbox" checked={hasIssues} onChange={(e) => update({ hasIssues: e.target.checked ? '1' : null, page: null })} />
           Только с противоречиями в данных

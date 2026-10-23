@@ -22,7 +22,7 @@ SORT_KEYS = {
 }
 
 
-def _filtered(request: Request, sort: str, order: str, level, q, hasIssues):
+def _filtered(request: Request, sort: str, order: str, level, q, hasIssues, cause=None):
     cur = request.app.state.radar.current
     items = cur.result.customers
     if level:
@@ -32,6 +32,8 @@ def _filtered(request: Request, sort: str, order: str, level, q, hasIssues):
         items = [c for c in items if needle in c.account.email.lower() or needle == str(c.account.id)]
     if hasIssues:
         items = [c for c in items if c.quality_issues]
+    if cause:
+        items = [c for c in items if c.level in ("high", "medium") and c.main_cause == cause]
     key = SORT_KEYS[sort]
     # Клиенты без значения (нет оценки) всегда в конце — при любом направлении.
     present = [c for c in items if key(c) is not None]
@@ -49,8 +51,9 @@ def export_csv(
     level: list[Level] | None = Query(None),
     q: str | None = Query(None, max_length=100),
     hasIssues: bool | None = Query(None),
+    cause: str | None = Query(None, max_length=64),
 ) -> Response:
-    cur, rows = _filtered(request, sort, order, level, q, hasIssues)
+    cur, rows = _filtered(request, sort, order, level, q, hasIssues, cause)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["id", "email", "баланс_eur", "пополнено_eur", "score", "уровень", "потеря_30д_eur", "причина", "что_сделать"])
@@ -72,10 +75,11 @@ def list_customers(
     level: list[Level] | None = Query(None, description="Фильтр по уровням, можно несколько"),
     q: str | None = Query(None, max_length=100, description="Поиск по email или ID"),
     hasIssues: bool | None = Query(None, description="Только клиенты с противоречиями в данных"),
+    cause: str | None = Query(None, max_length=64, description="Главная причина риска (ключ признака) — клиенты высокого и среднего риска"),
     page: int = Query(1, ge=1),
     pageSize: int = Query(25, ge=1, le=200),
 ) -> CustomerPage:
-    cur, ordered = _filtered(request, sort, order, level, q, hasIssues)
+    cur, ordered = _filtered(request, sort, order, level, q, hasIssues, cause)
     start = (page - 1) * pageSize
     return CustomerPage(
         items=[list_item(c) for c in ordered[start:start + pageSize]],
