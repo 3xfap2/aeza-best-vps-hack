@@ -11,7 +11,7 @@ from fastapi.openapi.utils import get_openapi
 
 from app import db
 from app.config import load_config
-from app.routers import analytics, auth, customers, metrics, model, source, stream
+from app.routers import analytics, auth, customers, metrics, model, oidc, source, stream
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
@@ -77,7 +77,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for r in (auth.router, customers.router, analytics.router, model.router, source.router, stream.router, metrics.router):
+for r in (auth.router, oidc.router, customers.router, analytics.router, model.router, source.router, stream.router, metrics.router):
     app.include_router(r)
 
 
@@ -105,7 +105,7 @@ def custom_openapi() -> dict:
         "type": "http", "scheme": "bearer", "description": "Токен из POST /api/v1/auth/login",
     }
     for path, ops in schema["paths"].items():
-        if path == "/api/v1/auth/login":
+        if path == "/api/v1/auth/login" or path.startswith("/api/v1/auth/oidc"):
             continue
         for op in ops.values():
             op.setdefault("security", [{"bearerAuth": []}])

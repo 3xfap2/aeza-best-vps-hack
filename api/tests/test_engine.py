@@ -1,0 +1,150 @@
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from app.domain import Account, Service, Snapshot, Transaction
+from app.scoring.engine import evaluate, renewal_cost, revenue_over_horizon, timeline
+from app.scoring.settings import ModelSettings, default_settings, merge_patch
+from app.source import SnapshotIn
+
+CASE = Path(__file__).resolve().parents[2] / "data" / "case" / "data.json"
+T0 = datetime(2026, 10, 19, 15, tzinfo=timezone.utc)
+
+
+def account(id=1, balance=10_000, bonus=0, bonus_state="locked"):
+    return Account(id, f"user-{id}@example.test", balance, 0, balance, bonus, bonus_state)
+
+
+def service(id=1, owner=1, term="month", status="active", autoprolong=True, expires_in_days=10.0, price=1000):
+    expires = T0 + timedelta(days=expires_in_days)
+    return Service(id, f"service-{id}", owner, term, autoprolong, expires - timedelta(days=30), expires, status, price)
+
+
+def snap(accounts, services, transactions=()):
+    return Snapshot(list(accounts), list(services), list(transactions), reference_at=T0)
+
+
+def only(result):
+    return result.customers[0]
+
+
+def test_case_data_levels_and_issues():
+    data = SnapshotIn.model_validate(json.loads(CASE.read_text(encoding="utf-8"))).to_snapshot()
+    r = evaluate(data, default_settings())
+    assert r.summary.levels == {"high": 3, "medium": 2, "low": 1, "no_score": 2, "churned": 2}
+    assert r.summary.quality_issues == 8
+    assert all(c.score is None for c in r.customers if c.level in ("no_score", "churned"))
+
+
+def test_healthy_customer_is_low():
+    c = only(evaluate(snap([account()], [service(expires_in_days=200)]), default_settings()))
+    assert c.level == "low" and c.score == 0 and c.contributions == []
+
+
+def test_expiring_without_autoprolong_grows_as_deadline_nears():
+    far = only(evaluate(snap([account()], [service(autoprolong=False, expires_in_days=25)]), default_settings()))
+    near = only(evaluate(snap([account()], [service(autoprolong=False, expires_in_days=2)]), default_settings()))
+    assert 0 < far.score < near.score <= 35
+
+
+def test_prolong_wait_overdue_gets_full_strength_and_quality_flag():
+    c = only(evaluate(snap([account()], [service(status="prolong_wait", expires_in_days=-30)]), default_settings()))
+    pw = next(x for x in c.contributions if x.feature == "prolong_wait")
+    assert pw.strength == 1.0 and pw.points == 60
+    assert c.quality_issues and "удаление просрочено" in c.quality_issues[0]
+
+
+def test_insufficient_funds_counts_unlocked_bonus_only():
+    services = [service(price=5000, expires_in_days=3)]
+    locked = only(evaluate(snap([account(balance=3000, bonus=3000, bonus_state="locked")], services), default_settings()))
+    unlocked = only(evaluate(snap([account(balance=3000, bonus=3000, bonus_state="unlocked")], services), default_settings()))
+    assert any(x.feature == "insufficient_funds" for x in locked.contributions)
+    assert not any(x.feature == "insufficient_funds" for x in unlocked.contributions)
+
+
+def test_unpaid_transactions_share():
+    txs = [Transaction(i, 100, "performed" if i % 2 else "not_performed", T0 if i % 2 else None, T0, "prolong", 1)
+           for i in range(1, 5)]
+    c = only(evaluate(snap([account()], [service(expires_in_days=200)], txs), default_settings()))
+    unpaid = next(x for x in c.contributions if x.feature == "unpaid_transactions")
+    assert unpaid.strength == 0.5 and unpaid.points == 7.5
+
+
+def test_no_score_and_churned():
+    blocked = only(evaluate(snap([account()], [service(status="blocked"), service(2, status="deleted")]), default_settings()))
+    churned = only(evaluate(snap([account()], [service(status="deleted")]), default_settings()))
+    empty = only(evaluate(snap([account()], []), default_settings()))
+    assert (blocked.level, churned.level, empty.level) == ("no_score", "churned", "no_score")
+    assert "заблокировано 1 из 2" in blocked.note
+
+
+def test_score_capped_and_points_add_up():
+    s = service(status="prolong_wait", expires_in_days=-10, price=100_000)  # 60 + 40 + 15 > 100
+    unpaid = [Transaction(1, 100, "not_performed", None, T0, "prolong", 1)]
+    c = only(evaluate(snap([account(balance=0)], [s], unpaid), default_settings()))
+    assert sum(x.points for x in c.contributions) > 100
+    assert c.score == 100
+    services = [service(autoprolong=False, expires_in_days=15)]
+    c2 = only(evaluate(snap([account()], services), default_settings()))
+    assert c2.score == round(sum(x.points for x in c2.contributions))
+
+
+def test_weights_change_result_and_disabled_feature_is_ignored():
+    data = snap([account()], [service(autoprolong=False, expires_in_days=2)])
+    base = only(evaluate(data, default_settings()))
+    heavier = default_settings().model_copy(deep=True)
+    heavier.features["expiring_no_autoprolong"].weight = 90
+    off = default_settings().model_copy(deep=True)
+    off.features["expiring_no_autoprolong"].enabled = False
+    assert only(evaluate(data, heavier)).score > base.score
+    assert only(evaluate(data, off)).score == 0
+
+
+def test_money_is_revenue_times_probability():
+    s = service(autoprolong=False, expires_in_days=5, price=3000)
+    r = evaluate(snap([account()], [s]), default_settings())
+    c = only(r)
+    expected = revenue_over_horizon(s, 30) * c.services[0].score / 100
+    assert c.expected_loss == pytest.approx(expected)
+    assert r.summary.expected_loss == pytest.approx(expected)
+
+
+def test_hourly_renewal_cost_covers_horizon():
+    s = service(term="hour", expires_in_days=0.5, price=100)
+    assert renewal_cost(s, 0.5, 30) == (1 + int((30 - 0.5) // (1 / 24))) * 100
+
+
+def test_thresholds_must_be_ordered():
+    with pytest.raises(ValidationError):
+        ModelSettings.model_validate({"features": {}, "thresholds": {"high": 20, "medium": 30}})
+
+
+def test_unknown_feature_rejected_and_new_feature_gets_default():
+    with pytest.raises(ValidationError):
+        ModelSettings.model_validate({"features": {"no_such": {"weight": 1}}})
+    s = ModelSettings.model_validate({"features": {}})
+    assert s.features["prolong_wait"].weight == 60
+
+
+def test_merge_patch():
+    assert merge_patch({"a": {"b": 1, "c": 2}, "d": 3}, {"a": {"b": 5}, "d": None}) == {"a": {"b": 5, "c": 2}}
+
+
+def test_timeline_restores_deletion_date_and_forecasts():
+    deleted = service(1, status="deleted", expires_in_days=-10)
+    live = service(2, autoprolong=False, expires_in_days=4)
+    data = snap([account()], [deleted, live])
+    r = evaluate(data, default_settings())
+    points = {p.date: p for p in timeline(r, data, [])}
+    assert points[(T0 - timedelta(days=5)).date().isoformat()].fact_restored == 1
+    assert points[(T0 + timedelta(days=4)).date().isoformat()].forecast > 0
+
+
+def test_snapshot_validation_reports_field():
+    raw = json.loads(CASE.read_text(encoding="utf-8"))
+    raw["services"][0]["ownerId"] = 999
+    with pytest.raises(ValidationError, match=r"services\[0\]\.ownerId"):
+        SnapshotIn.model_validate(raw)
