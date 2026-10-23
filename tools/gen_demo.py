@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Расширенный демонстрационный набор данных «для наглядности» (разрешено кейсом).
+"""Расширенный набор данных «для наглядности» (разрешено кейсом): данные кейса + сгенерированные клиенты.
 
 Формат и ограничения — как в data.json организаторов. В отличие от их генератора,
 клиенты собраны из правдоподобных сценариев (лояльный, забывчивый, без денег,
@@ -25,9 +25,11 @@ TERM_FACTOR = {"hour": 1 / 730, "week": 0.25, "month": 1, "quarter_year": 2.85, 
 TERM_WEIGHTS = {"hour": 8, "week": 6, "month": 50, "quarter_year": 14, "half_year": 8, "year": 14}
 NAMES = ["web", "db", "vpn", "game", "shop", "api", "mail", "backup", "ci", "cdn", "bot", "crm"]
 
+# Доли сценариев подобраны под ориентиры рынка подписок/хостинга: отток 3–7 % в месяц,
+# недобровольная часть (неоплата) 20–50 % оттока. Источники — в docs/MODEL.md.
 PERSONAS = [  # (имя, доля)
-    ("loyal", 40), ("forgetful", 14), ("short_on_money", 12), ("waiting", 8),
-    ("sleeping", 8), ("churned", 10), ("blocked", 3), ("new_unpaid", 5),
+    ("loyal", 63), ("forgetful", 10), ("short_on_money", 4), ("waiting", 3),
+    ("sleeping", 7), ("churned", 9), ("blocked", 2), ("new_unpaid", 2),
 ]
 
 
@@ -45,12 +47,13 @@ def add_term(v: datetime, term: str, n: int = 1) -> datetime:
 
 
 class Gen:
-    def __init__(self, seed: int, ref: datetime) -> None:
+    def __init__(self, seed: int, ref: datetime, base: dict | None = None) -> None:
         self.rng = random.Random(seed)
         self.ref = ref
-        self.accounts: list[dict] = []
-        self.services: list[dict] = []
-        self.transactions: list[dict] = []
+        # Расширение тестового набора: записи кейса идут первыми и без изменений.
+        self.accounts: list[dict] = list(base["accounts"]) if base else []
+        self.services: list[dict] = list(base["services"]) if base else []
+        self.transactions: list[dict] = list(base["transactions"]) if base else []
 
     def pick(self, weights: dict[str, int]) -> str:
         return self.rng.choices(list(weights), weights=list(weights.values()))[0]
@@ -105,6 +108,12 @@ class Gen:
                 "createdAt": iso(at), "type": "order" if n == 0 else "prolong", "serviceId": svc["id"],
             })
 
+    def fund(self, acc: dict, services: list[dict]) -> None:
+        """Баланс, которого хватает на ближайшие продления всех услуг клиента."""
+        need = sum(s["price"] for s in services)
+        acc["balance"] = round(need * self.rng.uniform(1.3, 3.5))
+        acc["totalReplenished"] = acc["balance"] + self.rng.randint(1000, 300_000)
+
     def days(self, low: float, high: float) -> datetime:
         return self.ref + timedelta(days=self.rng.uniform(low, high))
 
@@ -118,12 +127,12 @@ class Gen:
             acc = self.account(round(monthly_spend * r.uniform(3, 12)))
             for t in terms:
                 self.service(acc, t, r.choice(["active"] * 9 + ["suspended"]), True, self.days(10, 300))
-        elif persona == "forgetful":
-            acc = self.account(round(monthly_spend * r.uniform(1, 6)))
-            for k, t in enumerate(terms):
-                t = "month" if t == "hour" else t
-                self.service(acc, t, "active", k > 0 and r.random() < 0.5,
-                             self.days(0.3, 25) if k == 0 else self.days(5, 200))
+        elif persona == "forgetful":  # деньги есть, но автопродление выключено
+            acc = self.account(0)
+            svcs = [self.service(acc, "month" if t == "hour" else t, "active", k > 0 and r.random() < 0.5,
+                                 self.days(0.3, 25) if k == 0 else self.days(5, 200))
+                    for k, t in enumerate(terms)]
+            self.fund(acc, svcs)
         elif persona == "short_on_money":
             acc = self.account(round(monthly_spend * r.uniform(0.05, 0.6)), bonus_unlocked=False)
             for k, t in enumerate(terms):
@@ -134,15 +143,16 @@ class Gen:
                          r.random() < 0.5, self.days(-4.8, -0.1), unpaid_share=0.4)
             for t in terms[1:]:
                 self.service(acc, t, "active", True, self.days(3, 90))
-        elif persona == "sleeping":
-            acc = self.account(round(monthly_spend * r.uniform(0.8, 4)))
-            for t in terms:
-                self.service(acc, t, "suspended", r.random() < 0.6, self.days(2, 120), unpaid_share=0.3)
+        elif persona == "sleeping":  # выключил сервер и не продлевает
+            acc = self.account(0)
+            svcs = [self.service(acc, "month" if t == "hour" else t, "suspended", r.random() < 0.3,
+                                 self.days(2, 40), unpaid_share=0.3) for t in terms]
+            self.fund(acc, svcs)
         elif persona == "churned":
             acc = self.account(r.randint(0, 2000))
             for t in terms:
                 self.service(acc, t if t != "hour" else "month", "deleted", r.random() < 0.3,
-                             self.days(-50, -5.2), unpaid_share=0.5)
+                             self.days(-60, -5.2), unpaid_share=0.5)
         elif persona == "blocked":
             acc = self.account(r.randint(0, 5000))
             for t in terms:
@@ -153,6 +163,7 @@ class Gen:
                          self.days(1, 25), unpaid_share=1.0)
 
     def build(self, count: int) -> dict:
+        count -= len(self.accounts)
         personas = [p for p, _ in PERSONAS]
         weights = [w for _, w in PERSONAS]
         for _ in range(count):
@@ -166,10 +177,13 @@ def main() -> None:
     p.add_argument("--accounts", type=int, default=200)
     p.add_argument("--seed", type=int, default=2026)
     p.add_argument("--reference", default="2026-10-19T15:00:00.000Z")
+    p.add_argument("--base", type=Path, default=Path("data/case/data.json"),
+                   help="Тестовый набор кейса, который расширяем (пусто — без него)")
     p.add_argument("--out", type=Path, default=Path("data/demo/data.json"))
     a = p.parse_args()
     ref = datetime.fromisoformat(a.reference.replace("Z", "+00:00")).astimezone(timezone.utc)
-    data = Gen(a.seed, ref).build(a.accounts)
+    base = json.loads(a.base.read_text(encoding="utf-8")) if a.base and str(a.base) else None
+    data = Gen(a.seed, ref, base).build(a.accounts)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"{a.out}: {len(data['accounts'])} аккаунтов, {len(data['services'])} услуг, "

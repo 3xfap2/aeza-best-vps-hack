@@ -29,7 +29,8 @@ services:
       <<: *secrets
       DATABASE_URL: postgresql://radar:${DB_PASSWORD:-radar-db-demo}@db:5432/radar
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
-      SEED_PATH: /app/data/case/data.json
+      SEED_PATH: /app/data/demo/data.json
+      CASE_PATH: /app/data/case/data.json
       DEMO_PATH: /app/data/demo/data.json
       PUBLIC_URL: http://localhost:8080
       OIDC_ISSUER: http://dex:5556/dex

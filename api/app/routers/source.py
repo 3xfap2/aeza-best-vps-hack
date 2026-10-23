@@ -111,16 +111,18 @@ def snapshot_info(request: Request, _: User = Depends(current_user)) -> Snapshot
     return SnapshotInfo(**info) if info else None
 
 
-@router.post("/demo", response_model=LoadResult, summary="Загрузить расширенный демонстрационный набор данных")
-def load_demo(request: Request, user: User = Depends(current_user)) -> LoadResult:
-    path = request.app.state.config.demo_path
+@router.post("/preset/{name}", response_model=LoadResult,
+             summary="Загрузить готовый набор: case — данные кейса (10 клиентов), extended — кейс + 190 сгенерированных")
+def load_preset(name: Literal["case", "extended"], request: Request, user: User = Depends(current_user)) -> LoadResult:
+    cfg = request.app.state.config
+    path = cfg.case_path if name == "case" else cfg.demo_path
     if not path or not path.exists():
-        raise HTTPException(404, "Файл расширенного набора не найден")
+        raise HTTPException(404, "Файл набора не найден")
     try:
         snap = SnapshotIn.model_validate(json.loads(path.read_text(encoding="utf-8")))
     except ValidationError as e:
-        raise HTTPException(500, f"Расширенный набор повреждён: {e.errors()[0]['msg']}") from e
-    return load_snapshot(request, snap, user.login, "demo")
+        raise HTTPException(500, f"Набор повреждён: {e.errors()[0]['msg']}") from e
+    return load_snapshot(request, snap, user.login, f"preset:{name}")
 
 
 @router.post("/events", response_model=EventResult,

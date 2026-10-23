@@ -161,3 +161,12 @@ def test_telegram_bot_requires_link_code_and_alerts(client, auth):
     assert chat_id == 1001 and "В высокий риск перешли" in text
     client.patch("/api/v1/model/settings", headers=auth, json={"thresholds": {"high": 60}})
     assert "отключены" in bot.handle(1001, "u", "/stop")
+
+
+def test_presets(client, auth):
+    r = client.post("/api/v1/source/preset/extended", headers=auth)
+    assert r.status_code == 200 and r.json()["accounts"] == 200
+    assert client.get("/api/v1/customers/1", headers=auth).json()["email"] == "user-0001@example.test"
+    r = client.post("/api/v1/source/preset/case", headers=auth)
+    assert r.status_code == 200 and r.json()["accounts"] == 10
+    assert client.post("/api/v1/source/preset/other", headers=auth).status_code == 422

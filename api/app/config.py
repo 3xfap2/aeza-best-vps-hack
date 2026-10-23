@@ -16,6 +16,7 @@ class Config:
     session_hours: int
     cookie_secure: bool
     seed_path: Path | None
+    case_path: Path | None
     demo_path: Path | None
     oidc_issuer: str | None
     oidc_public_issuer: str | None
@@ -47,7 +48,9 @@ def load_config() -> Config:
         metrics_token=token,
         session_hours=int(os.environ.get("SESSION_HOURS", "12")),
         cookie_secure=os.environ.get("COOKIE_SECURE", "false").lower() == "true",
-        seed_path=_path(os.environ.get("SEED_PATH", str(ROOT.parent / "data" / "case" / "data.json"))),
+        # При первом запуске грузим расширенный набор: данные кейса + сгенерированные клиенты.
+        seed_path=_path(os.environ.get("SEED_PATH", str(ROOT.parent / "data" / "demo" / "data.json"))),
+        case_path=_path(os.environ.get("CASE_PATH", str(ROOT.parent / "data" / "case" / "data.json"))),
         demo_path=_path(os.environ.get("DEMO_PATH", str(ROOT.parent / "data" / "demo" / "data.json"))),
         oidc_issuer=os.environ.get("OIDC_ISSUER") or None,
         oidc_public_issuer=os.environ.get("OIDC_PUBLIC_ISSUER") or os.environ.get("OIDC_ISSUER") or None,
