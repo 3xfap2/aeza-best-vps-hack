@@ -128,13 +128,20 @@ def main() -> None:
     live.append({"id": f"user-{low_act.account.id:04d}", "why": low_act.top_reason, "a": low_act.score,
                  "b": after2.score, "why2": "Сервер выключен клиентом"})
 
-    # Предпросмотр настройки: вес «Не хватает средств» 40 → 55.
-    tuned = settings.model_copy(deep=True)
-    tuned.features["insufficient_funds"].weight = 55
-    rt = evaluate(snap, tuned)
-    tune = {"feature": "Не хватает средств", "from": 40, "to": 55,
-            "highFrom": s.levels["high"], "highTo": rt.summary.levels["high"],
-            "lossDelta": eur(rt.summary.expected_loss - s.expected_loss)}
+    # Предпросмотр настройки: первый признак, у которого рост веса реально меняет число клиентов высокого риска.
+    titles = {f.key: f.title for f in FEATURES}
+    tune = None
+    for key, to in [("insufficient_funds", 55), ("expiring_no_autoprolong", 50), ("no_autoprolong_no_funds", 45),
+                    ("unpaid_transactions", 35), ("suspended", 40)]:
+        tuned = settings.model_copy(deep=True)
+        tuned.features[key].weight = to
+        rt = evaluate(snap, tuned)
+        if rt.summary.levels["high"] > s.levels["high"]:
+            tune = {"feature": titles[key], "from": int(settings.features[key].weight), "to": to,
+                    "highFrom": s.levels["high"], "highTo": rt.summary.levels["high"],
+                    "lossDelta": eur(rt.summary.expected_loss - s.expected_loss)}
+            break
+    assert tune, "ни одна настройка не меняет высокий риск — подберите кандидатов"
 
     # Формула: 6 клиентов, сила сигналов главной услуги по трём признакам.
     keys = ["prolong_wait", "insufficient_funds", "expiring_no_autoprolong"]
@@ -187,7 +194,8 @@ def main() -> None:
         "rank": rank, "live": live, "tune": tune, "formula": picks,
         "weights": {"wait": weights["prolong_wait"], "funds": weights["insufficient_funds"],
                     "exp": weights["expiring_no_autoprolong"], "unpaid": weights["unpaid_transactions"],
-                    "suspended": weights["suspended"]},
+                    "suspended": weights["suspended"],
+                    "others": [[f.title, f.default_weight] for f in FEATURES if f.key not in keys]},
         "chart": {"fact": fact, "forecast": fc, "labels": labels},
         "story": story,
     }

@@ -56,6 +56,7 @@ class ServiceResult:
     days_left: float
     contributions: list[Contribution] = field(default_factory=list)
     quality_issues: list[str] = field(default_factory=list)
+    ltv: float = 0.0            # евроценты, выручка за ожидаемый срок жизни
 
 
 @dataclass
@@ -68,6 +69,7 @@ class CustomerResult:
     expected_loss: float
     revenue_horizon: float
     renewal_need: int
+    ltv_at_risk: float
     services: list[ServiceResult]
     contributions: list[Contribution]
     actions: list[str]
@@ -99,6 +101,7 @@ class Summary:
     level_loss: dict[str, float]
     expected_loss: float
     worst_case: float
+    ltv_at_risk: float
     revenue_at_risk: float
     balance_at_risk: int
     services_at_risk: int
@@ -151,6 +154,15 @@ def revenue_over_horizon(service: Service, horizon_days: int) -> float:
     return service.price * horizon_days * 24 / service.term_hours
 
 
+LTV_CAP_MONTHS = 36
+
+
+def ltv(service: Service, monthly_churn_pct: float) -> float:
+    """Выручка услуги за ожидаемый срок жизни клиента: месячная выручка / базовый месячный отток (не больше 36 мес.)."""
+    monthly = service.price * 730 / service.term_hours
+    return monthly * min(100 / monthly_churn_pct, LTV_CAP_MONTHS)
+
+
 def evaluate(snapshot: Snapshot, settings: ModelSettings, now: datetime | None = None) -> EngineResult:
     as_of = resolve_as_of(settings, snapshot, now)
     horizon = settings.horizonDays
@@ -197,7 +209,9 @@ def _evaluate_customer(
             results.append(ServiceResult(s, None, 0.0, 0.0, 0.0, days[s.id], [], issues))
             continue
         total, unpaid = tx_stats.get(s.id, (0, 0))
-        ctx = ServiceContext(s, account, as_of, horizon, days[s.id], costs[s.id], account_need, total, unpaid)
+        gone = sum(1 for x in services if x.status in ("deleted", "blocked"))
+        ctx = ServiceContext(s, account, as_of, horizon, days[s.id], costs[s.id], account_need, total, unpaid,
+                             len(services), gone)
         contributions = []
         for feature in FEATURES:
             weight = settings.weight(feature.key)
@@ -214,12 +228,13 @@ def _evaluate_customer(
         probability = score / 100
         revenue = revenue_over_horizon(s, horizon)
         contributions.sort(key=lambda c: c.points, reverse=True)
-        results.append(ServiceResult(s, score, probability, revenue, revenue * probability, days[s.id], contributions, issues))
+        results.append(ServiceResult(s, score, probability, revenue, revenue * probability, days[s.id], contributions, issues,
+                                     ltv(s, settings.ltvMonthlyChurn)))
 
     quality = [f"{r.service.name}: {i}" for r in results for i in r.quality_issues]
     if not live:
         level, note = _no_live_level(services)
-        return CustomerResult(account, None, level, note, None, 0.0, 0.0, 0, results, [], [], quality)
+        return CustomerResult(account, None, level, note, None, 0.0, 0.0, 0, 0.0, results, [], [], quality)
 
     live_results = [r for r in results if r.score is not None]
     score = round(max(r.score for r in live_results))
@@ -236,6 +251,7 @@ def _evaluate_customer(
         expected_loss=sum(r.expected_loss for r in live_results),
         revenue_horizon=sum(r.revenue_horizon for r in live_results),
         renewal_need=account_need,
+        ltv_at_risk=sum(r.ltv * r.probability for r in live_results),
         services=results,
         contributions=contributions,
         actions=_actions(account, live_results, account_need, as_of),
@@ -259,7 +275,7 @@ def _no_live_level(services: list[Service]) -> tuple[str, str]:
 def _quality_issues(service: Service, days_left: float) -> list[str]:
     grace_days = GRACE_PERIOD.total_seconds() / 86400
     if service.status == "prolong_wait" and days_left + grace_days < 0:
-        return [f"ждёт оплаты дольше 5 дней (удаление просрочено на {humanize_days(-(days_left + grace_days))}) — статус в источнике не обновлён"]
+        return [f"ждёт оплаты дольше обычных 5 дней — удаление задержано на {humanize_days(-(days_left + grace_days))}; проверить в биллинге"]
     if service.status in ("active", "suspended") and days_left < -1:
         return [f"срок истёк {humanize_days(-days_left)} назад, а статус «{STATUS_TITLES[service.status]}»"]
     return []
@@ -279,7 +295,7 @@ def _actions(account: Account, live: list[ServiceResult], need: int, as_of: date
         if "prolong_wait" in feats:
             deadline = r.service.expiresAt + GRACE_PERIOD
             if deadline <= as_of:
-                actions.append(f"Проверить {name} в биллинге: удаление просрочено, клиент ещё может вернуться")
+                actions.append(f"Срочно связаться: {name} давно ждёт оплаты, удаление задержано — клиента ещё можно вернуть")
             else:
                 actions.append(f"Срочно связаться: {name} удалится {deadline:%d.%m %H:%M}, если не оплатить")
         elif "expiring_no_autoprolong" in feats:
@@ -308,6 +324,7 @@ def _summarize(customers: list[CustomerResult], settings: ModelSettings, as_of: 
         levels=levels,
         level_loss=level_loss,
         expected_loss=sum(c.expected_loss for c in customers),
+        ltv_at_risk=sum(c.ltv_at_risk for c in customers),
         worst_case=sum(c.revenue_horizon for c in customers if c.level == "high"),
         revenue_at_risk=sum(c.revenue_horizon for c in at_risk),
         balance_at_risk=sum(c.account.available_funds for c in at_risk),

@@ -16,6 +16,7 @@ function diffPatch(saved: ModelSettings, draft: ModelSettings) {
   if (Object.keys(features).length) patch.features = features
   if (saved.thresholds.high !== draft.thresholds.high || saved.thresholds.medium !== draft.thresholds.medium) patch.thresholds = draft.thresholds
   if (saved.horizonDays !== draft.horizonDays) patch.horizonDays = draft.horizonDays
+  if (saved.ltvMonthlyChurn !== draft.ltvMonthlyChurn) patch.ltvMonthlyChurn = draft.ltvMonthlyChurn
   if (saved.asOf.mode !== draft.asOf.mode || saved.asOf.value !== draft.asOf.value) patch.asOf = draft.asOf
   return patch
 }
@@ -134,6 +135,12 @@ export default function Model() {
                   onClick={() => setDraft({ ...draft, horizonDays: d })}>{d} дней</button>
               ))}
             </div>
+          </div>
+          <div className="model__group">
+            <h3 className="ro-label">LTV</h3>
+            <label className="field"><span>Базовый месячный отток, % — LTV = месячная выручка / отток (не больше 36 мес.)</span>
+              <input type="number" min={0.5} max={50} step={0.5} value={draft.ltvMonthlyChurn}
+                onChange={(e) => setDraft({ ...draft, ltvMonthlyChurn: Number(e.target.value) })} /></label>
           </div>
           <div className="model__group">
             <h3 className="ro-label">Дата расчёта</h3>

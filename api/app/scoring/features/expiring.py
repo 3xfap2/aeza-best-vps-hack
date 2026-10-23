@@ -5,6 +5,7 @@ class ExpiringWithoutAutoprolong(Feature):
     key = "expiring_no_autoprolong"
     title = "Скоро истекает без автопродления"
     description = "Автопродление выключено, а срок наступает в пределах горизонта. Чем ближе срок, тем выше сила."
+    order = 20
     default_weight = 35
 
     def evaluate(self, ctx: ServiceContext) -> Signal | None:

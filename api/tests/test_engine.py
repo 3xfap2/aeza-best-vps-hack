@@ -54,7 +54,7 @@ def test_prolong_wait_overdue_gets_full_strength_and_quality_flag():
     c = only(evaluate(snap([account()], [service(status="prolong_wait", expires_in_days=-30)]), default_settings()))
     pw = next(x for x in c.contributions if x.feature == "prolong_wait")
     assert pw.strength == 1.0 and pw.points == 60
-    assert c.quality_issues and "удаление просрочено" in c.quality_issues[0]
+    assert c.quality_issues and "удаление задержано" in c.quality_issues[0]
 
 
 def test_insufficient_funds_counts_unlocked_bonus_only():
@@ -160,3 +160,33 @@ def test_causes_split_involuntary_and_voluntary():
     assert causes["expiring_no_autoprolong"]["kind"] == "voluntary"
     assert sum(g["expected_loss"] for g in r.summary.causes) == pytest.approx(
         sum(c.expected_loss for c in r.customers if c.level in ("high", "medium")))
+
+
+def test_features_are_discovered_automatically():
+    from app.scoring.features import FEATURES
+    keys = [f.key for f in FEATURES]
+    assert {"no_autoprolong_no_funds", "partial_churn", "prolong_wait"} <= set(keys)
+    assert keys[0] == "prolong_wait"  # порядок показа задаёт order
+
+
+def test_no_autoprolong_and_no_money_combo():
+    poor = only(evaluate(snap([account(balance=100)], [service(autoprolong=False, expires_in_days=200, price=1000)]), default_settings()))
+    rich = only(evaluate(snap([account(balance=100_000)], [service(autoprolong=False, expires_in_days=200, price=1000)]), default_settings()))
+    assert any(x.feature == "no_autoprolong_no_funds" for x in poor.contributions)
+    assert not any(x.feature == "no_autoprolong_no_funds" for x in rich.contributions)
+
+
+def test_partial_churn_counts_deleted_and_blocked():
+    services = [service(1, expires_in_days=200), service(2, status="deleted"), service(3, status="blocked")]
+    c = only(evaluate(snap([account()], services), default_settings()))
+    pc = next(x for x in c.contributions if x.feature == "partial_churn")
+    assert pc.strength == pytest.approx(2 / 3, abs=1e-3) and "2 из 3" in pc.reason
+
+
+def test_ltv_is_monthly_revenue_over_churn_and_capped():
+    from app.scoring.engine import LTV_CAP_MONTHS, ltv
+    s = service(term="month", price=1000)
+    assert ltv(s, 5) == pytest.approx(1000 * 20)                    # 1 / 5 % = 20 месяцев
+    assert ltv(s, 1) == pytest.approx(1000 * LTV_CAP_MONTHS)        # не больше 36 месяцев
+    c = only(evaluate(snap([account()], [service(autoprolong=False, expires_in_days=3, price=1000)]), default_settings()))
+    assert c.ltv_at_risk == pytest.approx(ltv(c.services[0].service, 5) * c.services[0].probability)

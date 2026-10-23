@@ -43,6 +43,9 @@ class RadarCollector:
                                   "Выручка клиентов высокого риска за горизонт, EUR", labels=["horizon_days"])
         worst.add_metric([horizon], eur(s.worst_case))
         yield worst
+        ltv_m = GaugeMetricFamily("churn_radar_ltv_at_risk_eur", "LTV клиентов × вероятность непродления, EUR")
+        ltv_m.add_metric([], eur(s.ltv_at_risk))
+        yield ltv_m
         at_risk = GaugeMetricFamily("churn_radar_revenue_at_risk_eur",
                                     "Выручка клиентов высокого и среднего риска за горизонт, EUR", labels=["horizon_days"])
         at_risk.add_metric([horizon], eur(s.revenue_at_risk))

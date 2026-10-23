@@ -317,11 +317,11 @@ window.OTTOK_DATA = {
   {
    "id": "user-0027",
    "email": "user-0027@example.test",
-   "level": "mid",
-   "score": 56,
-   "threat": 23.49,
+   "level": "high",
+   "score": 81,
+   "threat": 33.94,
    "revenue": 41.8,
-   "prob": 0.56,
+   "prob": 0.81,
    "reason": "Истекает через 7 дней, автопродление выключено",
    "balance": 7.35,
    "plan": "backup-0064 · месяц"
@@ -378,10 +378,10 @@ window.OTTOK_DATA = {
    "id": "user-0032",
    "email": "user-0032@example.test",
    "level": "high",
-   "score": 64,
-   "threat": 23.99,
+   "score": 89,
+   "threat": 33.43,
    "revenue": 37.77,
-   "prob": 0.64,
+   "prob": 0.89,
    "reason": "На счёте € 14,06, а на продления за 30 дн. нужно € 38,29",
    "balance": 14.06,
    "plan": "bot-0072 · месяц"
@@ -641,11 +641,11 @@ window.OTTOK_DATA = {
   {
    "id": "user-0054",
    "email": "user-0054@example.test",
-   "level": "mid",
-   "score": 54,
-   "threat": 9.34,
+   "level": "high",
+   "score": 79,
+   "threat": 13.67,
    "revenue": 17.32,
-   "prob": 0.54,
+   "prob": 0.79,
    "reason": "На счёте € 5,45, а на продления за 30 дн. нужно € 17,56",
    "balance": 5.45,
    "plan": "game-0115 · месяц"
@@ -726,10 +726,10 @@ window.OTTOK_DATA = {
    "id": "user-0061",
    "email": "user-0061@example.test",
    "level": "high",
-   "score": 64,
-   "threat": 23.62,
+   "score": 89,
+   "threat": 32.9,
    "revenue": 37.14,
-   "prob": 0.64,
+   "prob": 0.89,
    "reason": "Ждёт оплаты, до удаления 3 дня",
    "balance": 4.08,
    "plan": "crm-0128 · месяц"
@@ -1374,10 +1374,10 @@ window.OTTOK_DATA = {
    "id": "user-0115",
    "email": "user-0115@example.test",
    "level": "high",
-   "score": 98,
-   "threat": 26.21,
+   "score": 100,
+   "threat": 26.76,
    "revenue": 26.76,
-   "prob": 0.98,
+   "prob": 1.0,
    "reason": "Ждёт оплаты, до удаления 1 день",
    "balance": 13.34,
    "plan": "ci-0227 · полгода"
@@ -1950,10 +1950,10 @@ window.OTTOK_DATA = {
    "id": "user-0163",
    "email": "user-0163@example.test",
    "level": "high",
-   "score": 74,
-   "threat": 26.31,
+   "score": 99,
+   "threat": 35.22,
    "revenue": 35.64,
-   "prob": 0.74,
+   "prob": 0.99,
    "reason": "Истекает через 4 дня, автопродление выключено",
    "balance": 10.66,
    "plan": "cdn-0308 · квартал"
@@ -2404,14 +2404,14 @@ window.OTTOK_DATA = {
   }
  ],
  "counts": {
-  "high": 11,
-  "mid": 19,
+  "high": 13,
+  "mid": 17,
   "low": 146,
   "none": 5,
   "gone": 19
  },
- "total": 8454.23,
- "worst": 11214.6,
+ "total": 8497.2,
+ "worst": 11273.72,
  "revenueAtRisk": 12720.18,
  "balanceAtRisk": 7713.03,
  "pinned": {
@@ -2433,13 +2433,13 @@ window.OTTOK_DATA = {
   },
   {
    "id": "user-0163",
-   "score": 74,
+   "score": 99,
    "bal": 10.66,
    "why": "Истекает через 4 дня, автопродление выключено"
   },
   {
    "id": "user-0032",
-   "score": 64,
+   "score": 89,
    "bal": 14.06,
    "why": "На счёте € 14,06, а на продления за 30 дн. нужно € 38,29"
   },
@@ -2480,12 +2480,12 @@ window.OTTOK_DATA = {
   }
  ],
  "tune": {
-  "feature": "Не хватает средств",
-  "from": 40,
-  "to": 55,
-  "highFrom": 11,
-  "highTo": 13,
-  "lossDelta": 965.46
+  "feature": "Скоро истекает без автопродления",
+  "from": 35,
+  "to": 50,
+  "highFrom": 13,
+  "highTo": 14,
+  "lossDelta": 148.76
  },
  "formula": [
   {
@@ -2499,14 +2499,14 @@ window.OTTOK_DATA = {
    "rev": 30.34
   },
   {
-   "id": "user-0150",
+   "id": "user-0115",
    "s": [
-    0.97,
-    0.98,
+    0.9,
+    0.92,
     0
    ],
-   "other": 2.1,
-   "rev": 28.92
+   "other": 32.5,
+   "rev": 26.76
   },
   {
    "id": "user-0163",
@@ -2515,7 +2515,7 @@ window.OTTOK_DATA = {
     0.7,
     0.88
    ],
-   "other": 15.0,
+   "other": 40.0,
    "rev": 35.64
   },
   {
@@ -2525,7 +2525,7 @@ window.OTTOK_DATA = {
     0.63,
     0.66
    ],
-   "other": 15.0,
+   "other": 40.0,
    "rev": 37.77
   },
   {
@@ -2535,7 +2535,7 @@ window.OTTOK_DATA = {
     0.36,
     0.76
    ],
-   "other": 15.0,
+   "other": 40.0,
    "rev": 41.8
   },
   {
@@ -2545,7 +2545,7 @@ window.OTTOK_DATA = {
     0.69,
     0.32
    ],
-   "other": 15.0,
+   "other": 40.0,
    "rev": 17.32
   }
  ],
@@ -2554,7 +2554,25 @@ window.OTTOK_DATA = {
   "funds": 40,
   "exp": 35,
   "unpaid": 15,
-  "suspended": 15
+  "suspended": 15,
+  "others": [
+   [
+    "Нет автопродления и нет денег",
+    25
+   ],
+   [
+    "Неоплаченные счета",
+    15
+   ],
+   [
+    "Сервер выключен клиентом",
+    15
+   ],
+   [
+    "Уже отказывался от услуг",
+    20
+   ]
+  ]
  },
  "chart": {
   "fact": [
@@ -2569,10 +2587,10 @@ window.OTTOK_DATA = {
    0.0
   ],
   "forecast": [
-   87.16,
+   87.72,
    28.66,
-   45.25,
-   37.43,
+   54.53,
+   46.34,
    2.15
   ],
   "labels": [

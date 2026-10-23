@@ -9,6 +9,7 @@ class ProlongWait(Feature):
     key = "prolong_wait"
     title = "Ждёт оплаты"
     description = "Срок услуги истёк, она ждёт оплаты 5 дней и затем удаляется. Чем ближе удаление, тем выше сила."
+    order = 10
     default_weight = 60
 
     def evaluate(self, ctx: ServiceContext) -> Signal | None:

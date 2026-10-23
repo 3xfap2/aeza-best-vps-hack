@@ -600,7 +600,7 @@
           return '<div class="ro-weight"><div class="ro-weight__top"><label for="w-' + uid + i + '">' + esc(f.name) + '</label><output for="w-' + uid + i + '" data-o="' + i + '">' + f.w + '</output></div>' +
             '<input class="ro-range" id="w-' + uid + i + '" type="range" min="0" max="100" step="1" value="' + f.w + '" data-i="' + i + '" aria-describedby="wd-' + uid + '"></div>';
         }).join('') +
-        '<div class="ro-weights__fixed" id="wd-' + uid + '"><span class="ro-small">Остальные признаки — с постоянным весом:</span><div><span>Неоплаченные счета</span><b>' + OD.weights.unpaid + '</b></div><div><span>Сервер выключен клиентом</span><b>' + OD.weights.suspended + '</b></div></div>' +
+        '<div class="ro-weights__fixed" id="wd-' + uid + '"><span class="ro-small">Остальные признаки — с постоянным весом:</span>' + OD.weights.others.map(function (o) { return '<div><span>' + esc(o[0]) + '</span><b>' + o[1] + '</b></div>'; }).join('') + '</div>' +
         '</div>' +
         '<div class="ro-card ro-card--lift ro-ftable"><div class="ro-ftable__head" aria-hidden="true"><span>Клиент</span>' + F_FEATS.map(function (f) { return '<span class="sig">' + f.short + '</span>'; }).join('') + '<span>Score</span><span>Уровень</span><span class="eur">€ / 30 дн</span></div>' +
         '<div class="ro-ftable__rows" role="list" aria-label="Клиенты, отсортированные по score"></div>' +

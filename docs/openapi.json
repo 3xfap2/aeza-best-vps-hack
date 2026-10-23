@@ -1478,6 +1478,11 @@
             "type": "number",
             "title": "Revenuehorizon"
           },
+          "ltvAtRisk": {
+            "type": "number",
+            "title": "Ltvatrisk",
+            "description": "Σ LTV услуг × вероятность непродления, €"
+          },
           "finances": {
             "$ref": "#/components/schemas/Finances"
           },
@@ -1545,6 +1550,7 @@
           "qualityIssues",
           "note",
           "revenueHorizon",
+          "ltvAtRisk",
           "finances",
           "contributions",
           "actions",
@@ -2032,6 +2038,14 @@
             "title": "Horizondays",
             "description": "Горизонт прогноза и денежной оценки, дней",
             "default": 30
+          },
+          "ltvMonthlyChurn": {
+            "type": "number",
+            "maximum": 50.0,
+            "minimum": 0.5,
+            "title": "Ltvmonthlychurn",
+            "description": "Базовый месячный отток для LTV, %: LTV = месячная выручка / отток",
+            "default": 5
           },
           "asOf": {
             "$ref": "#/components/schemas/AsOf",
@@ -2575,6 +2589,15 @@
             "title": "Worstcase",
             "description": "Вся выручка за горизонт клиентов высокого риска, €"
           },
+          "ltvAtRisk": {
+            "type": "number",
+            "title": "Ltvatrisk",
+            "description": "Σ LTV услуги × вероятность непродления, €; LTV = месячная выручка / базовый отток"
+          },
+          "ltvMonthlyChurn": {
+            "type": "number",
+            "title": "Ltvmonthlychurn"
+          },
           "revenueAtRisk": {
             "type": "number",
             "title": "Revenueatrisk",
@@ -2628,6 +2651,8 @@
           "levelLoss",
           "expectedLoss",
           "worstCase",
+          "ltvAtRisk",
+          "ltvMonthlyChurn",
           "revenueAtRisk",
           "balanceAtRisk",
           "servicesAtRisk",

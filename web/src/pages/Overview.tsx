@@ -63,6 +63,8 @@ export default function Overview() {
                 onClick={() => setHowOpen(!howOpen)}>Как считается<Icon name="chev" /></button>
               <span className="ro-small">Худший случай: <b className="ro-mono" style={{ color: 'var(--ink)' }}>{eur(s.worstCase)}</b></span>
               <span className="ro-small">На счетах клиентов под риском: <b className="ro-mono" style={{ color: 'var(--ink)' }}>{eur(s.balanceAtRisk)}</b></span>
+              <span className="ro-small" title={`LTV = месячная выручка / базовый отток ${s.ltvMonthlyChurn} % в месяц, не больше 36 мес.`}>
+                LTV под угрозой: <b className="ro-mono" style={{ color: 'var(--ink)' }}>{eur(s.ltvAtRisk)}</b></span>
             </div>
             <div className={`ro-howto${howOpen ? ' is-open' : ''}`} id="howto"><div><div className="ro-howto__in">
               <code className="ro-mono">потеря = Σ выручка услуги за {s.horizonDays} дн. × score услуги / 100</code>
@@ -72,6 +74,8 @@ export default function Overview() {
                   <tr key={l}><td><RiskBadge level={l} title={LEVEL_TITLE[l]} /></td><td className="ro-mono">{s.levels[l]}</td><td>{eur(s.levelLoss[l])}</td></tr>
                 ))}
               </tbody></table>
+              <code className="ro-mono">LTV под угрозой = Σ месячная выручка / {s.ltvMonthlyChurn} % × score / 100</code>
+              <p className="ro-small">LTV — выручка за ожидаемый срок жизни клиента при базовом оттоке {s.ltvMonthlyChurn} % в месяц (не больше 36 месяцев): сколько бизнес теряет, если клиент уйдёт насовсем, а не только в этом месяце.</p>
               <p className="ro-small">«Нет оценки» ({s.levels.no_score}) и «Ушёл» ({s.levels.churned}) в сумму не входят. Худший случай — вся выручка клиентов высокого риска.</p>
             </div></div></div>
           </section>
@@ -92,7 +96,7 @@ export default function Overview() {
                 </tr>
               ))}
             </tbody></table>
-            {s.qualityIssues > 0 && <Link className="ro-small issues-link" to="/app/customers?hasIssues=1">Противоречий в данных: {s.qualityIssues} →</Link>}
+            {s.qualityIssues > 0 && <Link className="ro-small issues-link" to="/app/customers?hasIssues=1">Расхождений статуса и дат: {s.qualityIssues} →</Link>}
           </section>
 
           <RadarCard customers={data!.customers} total={s.expectedLoss} />

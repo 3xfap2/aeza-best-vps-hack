@@ -5,6 +5,7 @@ class UnpaidTransactions(Feature):
     key = "unpaid_transactions"
     title = "Неоплаченные счета"
     description = "Доля транзакций услуги в статусе not_performed: клиент создал заказ или продление, но не оплатил."
+    order = 50
     default_weight = 15
 
     def evaluate(self, ctx: ServiceContext) -> Signal | None:

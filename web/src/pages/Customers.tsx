@@ -86,7 +86,7 @@ export default function Customers() {
         )}
         <label className="check">
           <input type="checkbox" checked={hasIssues} onChange={(e) => update({ hasIssues: e.target.checked ? '1' : null, page: null })} />
-          Только с противоречиями в данных
+          Только с расхождениями статуса и дат
         </label>
       </div>
 
@@ -124,7 +124,7 @@ export default function Customers() {
                   <tr key={c.id} className={changed.has(c.id) ? 'is-changed' : undefined}>
                     <td className="r mono">{c.id}</td>
                     <td><Link className="ro-mono row-link" to={`/app/customers/${c.id}`}>{c.email}</Link>
-                      {c.qualityIssues > 0 && <span className="issue-flag" title="В данных клиента есть противоречия">!</span>}</td>
+                      {c.qualityIssues > 0 && <span className="issue-flag" title="Статус услуги расходится с датами">!</span>}</td>
                     <td className="r mono">{eur(c.balance)}</td>
                     <td className="r mono">{eur(c.totalReplenished)}</td>
                     <td className="r"><ScoreBar score={c.score} /></td>

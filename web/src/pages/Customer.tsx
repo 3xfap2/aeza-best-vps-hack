@@ -60,7 +60,7 @@ export default function Customer() {
               </div>
               <p className="ro-small">Лояльность — обратная шкала: <b className="ro-mono">{c.loyalty} из 100</b></p>
               <p className="ro-text">Ожидаемая потеря <b className="ro-mono">{eur(c.expectedLoss)}</b> за {c.horizonDays} дней
-                из выручки <span className="ro-mono">{eur(c.revenueHorizon)}</span>.</p>
+                из выручки <span className="ro-mono">{eur(c.revenueHorizon)}</span>. LTV под угрозой — <span className="ro-mono">{eur(c.ltvAtRisk)}</span>.</p>
             </>
           ) : (
             <>
@@ -111,9 +111,9 @@ export default function Customer() {
 
         {c.issues.length > 0 && (
           <section className="ro-card issues" aria-labelledby="iss-t" role="note">
-            <div className="ro-cardhead"><h2 id="iss-t">Данные противоречат</h2></div>
+            <div className="ro-cardhead"><h2 id="iss-t">Расхождение статуса и дат</h2></div>
             <ul>{c.issues.map((x, i) => <li key={i}>{x}</li>)}</ul>
-            <p className="ro-small">На score это не влияет: статус берём как есть, а противоречие показываем, чтобы его проверили в биллинге.</p>
+            <p className="ro-small">На score это не влияет: статус берём как есть (на практике удаление бывает задержано), а расхождение показываем, чтобы его проверили в биллинге.</p>
           </section>
         )}
 

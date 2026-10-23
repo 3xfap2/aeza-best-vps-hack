@@ -217,3 +217,24 @@ def test_cause_filter_and_csv(client, auth):
     csv = client.get(f"/api/v1/customers/export.csv?cause={top['feature']}", headers=auth)
     assert csv.status_code == 200 and csv.text.count("\n") == top["customers"] + 1
     assert "churn_radar_expected_loss_by_cause_eur" in client.get("/metrics", headers=auth).text
+
+
+def test_own_snapshot_changes_results(client, auth):
+    """Как будет проверять жюри: свой снимок в формате кейса через PUT — всё пересчитано из него."""
+    own = {
+        "accounts": [{"id": 1, "email": "jury@example.test", "balance": 0, "withdrawBalance": 0,
+                      "totalReplenished": 5000, "bonusBalance": 0, "bonusState": "locked"}],
+        "services": [{"id": 1, "name": "jury-vps", "ownerId": 1, "paymentTerm": "month", "autoProlong": False,
+                      "createdAt": "2026-10-01T00:00:00.000Z", "expiresAt": "2026-10-20T00:00:00.000Z",
+                      "status": "prolong_wait", "price": 900}],
+        "transactions": [{"id": 1, "amount": 900, "status": "not_performed", "performedAt": None,
+                          "createdAt": "2026-10-01T00:00:00.000Z", "type": "order", "serviceId": 1}],
+    }
+    assert client.put("/api/v1/source/snapshot", headers=auth, json=own).status_code == 200
+    s = client.get("/api/v1/analytics/summary", headers=auth).json()
+    assert s["customersTotal"] == 1 and s["levels"]["high"] == 1 and s["expectedLoss"] > 0 and s["ltvAtRisk"] > s["expectedLoss"]
+    items = client.get("/api/v1/customers", headers=auth).json()["items"]
+    assert items[0]["email"] == "jury@example.test"
+    metrics = client.get("/metrics", headers=auth).text
+    assert 'churn_radar_customers{level="high"} 1.0' in metrics
+    client.post("/api/v1/source/preset/case", headers=auth)

@@ -27,20 +27,23 @@ class ServiceContext:
     account_renewal_cost: int     # то же по всем живым услугам аккаунта
     tx_total: int
     tx_unpaid: int
+    account_services_total: int = 0   # все услуги аккаунта
+    account_services_gone: int = 0    # из них удалённые и заблокированные
 
 
 class Feature:
     """Признак риска.
 
-    Чтобы добавить признак: создать файл в этой папке с наследником Feature
-    и дописать экземпляр в FEATURES в __init__.py. Вес появится в настройках,
-    API, Swagger и метриках автоматически.
+    Чтобы добавить признак, достаточно создать файл в этой папке с наследником Feature:
+    реестр находит его сам (см. __init__.py). Вес появится в настройках, API, Swagger,
+    на экране «Модель» и в метриках автоматически.
     """
 
     key: str
     title: str
     description: str
     default_weight: float
+    order: int = 100  # порядок показа в панели
 
     def evaluate(self, ctx: ServiceContext) -> Signal | None:
         raise NotImplementedError

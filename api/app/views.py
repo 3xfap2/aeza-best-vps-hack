@@ -106,6 +106,7 @@ class Finances(BaseModel):
 class CustomerDetail(CustomerListItem):
     note: str | None
     revenueHorizon: float
+    ltvAtRisk: float = Field(description="Σ LTV услуг × вероятность непродления, €")
     finances: Finances
     contributions: list[ContributionOut]
     actions: list[str]
@@ -125,6 +126,8 @@ class SummaryOut(BaseModel):
     levelLoss: dict[str, float] = Field(description="Ожидаемая потеря по уровням риска, €")
     expectedLoss: float = Field(description="Σ выручка услуг за горизонт × вероятность непродления, €")
     worstCase: float = Field(description="Вся выручка за горизонт клиентов высокого риска, €")
+    ltvAtRisk: float = Field(description="Σ LTV услуги × вероятность непродления, €; LTV = месячная выручка / базовый отток")
+    ltvMonthlyChurn: float
     revenueAtRisk: float = Field(description="Выручка за горизонт клиентов высокого и среднего риска, €")
     balanceAtRisk: float = Field(description="Доступные деньги на счетах клиентов высокого и среднего риска, €")
     servicesAtRisk: int
@@ -205,6 +208,7 @@ def customer_detail(c: CustomerResult, result: EngineResult, snapshot: Snapshot,
         **list_item(c).model_dump(),
         note=c.note,
         revenueHorizon=eur(c.revenue_horizon),
+        ltvAtRisk=eur(c.ltv_at_risk),
         finances=Finances(
             balance=eur(a.balance), bonusBalance=eur(a.bonusBalance), bonusState=a.bonusState,
             withdrawBalance=eur(a.withdrawBalance), totalReplenished=eur(a.totalReplenished),
@@ -235,6 +239,8 @@ def summary_out(result: EngineResult, version: int, computed_at: datetime, durat
         levelLoss={k: eur(v) for k, v in s.level_loss.items()},
         expectedLoss=eur(s.expected_loss),
         worstCase=eur(s.worst_case),
+        ltvAtRisk=eur(s.ltv_at_risk),
+        ltvMonthlyChurn=result.settings.ltvMonthlyChurn,
         revenueAtRisk=eur(s.revenue_at_risk),
         balanceAtRisk=eur(s.balance_at_risk),
         servicesAtRisk=s.services_at_risk,

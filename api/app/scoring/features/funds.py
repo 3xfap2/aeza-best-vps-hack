@@ -8,6 +8,7 @@ class InsufficientFunds(Feature):
         "Сравниваем доступные деньги (баланс + разблокированные бонусы) с суммой продлений "
         "всех услуг аккаунта в горизонте. Сила — доля, которую нечем оплатить."
     )
+    order = 30
     default_weight = 40
 
     def evaluate(self, ctx: ServiceContext) -> Signal | None:

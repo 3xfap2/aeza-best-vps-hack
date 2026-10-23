@@ -24,7 +24,7 @@ export interface ServiceOut {
   contributions: Contribution[]; qualityIssues: string[]
 }
 export interface CustomerDetail extends CustomerItem {
-  note: string | null; revenueHorizon: number
+  note: string | null; revenueHorizon: number; ltvAtRisk: number
   finances: { balance: number; bonusBalance: number; bonusState: string; withdrawBalance: number
     totalReplenished: number; availableFunds: number; renewalNeed: number }
   contributions: Contribution[]; actions: string[]; issues: string[]; services: ServiceOut[]
@@ -36,6 +36,7 @@ export interface Summary {
   asOf: string; horizonDays: number; customersTotal: number
   levels: Record<Level, number>; levelLoss: Record<Level, number>
   expectedLoss: number; worstCase: number; revenueAtRisk: number; balanceAtRisk: number
+  ltvAtRisk: number; ltvMonthlyChurn: number
   servicesAtRisk: number; qualityIssues: number; explanation: string
   causes: { feature: string; title: string; kind: 'involuntary' | 'voluntary'; customers: number; expectedLoss: number }[]
   version: number; computedAt: string; durationMs: number
@@ -51,6 +52,7 @@ export interface ModelSettings {
   features: Record<string, FeatureSetting>
   thresholds: { high: number; medium: number }
   horizonDays: number
+  ltvMonthlyChurn: number
   asOf: { mode: 'snapshot' | 'now' | 'fixed'; value: string | null }
 }
 export interface SettingsOut {

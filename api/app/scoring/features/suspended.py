@@ -5,6 +5,7 @@ class Suspended(Feature):
     key = "suspended"
     title = "Сервер выключен клиентом"
     description = "Клиент выключил сервер, но продолжает платить — услугой не пользуются и могут отказаться."
+    order = 60
     default_weight = 15
 
     def evaluate(self, ctx: ServiceContext) -> Signal | None:
