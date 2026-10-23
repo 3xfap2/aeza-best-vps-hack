@@ -1,0 +1,91 @@
+"""GET /metrics в формате Prometheus.
+
+Значения берутся из того же результата расчёта, что и панель, поэтому сумма
+churn_radar_expected_loss_eur совпадает с expectedLoss в /api/v1/analytics/summary.
+Доступ: Bearer METRICS_TOKEN (для сборщика) или сессия пользователя.
+"""
+from __future__ import annotations
+
+import hmac
+
+from fastapi import APIRouter, HTTPException, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
+from prometheus_client.core import GaugeMetricFamily, HistogramMetricFamily
+
+from app import db
+from app.security import request_token, token_hash
+from app.views import eur
+
+router = APIRouter(tags=["Метрики"])
+
+SCORE_BUCKETS = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+
+
+class RadarCollector:
+    def __init__(self, radar) -> None:
+        self.radar = radar
+
+    def collect(self):
+        cur = self.radar.current
+        s = cur.result.summary
+        horizon = str(s.horizon_days)
+
+        customers = GaugeMetricFamily("churn_radar_customers", "Клиенты по уровням риска", labels=["level"])
+        for level, count in s.levels.items():
+            customers.add_metric([level], count)
+        yield customers
+
+        loss = GaugeMetricFamily("churn_radar_expected_loss_eur",
+                                 "Ожидаемая потеря выручки за горизонт, EUR", labels=["horizon_days"])
+        loss.add_metric([horizon], eur(s.expected_loss))
+        yield loss
+        worst = GaugeMetricFamily("churn_radar_worst_case_loss_eur",
+                                  "Выручка клиентов высокого риска за горизонт, EUR", labels=["horizon_days"])
+        worst.add_metric([horizon], eur(s.worst_case))
+        yield worst
+        at_risk = GaugeMetricFamily("churn_radar_revenue_at_risk_eur",
+                                    "Выручка клиентов высокого и среднего риска за горизонт, EUR", labels=["horizon_days"])
+        at_risk.add_metric([horizon], eur(s.revenue_at_risk))
+        yield at_risk
+
+        yield GaugeMetricFamily("churn_radar_services_at_risk", "Услуги со score не ниже порога среднего риска",
+                                value=s.services_at_risk)
+        yield GaugeMetricFamily("churn_radar_data_quality_issues", "Найденные противоречия в данных",
+                                value=s.quality_issues)
+
+        scores = sorted(c.score for c in cur.result.customers if c.score is not None)
+        buckets = [(str(b), sum(1 for x in scores if x <= b)) for b in SCORE_BUCKETS] + [("+Inf", len(scores))]
+        yield HistogramMetricFamily("churn_radar_customer_risk_score", "Распределение score клиентов",
+                                    buckets=buckets, sum_value=float(sum(scores)))
+
+        yield GaugeMetricFamily("churn_radar_model_settings_version", "Версия настроек модели",
+                                value=cur.settings_version)
+        yield GaugeMetricFamily("churn_radar_calculation_version", "Номер пересчёта с момента запуска",
+                                value=cur.version)
+        yield GaugeMetricFamily("churn_radar_last_calculation_timestamp_seconds", "Время последнего пересчёта",
+                                value=cur.computed_at.timestamp())
+        yield GaugeMetricFamily("churn_radar_calculation_duration_seconds", "Длительность последнего пересчёта",
+                                value=cur.duration_ms / 1000)
+        yield GaugeMetricFamily("churn_radar_as_of_timestamp_seconds", "Дата расчёта (as of)",
+                                value=s.as_of.timestamp())
+        yield GaugeMetricFamily("churn_radar_live_clients", "Подключённые панели (SSE)",
+                                value=self.radar.broker.count)
+
+
+def build_registry(radar) -> CollectorRegistry:
+    registry = CollectorRegistry()
+    registry.register(RadarCollector(radar))
+    return registry
+
+
+@router.get("/metrics", summary="Агрегированные метрики в формате Prometheus",
+            response_class=Response, responses={200: {"content": {"text/plain": {}}}, 401: {"description": "Нет доступа"}})
+def metrics(request: Request) -> Response:
+    token = request_token(request)
+    allowed = bool(token) and hmac.compare_digest(token, request.app.state.config.metrics_token)
+    if not allowed and token:
+        with request.app.state.pool.connection() as conn:
+            allowed = db.session_user(conn, token_hash(token)) is not None
+    if not allowed:
+        raise HTTPException(401, "Нужен Bearer-токен сборщика или вход в панель", headers={"WWW-Authenticate": "Bearer"})
+    return Response(generate_latest(request.app.state.metrics_registry), media_type=CONTENT_TYPE_LATEST)
