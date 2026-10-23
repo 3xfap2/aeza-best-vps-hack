@@ -1,0 +1,9 @@
+{
+  "name": "Радар оттока",
+  "short_name": "Радар",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#FFFBF8",
+  "theme_color": "#FFFBF8",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

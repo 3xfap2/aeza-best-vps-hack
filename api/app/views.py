@@ -121,6 +121,7 @@ class SummaryOut(BaseModel):
     horizonDays: int
     customersTotal: int
     levels: dict[str, int]
+    levelLoss: dict[str, float] = Field(description="Ожидаемая потеря по уровням риска, €")
     expectedLoss: float = Field(description="Σ выручка услуг за горизонт × вероятность непродления, €")
     worstCase: float = Field(description="Вся выручка за горизонт клиентов высокого риска, €")
     revenueAtRisk: float = Field(description="Выручка за горизонт клиентов высокого и среднего риска, €")
@@ -220,6 +221,7 @@ def summary_out(result: EngineResult, version: int, computed_at: datetime, durat
         horizonDays=s.horizon_days,
         customersTotal=s.customers_total,
         levels=s.levels,
+        levelLoss={k: eur(v) for k, v in s.level_loss.items()},
         expectedLoss=eur(s.expected_loss),
         worstCase=eur(s.worst_case),
         revenueAtRisk=eur(s.revenue_at_risk),

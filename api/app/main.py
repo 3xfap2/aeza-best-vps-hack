@@ -11,7 +11,7 @@ from fastapi.openapi.utils import get_openapi
 
 from app import db
 from app.config import load_config
-from app.routers import analytics, auth, customers, metrics, model, oidc, source, stream
+from app.routers import analytics, auth, customers, integrations, metrics, model, oidc, source, stream
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
     if config.telegram_token and config.telegram_link_code:
         bot = TelegramBot(config.telegram_token, config.telegram_link_code, radar, config.public_url)
         bot.start()
+    app.state.bot = bot
     try:
         yield
     finally:
@@ -84,7 +85,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for r in (auth.router, oidc.router, customers.router, analytics.router, model.router, source.router, stream.router, metrics.router):
+for r in (auth.router, oidc.router, customers.router, analytics.router, model.router, source.router, stream.router, integrations.router, metrics.router):
     app.include_router(r)
 
 

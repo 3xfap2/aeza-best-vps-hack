@@ -138,6 +138,131 @@
         }
       }
     },
+    "/api/v1/customers/export.csv": {
+      "get": {
+        "tags": [
+          "Клиенты"
+        ],
+        "summary": "Выгрузка клиентов в CSV (те же фильтры и сортировка, что у списка)",
+        "operationId": "export_csv_api_v1_customers_export_csv_get",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "email",
+                "balance",
+                "totalReplenished",
+                "score",
+                "expectedLoss"
+              ],
+              "type": "string",
+              "default": "score",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low",
+                      "no_score",
+                      "churned"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "hasIssues",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasissues"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/customers": {
       "get": {
         "tags": [
@@ -675,13 +800,28 @@
         ]
       }
     },
-    "/api/v1/source/demo": {
+    "/api/v1/source/preset/{name}": {
       "post": {
         "tags": [
           "Данные источника"
         ],
-        "summary": "Загрузить расширенный демонстрационный набор данных",
-        "operationId": "load_demo_api_v1_source_demo_post",
+        "summary": "Загрузить готовый набор: case — данные кейса (10 клиентов), extended — кейс + 190 сгенерированных",
+        "operationId": "load_preset_api_v1_source_preset__name__post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "case",
+                "extended"
+              ],
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -689,6 +829,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoadResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -903,6 +1053,32 @@
         "responses": {
           "200": {
             "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/integrations/telegram": {
+      "get": {
+        "tags": [
+          "Интеграции"
+        ],
+        "summary": "Telegram-бот: ссылка для подключения уведомлений (только для вошедших пользователей)",
+        "operationId": "telegram_api_v1_integrations_telegram_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramOut"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2281,6 +2457,14 @@
             "type": "object",
             "title": "Levels"
           },
+          "levelLoss": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Levelloss",
+            "description": "Ожидаемая потеря по уровням риска, €"
+          },
           "expectedLoss": {
             "type": "number",
             "title": "Expectedloss",
@@ -2333,6 +2517,7 @@
           "horizonDays",
           "customersTotal",
           "levels",
+          "levelLoss",
           "expectedLoss",
           "worstCase",
           "revenueAtRisk",
@@ -2345,6 +2530,43 @@
           "durationMs"
         ],
         "title": "SummaryOut"
+      },
+      "TelegramOut": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "botUsername": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Botusername"
+          },
+          "connectUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connecturl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "botUsername",
+          "connectUrl"
+        ],
+        "title": "TelegramOut"
       },
       "Thresholds": {
         "properties": {

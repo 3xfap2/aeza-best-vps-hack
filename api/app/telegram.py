@@ -49,6 +49,7 @@ class TelegramBot:
         self._outbox: queue.Queue[tuple[int, str]] = queue.Queue(maxsize=500)
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        self.username: str | None = None
 
     # --- жизненный цикл ------------------------------------------------------
 
@@ -78,7 +79,7 @@ class TelegramBot:
             lines.append("")
             lines.append(self._customer_short(c, old.get(c.account.id)))
         if len(escalated) > MAX_ALERTS_PER_RECALC:
-            lines.append(f"\nи ещё {len(escalated) - MAX_ALERTS_PER_RECALC} — в панели: {self.public_url}/customers")
+            lines.append(f"\nи ещё {len(escalated) - MAX_ALERTS_PER_RECALC} — в панели: {self.public_url}/app/customers")
         self._broadcast("\n".join(lines))
 
     def _broadcast(self, text: str) -> None:
@@ -96,7 +97,7 @@ class TelegramBot:
         parts = [head, html.escape(c.top_reason or c.note or "")]
         if c.actions:
             parts.append(f"→ {html.escape(c.actions[0])}")
-        parts.append(f"{self.public_url}/customers/{c.account.id}")
+        parts.append(f"{self.public_url}/app/customers/{c.account.id}")
         return "\n".join(parts)
 
     def _summary(self) -> str:
@@ -183,6 +184,8 @@ class TelegramBot:
         with httpx.Client(timeout=40) as http:
             while not self._stop.is_set():
                 try:
+                    if self.username is None:  # имя нужно для ссылки «Подключить» в панели
+                        self.username = http.get(f"{self.api}/getMe").json()["result"]["username"]
                     r = http.get(f"{self.api}/getUpdates", params={"timeout": 30, "offset": offset})
                     r.raise_for_status()
                     for update in r.json().get("result", []):

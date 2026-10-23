@@ -91,6 +91,7 @@ class Summary:
     horizon_days: int
     customers_total: int
     levels: dict[str, int]
+    level_loss: dict[str, float]
     expected_loss: float
     worst_case: float
     revenue_at_risk: float
@@ -285,14 +286,17 @@ def _actions(account: Account, live: list[ServiceResult], need: int, as_of: date
 
 def _summarize(customers: list[CustomerResult], settings: ModelSettings, as_of: datetime) -> Summary:
     levels = {lvl: 0 for lvl in LEVELS}
+    level_loss = {lvl: 0.0 for lvl in LEVELS}
     for c in customers:
         levels[c.level] += 1
+        level_loss[c.level] += c.expected_loss
     at_risk = [c for c in customers if c.level in ("high", "medium")]
     return Summary(
         as_of=as_of,
         horizon_days=settings.horizonDays,
         customers_total=len(customers),
         levels=levels,
+        level_loss=level_loss,
         expected_loss=sum(c.expected_loss for c in customers),
         worst_case=sum(c.revenue_horizon for c in customers if c.level == "high"),
         revenue_at_risk=sum(c.revenue_horizon for c in at_risk),
