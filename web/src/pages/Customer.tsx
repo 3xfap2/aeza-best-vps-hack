@@ -58,6 +58,7 @@ export default function Customer() {
                 <span className="ro-sum__amount">{c.score}</span>
                 <RiskBadge level={c.level} title={c.levelTitle} />
               </div>
+              <p className="ro-small">Лояльность — обратная шкала: <b className="ro-mono">{c.loyalty} из 100</b></p>
               <p className="ro-text">Ожидаемая потеря <b className="ro-mono">{eur(c.expectedLoss)}</b> за {c.horizonDays} дней
                 из выручки <span className="ro-mono">{eur(c.revenueHorizon)}</span>.</p>
             </>

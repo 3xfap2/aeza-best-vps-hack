@@ -1341,6 +1341,18 @@
             "title": "Score",
             "description": "0–100; null — оценки нет (см. level и topReason)"
           },
+          "loyalty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loyalty",
+            "description": "Обратная шкала: 100 − score; null — оценки нет"
+          },
           "level": {
             "type": "string",
             "enum": [
@@ -1451,6 +1463,7 @@
           "balance",
           "totalReplenished",
           "score",
+          "loyalty",
           "level",
           "levelTitle",
           "topReason",
@@ -1502,6 +1515,18 @@
             "title": "Score",
             "description": "0–100; null — оценки нет (см. level и topReason)"
           },
+          "loyalty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loyalty",
+            "description": "Обратная шкала: 100 − score; null — оценки нет"
+          },
           "level": {
             "type": "string",
             "enum": [
@@ -1546,6 +1571,7 @@
           "balance",
           "totalReplenished",
           "score",
+          "loyalty",
           "level",
           "levelTitle",
           "topReason",

@@ -6,7 +6,7 @@ export interface User { id: number; login: string; displayName: string; viaSso: 
 
 export interface CustomerItem {
   id: number; email: string; balance: number; totalReplenished: number
-  score: number | null; level: Level; levelTitle: string; topReason: string | null
+  score: number | null; loyalty: number | null; level: Level; levelTitle: string; topReason: string | null
   expectedLoss: number; qualityIssues: number
 }
 export interface CustomerPage {

@@ -45,6 +45,7 @@ class CustomerListItem(BaseModel):
     balance: float = Field(description="Основной баланс, €")
     totalReplenished: float = Field(description="Пополнено за всё время, €")
     score: int | None = Field(description="0–100; null — оценки нет (см. level и topReason)")
+    loyalty: int | None = Field(description="Обратная шкала: 100 − score; null — оценки нет")
     level: Level
     levelTitle: str
     topReason: str | None
@@ -165,6 +166,7 @@ def list_item(c: CustomerResult) -> CustomerListItem:
         balance=eur(c.account.balance),
         totalReplenished=eur(c.account.totalReplenished),
         score=c.score,
+        loyalty=None if c.score is None else 100 - c.score,
         level=c.level,
         levelTitle=LEVEL_TITLES[c.level],
         topReason=c.top_reason or c.note,

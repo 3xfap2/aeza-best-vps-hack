@@ -13,6 +13,7 @@ from psycopg_pool import ConnectionPool
 
 from app.domain import Account, Service, Snapshot, Transaction
 from app.scoring.engine import Transition
+from app.scoring.features import FEATURES
 from app.scoring.settings import ModelSettings
 from app.source import SnapshotIn
 
@@ -167,7 +168,11 @@ def current_settings(conn: Connection) -> tuple[ModelSettings, int] | None:
     row = conn.execute("SELECT id, data FROM model_settings ORDER BY id DESC LIMIT 1").fetchone()
     if not row:
         return None
-    return ModelSettings.model_validate(row["data"]), row["id"]
+    data = dict(row["data"])
+    # Признак удалили из кода — его сохранённый вес просто игнорируем, а не роняем сервер.
+    known = {f.key for f in FEATURES}
+    data["features"] = {k: v for k, v in data.get("features", {}).items() if k in known}
+    return ModelSettings.model_validate(data), row["id"]
 
 
 def save_settings(conn: Connection, settings: ModelSettings, changes: list[str], author: str) -> int:

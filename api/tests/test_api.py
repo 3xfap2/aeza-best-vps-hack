@@ -170,3 +170,39 @@ def test_presets(client, auth):
     r = client.post("/api/v1/source/preset/case", headers=auth)
     assert r.status_code == 200 and r.json()["accounts"] == 10
     assert client.post("/api/v1/source/preset/other", headers=auth).status_code == 422
+
+
+def test_new_feature_is_picked_up_everywhere(client, auth):
+    """Расширяемость: признак из README добавляется одним классом и строкой в FEATURES."""
+    from app.scoring.features import FEATURES, Feature, ServiceContext, Signal
+
+    class WithdrawableBalance(Feature):
+        key = "withdrawable_balance"
+        title = "Деньги можно вывести"
+        description = "Большая часть баланса — реферальные средства."
+        default_weight = 10
+
+        def evaluate(self, ctx: ServiceContext) -> Signal | None:
+            a = ctx.account
+            if a.balance == 0 or a.withdrawBalance / a.balance < 0.5:
+                return None
+            return Signal(a.withdrawBalance / a.balance, "Больше половины баланса можно вывести")
+
+    FEATURES.append(WithdrawableBalance())
+    try:
+        client.app.state.radar.recalculate("test")
+        settings = client.get("/api/v1/model/settings", headers=auth).json()
+        assert settings["settings"]["features"]["withdrawable_balance"] == {"weight": 10, "enabled": True}
+        assert any(f["key"] == "withdrawable_balance" for f in settings["features"])
+        hit = [c for c in client.app.state.radar.current.result.customers
+               if any(x.feature == "withdrawable_balance" for x in c.contributions)]
+        assert hit, "признак должен сработать хотя бы у одного клиента"
+        detail = client.get(f"/api/v1/customers/{hit[0].account.id}", headers=auth).json()
+        assert any(x["feature"] == "withdrawable_balance" for x in detail["contributions"])
+        r = client.patch("/api/v1/model/settings", headers=auth, json={"features": {"withdrawable_balance": {"weight": 25}}})
+        assert r.status_code == 200
+    finally:
+        FEATURES.pop()
+        # признак убрали из кода — сохранённый вес не мешает загрузке настроек и пересчёту
+        client.app.state.radar.recalculate("test")
+        assert "withdrawable_balance" not in client.get("/api/v1/model/settings", headers=auth).json()["settings"]["features"]
