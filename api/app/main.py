@@ -126,12 +126,12 @@ for r in (auth.router, oidc.router, customers.router, retention.router, analytic
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
-@app.middleware("http")
 API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
 DOCS_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'")
 
 
+@app.middleware("http")
 async def security_headers(request: Request, call_next):
     # Защита от CSRF: браузер всегда шлёт Origin с изменяющими запросами; чужой сайт — отказ.
     # Клиенты API (curl, биллинг) Origin не шлют и проходят по Bearer-токену.
