@@ -34,6 +34,7 @@ export default function Shell() {
             ))}
           </nav>
           <div className="ro-side__foot">
+            <NavLink className="ro-link side__guide" to="/app/guide">Как пользоваться</NavLink>
             <span className="ro-small side__user">{user.displayName}{user.viaSso ? ' · SSO' : ''}</span>
             <a className="ro-link" href="/api/v1/docs" target="_blank" rel="noreferrer">Документация API</a>
             <button className="ro-link side__logout" type="button" onClick={logout}><Icon name="out" />Выйти</button>
@@ -43,7 +44,7 @@ export default function Shell() {
           <Outlet />
         </main>
         <nav className="tabbar" aria-label="Разделы">
-          {NAV.map((n) => (
+          {[...NAV, { to: "/app/guide", end: false, icon: "plus", label: "Гайд" }].map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}>
               <Icon name={n.icon} /><span>{n.label}</span>
             </NavLink>

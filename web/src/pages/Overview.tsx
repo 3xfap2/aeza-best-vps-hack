@@ -30,6 +30,8 @@ export default function Overview() {
     return { summary, timeline, customers, renewals }
   })
   const [howOpen, setHowOpen] = useState(false)
+  const [intro, setIntro] = useState(() => { try { return localStorage.getItem('radar.intro') !== 'hidden' } catch { return true } })
+  const hideIntro = () => { setIntro(false); try { localStorage.setItem('radar.intro', 'hidden') } catch { /* приватный режим */ } }
   const top5 = useMemo(() => (data?.customers ?? []).filter((c) => c.score != null).slice(0, 5), [data])
   const changed = useChanged(top5, (c) => `${c.score}|${c.expectedLoss}`)
 
@@ -49,6 +51,20 @@ export default function Overview() {
           <Link className="ro-btn ro-btn--sm" to="/app/model">Настроить модель<Icon name="arrow" /></Link>
         </div>
       </div>
+
+      {intro && (
+        <section className="ro-panel intro" aria-labelledby="intro-t">
+          <div className="intro__head"><h2 id="intro-t">С чего начать</h2>
+            <button className="ro-link" type="button" onClick={hideIntro}>Скрыть</button></div>
+          <ol>
+            <li><b>Сумма под угрозой</b> — сколько выручки за 30 дней, скорее всего, не продлят.</li>
+            <li><b>Топ клиентов</b> внизу — откройте первого: там причина риска и что сделать.</li>
+            <li><b>«За что мы теряем деньги»</b> — кампании по причинам и CSV для обзвона.</li>
+            <li><b>«Модель»</b> — подвиньте вес признака и посмотрите, как изменится рейтинг.</li>
+          </ol>
+          <Link className="ro-link" to="/app/guide">Полный гайд: шесть шагов, уровни риска, Telegram-бот →</Link>
+        </section>
+      )}
 
       {!s ? <div className="ro-grid"><div className="span12"><Skeleton h={220} /></div><div className="span12"><Skeleton h={360} /></div></div> : (
         <div className="ro-grid" aria-busy={loading}>

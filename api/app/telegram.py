@@ -28,11 +28,43 @@ log = logging.getLogger("radar.telegram")
 
 MAX_ALERTS_PER_RECALC = 5
 HELP = (
-    "Команды:\n"
-    "/summary — сколько денег под угрозой\n"
+    "<b>Команды</b>\n"
+    "/summary — сколько денег под угрозой и клиенты по уровням\n"
     "/top — 5 клиентов с наибольшей ожидаемой потерей\n"
-    "/client 42 или /client user-0042@example.test — карточка клиента\n"
+    "/client 42 — карточка клиента: причины риска и что сделать\n"
+    "/guide — как пользоваться Радаром\n"
     "/stop — отключить уведомления"
+)
+
+# Меню команд в Telegram (кнопка «/» рядом с полем ввода).
+COMMANDS = [
+    ("summary", "Сколько денег под угрозой"),
+    ("top", "5 клиентов с наибольшей потерей"),
+    ("client", "Карточка клиента: /client 42"),
+    ("guide", "Как пользоваться Радаром"),
+    ("help", "Что умеет бот и как подключиться"),
+    ("stop", "Отключить уведомления"),
+]
+
+GUIDE = (
+    "<b>Как пользоваться Радаром оттока</b>\n\n"
+    "1. <b>Сумма под угрозой</b> (/summary) — сколько выручки за 30 дней, скорее всего, не продлят.\n"
+    "2. <b>Кому звонить первым</b> (/top) — клиенты с наибольшей потерей. У каждого причина и готовое действие.\n"
+    "3. <b>Почему риск</b> (/client 42) — вклад каждого признака: «ждёт оплаты», «не хватает средств», "
+    "«автопродление выключено»…\n"
+    "4. <b>Уведомления</b> — когда клиент переходит в высокий риск, я сразу пишу сюда.\n"
+    "5. <b>Панель</b> — то же и больше: «что будет, если клиент пополнит счёт», календарь продлений, "
+    "настройка модели. Ссылка — в каждом уведомлении.\n\n"
+    "<b>Уровни риска:</b> высокий — score от 60, средний — от 30, низкий — ниже. "
+    "Score 0–100 — сумма баллов по признакам."
+)
+
+EXAMPLE = (
+    "<b>Пример уведомления</b> (демо):\n"
+    "<b>В высокий риск перешли: 1</b>\n\n"
+    "<b>user-0062@example.test</b> · score 100 · € 54,19\n"
+    "Ждёт оплаты, до удаления 20 ч\n"
+    "→ Предложить пополнить счёт на € 90,76 сегодня"
 )
 
 
@@ -157,15 +189,22 @@ class TelegramBot:
     def handle(self, chat_id: int, username: str | None, text: str) -> str:
         command, _, arg = text.strip().partition(" ")
         command = command.split("@")[0].lower()
+        subscribed = self._is_subscribed(chat_id)
         if command == "/start":
-            if hmac.compare_digest(arg.strip(), self.link_code):
-                self._subscribe(chat_id, username)
-                return "Готово: буду присылать клиентов, перешедших в высокий риск.\n\n" + HELP
-            if self._is_subscribed(chat_id):
-                return HELP
-            return "Это бот «Радара оттока». Чтобы подключиться, отправьте /start и код доступа из настроек сервера."
-        if not self._is_subscribed(chat_id):
-            return "Сначала подключитесь: /start <код доступа>."
+            if arg.strip() and hmac.compare_digest(arg.strip(), self.link_code):
+                if not subscribed:
+                    self._subscribe(chat_id, username)
+                return ("<b>Готово, вы подключены.</b> Буду присылать клиентов, перешедших в высокий риск.\n\n"
+                        + self._summary() + "\n\n" + HELP)
+            if arg.strip():
+                return "Код не подошёл. Откройте бота кнопкой «Подключить» в панели — код подставится сам.\n\n" + self._welcome()
+            return HELP if subscribed else self._welcome()
+        if command == "/guide":
+            return GUIDE if subscribed else GUIDE + "\n\n" + self._how_to_connect()
+        if command == "/help":
+            return HELP if subscribed else self._welcome()
+        if not subscribed:
+            return "Эта команда работает после подключения.\n\n" + self._how_to_connect()
         if command == "/stop":
             self._unsubscribe(chat_id)
             return "Уведомления отключены. Вернуться: /start <код доступа>."
@@ -177,6 +216,22 @@ class TelegramBot:
             return self._client(arg) if arg.strip() else "Укажите ID или email: /client 42"
         return HELP
 
+    def _how_to_connect(self) -> str:
+        return (
+            "<b>Как подключиться</b>\n"
+            f"1. Войдите в панель: {self.public_url}/login\n"
+            "2. «Данные» → «Интеграции» → «Подключить» — бот откроется с кодом доступа, нажмите «Старт».\n"
+            "Код доступа нужен, потому что в уведомлениях — данные клиентов."
+        )
+
+    def _welcome(self) -> str:
+        return (
+            "Привет! Я бот <b>Радара оттока</b> — помогаю маркетологу хостинга не терять клиентов.\n\n"
+            "• сообщаю, когда клиент переходит в высокий риск: кто, почему и что сделать;\n"
+            "• по команде показываю сумму под угрозой и кому звонить первым.\n\n"
+            + self._how_to_connect() + "\n\n" + EXAMPLE + "\n\n/guide — как пользоваться Радаром"
+        )
+
     # --- сеть ----------------------------------------------------------------
 
     def _poll(self) -> None:
@@ -186,6 +241,8 @@ class TelegramBot:
                 try:
                     if self.username is None:  # имя нужно для ссылки «Подключить» в панели
                         self.username = http.get(f"{self.api}/getMe").json()["result"]["username"]
+                        http.post(f"{self.api}/setMyCommands", json={
+                            "commands": [{"command": c, "description": d} for c, d in COMMANDS]})
                     r = http.get(f"{self.api}/getUpdates", params={"timeout": 30, "offset": offset})
                     r.raise_for_status()
                     for update in r.json().get("result", []):

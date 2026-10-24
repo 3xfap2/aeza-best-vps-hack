@@ -147,9 +147,14 @@ def test_login_rate_limit(client):
 def test_telegram_bot_requires_link_code_and_alerts(client, auth):
     from app.telegram import TelegramBot
     bot = TelegramBot("0:test", "link-code-123", client.app.state.radar, "http://localhost:8080")
-    assert "код доступа" in bot.handle(1001, "u", "/top")
-    assert "код доступа" in bot.handle(1001, "u", "/start wrong-code")
-    assert "Готово" in bot.handle(1001, "u", "/start link-code-123")
+    welcome = bot.handle(1001, "u", "/start")
+    assert "Как подключиться" in welcome and "Пример уведомления" in welcome   # гайд новичку без кода
+    assert "Как пользоваться" in bot.handle(1001, "u", "/guide")
+    assert "после подключения" in bot.handle(1001, "u", "/top")             # данных клиентов без кода нет
+    assert "user-0005" not in bot.handle(1001, "u", "/client 5")
+    assert "Код не подошёл" in bot.handle(1001, "u", "/start wrong-code")
+    connected = bot.handle(1001, "u", "/start link-code-123")
+    assert "Готово" in connected and "Под угрозой" in connected
     assert "Под угрозой" in bot.handle(1001, "u", "/summary")
     assert "score" in bot.handle(1001, "u", "/client 5")
 

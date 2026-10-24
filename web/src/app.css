@@ -138,7 +138,7 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
   .ro-top { flex-direction: column; align-items: flex-start; }
   .ro-top h1 { font-size: 30px; }
   .ro-top__actions { flex-wrap: wrap; }
-  .tabbar { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     background: var(--paper); border-top: 1px solid var(--line); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
   .tabbar a { display: grid; justify-items: center; gap: 2px; min-height: 52px; align-content: center; text-decoration: none; color: var(--ink-2); font-size: 12px; border-radius: 10px; }
   .tabbar a.active { color: var(--ink); background: var(--kraft-100); }
@@ -192,3 +192,24 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 .history__dot { fill: var(--card); stroke: var(--risk-high); stroke-width: 2; }
 .renewals__empty { padding: 0 24px 20px; }
 @media (max-width: 860px) { .whatif li { grid-template-columns: 1fr auto; } }
+
+/* --- гайд --- */
+.side__guide { font-weight: 500; }
+.intro { padding: 20px 24px; display: grid; gap: 10px; box-shadow: inset 0 0 0 2px var(--marker-200); }
+.intro__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.intro h2 { font-family: var(--font-display); font-weight: 500; font-size: 22px; margin: 0; }
+.intro ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; }
+.guide { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.guide li { display: grid; grid-template-columns: 44px 1fr; gap: 16px; padding: 20px 24px; align-items: start; }
+.guide h2 { font-family: var(--font-display); font-weight: 500; font-size: 20px; margin: 0 0 6px; }
+.guide p { margin: 0 0 8px; }
+.guide__n { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--marker-100); border: 1.5px dashed var(--marker); font: 600 18px var(--font-display); }
+.guide__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.guide__block { padding: 20px 24px; display: grid; gap: 12px; align-content: start; }
+.guide__block h2 { font-family: var(--font-display); font-weight: 500; font-size: 22px; margin: 0; }
+.guide__levels { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.guide__levels li { display: grid; gap: 4px; justify-items: start; }
+.guide__faq { display: grid; gap: 4px; }
+.guide__faq summary { cursor: pointer; font-weight: 500; min-height: 40px; display: flex; align-items: center; }
+.guide__faq p { margin: 0 0 12px; }
+@media (max-width: 860px) { .guide, .guide__cols { grid-template-columns: 1fr; } }

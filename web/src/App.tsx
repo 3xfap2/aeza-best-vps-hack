@@ -9,6 +9,7 @@ const Customers = lazy(() => import('./pages/Customers'))
 const Customer = lazy(() => import('./pages/Customer'))
 const Model = lazy(() => import('./pages/Model'))
 const DataPage = lazy(() => import('./pages/Data'))
+const Guide = lazy(() => import('./pages/Guide'))
 
 const page = (node: ReactNode) => <Suspense fallback={null}>{node}</Suspense>
 
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: 'customers/:id', element: page(<Customer />) },
       { path: 'model', element: page(<Model />) },
       { path: 'data', element: page(<DataPage />) },
+      { path: 'guide', element: page(<Guide />) },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },
