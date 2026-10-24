@@ -14,9 +14,14 @@ staticClients:
     redirectURIs:
       - http://localhost:8080/api/v1/auth/oidc/callback
 enablePasswordDB: true
-# Демо-учётка SSO: marketing@radar.example / radar-sso-2026 (bcrypt-хеш ниже).
+# Демо-учётки SSO, пароль у обеих radar-sso-2026 (bcrypt-хеш ниже).
+# Роль Радара задаётся в OIDC_ROLE_MAP (compose.yaml): marketing@ — маркетолог, viewer@ — наблюдатель.
 staticPasswords:
   - email: marketing@radar.example
     hash: "$2b$10$teZudv/hbiS2zY6bMeoKcOJHji8J2G6vl.7N3Pdpc5QE/JQu8AgUO"
     username: Маркетолог
     userID: 3b0a6f6e-5c1e-4c55-9d4f-1d3c2c7b9a10
+  - email: viewer@radar.example
+    hash: "$2b$10$teZudv/hbiS2zY6bMeoKcOJHji8J2G6vl.7N3Pdpc5QE/JQu8AgUO"
+    username: Руководитель
+    userID: 7d2e5b1a-9c4f-4e8a-b6d3-2f1a0c9e8b75

@@ -22,6 +22,10 @@ class Config:
     oidc_public_issuer: str | None
     oidc_client_id: str | None
     oidc_client_secret: str | None
+    oidc_scopes: str
+    oidc_role_claim: str
+    oidc_role_map: dict[str, str]
+    oidc_default_role: str
     public_url: str
     telegram_token: str | None
     telegram_link_code: str | None
@@ -30,6 +34,17 @@ class Config:
 
 def _path(value: str | None) -> Path | None:
     return Path(value) if value else None
+
+
+def _role_map(value: str) -> dict[str, str]:
+    """«radar-admins=admin, viewer@radar.example=viewer» → {группа или email: роль}."""
+    out = {}
+    for pair in filter(None, (p.strip() for p in value.split(","))):
+        key, _, role = pair.partition("=")
+        if role.strip() not in ("admin", "marketer", "viewer"):
+            raise RuntimeError(f"OIDC_ROLE_MAP: роль «{role.strip()}» — нужна admin, marketer или viewer")
+        out[key.strip().lower()] = role.strip()
+    return out
 
 
 def load_config() -> Config:
@@ -60,6 +75,10 @@ def load_config() -> Config:
         oidc_public_issuer=os.environ.get("OIDC_PUBLIC_ISSUER") or os.environ.get("OIDC_ISSUER") or None,
         oidc_client_id=os.environ.get("OIDC_CLIENT_ID") or None,
         oidc_client_secret=os.environ.get("OIDC_CLIENT_SECRET") or None,
+        oidc_scopes=os.environ.get("OIDC_SCOPES") or "openid email profile",
+        oidc_role_claim=os.environ.get("OIDC_ROLE_CLAIM") or "groups",
+        oidc_role_map=_role_map(os.environ.get("OIDC_ROLE_MAP", "")),
+        oidc_default_role=os.environ.get("OIDC_DEFAULT_ROLE") or "marketer",
         public_url=os.environ.get("PUBLIC_URL", "http://localhost:8080").rstrip("/"),
         telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,
         telegram_link_code=link_code,

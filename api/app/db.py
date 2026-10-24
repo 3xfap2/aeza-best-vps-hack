@@ -241,9 +241,13 @@ def workload(conn: Connection, days: int) -> dict[str, dict]:
         "FROM retention_actions WHERE created_at > now() - make_interval(days => %s) GROUP BY author", (days,))}
 
 
-def upsert_oidc_user(conn: Connection, subject: str, login: str, display_name: str, role: str = "marketer") -> dict:
+def upsert_oidc_user(conn: Connection, subject: str, login: str, display_name: str, role: str = "marketer",
+                     sync_role: bool = False) -> dict:
+    """sync_role — роль пришла из системы входа и обновляется при каждом входе."""
     row = conn.execute("SELECT * FROM app_users WHERE oidc_subject = %s", (subject,)).fetchone()
     if row:
+        if sync_role and row["role"] != role:
+            return conn.execute("UPDATE app_users SET role = %s WHERE id = %s RETURNING *", (role, row["id"])).fetchone()
         return row
     return conn.execute(
         "INSERT INTO app_users (login, display_name, oidc_subject, role) VALUES (%s, %s, %s, %s) "

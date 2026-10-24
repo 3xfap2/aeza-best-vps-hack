@@ -5,7 +5,8 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27.3-alpine
+# Непривилегированный nginx: процессы не от root, порт 8080
+FROM nginxinc/nginx-unprivileged:1.27.3-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /web/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080

@@ -1,5 +1,10 @@
 name: churn-radar
 
+# Ужесточение контейнеров: без лишних прав Linux и без повышения привилегий.
+x-hardened: &hardened
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
 x-secrets: &secrets
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:-radar-demo-2026}
   METRICS_TOKEN: ${METRICS_TOKEN:-radar-metrics-demo-token}
@@ -25,6 +30,9 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
+    <<: *hardened
+    read_only: true
+    tmpfs: [/tmp]
     environment:
       <<: *secrets
       DATABASE_URL: postgresql://radar:${DB_PASSWORD:-radar-db-demo}@db:5432/radar
@@ -36,6 +44,9 @@ services:
       OIDC_ISSUER: http://dex:5556/dex
       OIDC_PUBLIC_ISSUER: http://localhost:5556/dex
       OIDC_CLIENT_ID: churn-radar
+      OIDC_SCOPES: openid email profile groups
+      # Роль из системы входа: группа (claim groups в Keycloak / Authentik) или email → роль Радара
+      OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-radar-admins=admin,radar-marketing=marketer,radar-viewers=viewer,marketing@radar.example=marketer,viewer@radar.example=viewer}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_LINK_CODE: ${TELEGRAM_LINK_CODE:-}
       TELEGRAM_DIGEST_HOUR: ${TELEGRAM_DIGEST_HOUR:-9}
@@ -52,8 +63,11 @@ services:
 
   web:
     build: ./web
+    <<: *hardened
+    read_only: true
+    tmpfs: [/tmp]
     ports:
-      - "8080:80"
+      - "8080:8080"
     depends_on:
       api:
         condition: service_healthy
@@ -61,6 +75,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.5.0
+    <<: *hardened
     environment:
       METRICS_TOKEN: ${METRICS_TOKEN:-radar-metrics-demo-token}
     entrypoint: ["/bin/sh", "-c", "printf %s \"$$METRICS_TOKEN\" > /tmp/metrics_token && exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"]
@@ -75,6 +90,7 @@ services:
 
   grafana:
     image: grafana/grafana-oss:11.2.0
+    <<: *hardened
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-radar-grafana-demo}
       # Только агрегаты (суммы и число клиентов), без персональных данных — дашборд открыт на просмотр
@@ -96,6 +112,7 @@ services:
 
   dex:
     image: ghcr.io/dexidp/dex:v2.43.1
+    <<: *hardened
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     environment:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-radar-oidc-demo-secret}

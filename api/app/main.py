@@ -127,6 +127,11 @@ UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 @app.middleware("http")
+API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+DOCS_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'")
+
+
 async def security_headers(request: Request, call_next):
     # Защита от CSRF: браузер всегда шлёт Origin с изменяющими запросами; чужой сайт — отказ.
     # Клиенты API (curl, биллинг) Origin не шлют и проходят по Bearer-токену.
@@ -140,6 +145,8 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "same-origin")
+    # JSON API ничего не исполняет; страница Swagger — свои скрипты и стили (плюс её встроенный запуск).
+    response.headers.setdefault("Content-Security-Policy", DOCS_CSP if request.url.path.startswith("/api/v1/docs") else API_CSP)
     if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/v1/docs"):
         response.headers.setdefault("Cache-Control", "no-store")
     return response

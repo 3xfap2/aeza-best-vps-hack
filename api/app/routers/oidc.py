@@ -4,6 +4,11 @@
 обменивает код и берёт ключи по внутреннему (OIDC_ISSUER) — в Docker это разные
 адреса одного Dex. Подпись id_token, iss, aud, exp и nonce проверяются.
 Без настроек OIDC эндпоинты отвечают 404, а вход по паролю работает как обычно.
+
+Роль приходит из системы входа компании: claim OIDC_ROLE_CLAIM (по умолчанию groups,
+как в Keycloak и Authentik) сопоставляется с ролями по OIDC_ROLE_MAP; ключом может быть
+и email. Если совпадение есть, роль обновляется при каждом входе — источник правды IdP.
+Если нет — новому пользователю даётся OIDC_DEFAULT_ROLE, а роль можно сменить в «Команде».
 """
 from __future__ import annotations
 
@@ -43,6 +48,19 @@ def _cfg(request: Request):
     return cfg
 
 
+ROLE_RANK = ("viewer", "marketer", "admin")
+
+
+def role_from_claims(claims: dict, claim: str, role_map: dict[str, str]) -> str | None:
+    """Самая сильная роль среди групп пользователя и его email; None — совпадений нет."""
+    values = claims.get(claim) or []
+    if isinstance(values, str):
+        values = [values]
+    keys = [str(v).lower() for v in values] + [str(claims.get("email") or "").lower()]
+    roles = [role_map[k] for k in keys if k in role_map]
+    return max(roles, key=ROLE_RANK.index) if roles else None
+
+
 def _redirect_uri(cfg) -> str:
     return f"{cfg.public_url}/api/v1/auth/oidc/callback"
 
@@ -67,7 +85,7 @@ def oidc_login(request: Request) -> RedirectResponse:
         _pending[state] = (nonce, verifier, now)
     query = urlencode({
         "client_id": cfg.oidc_client_id, "redirect_uri": _redirect_uri(cfg), "response_type": "code",
-        "scope": "openid email profile", "state": state, "nonce": nonce,
+        "scope": cfg.oidc_scopes, "state": state, "nonce": nonce,
         "code_challenge": challenge, "code_challenge_method": "S256",
     })
     return RedirectResponse(f"{cfg.oidc_public_issuer}/auth?{query}", status_code=302)
@@ -110,8 +128,9 @@ def oidc_callback(request: Request, code: str | None = None, state: str | None =
 
     email = claims.get("email") or claims["sub"]
     name = claims.get("name") or email
+    role = role_from_claims(dict(claims), cfg.oidc_role_claim, cfg.oidc_role_map)
     with request.app.state.pool.connection() as conn:
-        user = db.upsert_oidc_user(conn, claims["sub"], email, name)
+        user = db.upsert_oidc_user(conn, claims["sub"], email, name, role or cfg.oidc_default_role, sync_role=role is not None)
     response = RedirectResponse("/app", status_code=302)
     start_session(request, response, user["id"])
     return response

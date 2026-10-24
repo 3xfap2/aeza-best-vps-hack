@@ -320,6 +320,20 @@ def _login(client, login, password):
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
+def test_role_from_sso_claims():
+    from app.config import _role_map
+    from app.routers.oidc import role_from_claims
+    m = _role_map("radar-admins=admin, radar-viewers=viewer, Boss@Corp.ru=marketer")
+    assert role_from_claims({"groups": ["radar-viewers"]}, "groups", m) == "viewer"
+    assert role_from_claims({"groups": ["radar-viewers", "radar-admins"]}, "groups", m) == "admin"   # сильнейшая
+    assert role_from_claims({"groups": "radar-admins"}, "groups", m) == "admin"
+    assert role_from_claims({"email": "boss@corp.ru"}, "groups", m) == "marketer"
+    assert role_from_claims({"groups": ["other"], "email": "x@y.z"}, "groups", m) is None
+    import pytest
+    with pytest.raises(RuntimeError):
+        _role_map("radar-admins=superuser")
+
+
 def test_roles_and_team(client, auth):
     me = client.get("/api/v1/auth/me", headers=auth).json()
     assert me["role"] == "admin"
