@@ -8,7 +8,8 @@
 - Персональные данные не уходят наружу: вместо email модель видит «клиент #62»,
   email подставляет сам Радар. Данные — только для чтения, записывать ИИ не может.
 
-Провайдеры: YandexGPT (Yandex AI Studio) и GigaChat — данные обрабатываются в РФ.
+Провайдеры: YandexGPT и GigaChat (данные обрабатываются в РФ) и OpenAI или любой
+OpenAI-совместимый сервис (AI_BASE_URL). Провайдер меняется одной переменной AI_PROVIDER.
 """
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ log = logging.getLogger("radar.ai")
 YANDEX_URL = "https://ai.api.cloud.yandex.net/foundationModels/v1/completion"
 GIGACHAT_OAUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 GIGACHAT_URL = "https://api.giga.chat/v1/chat/completions"
+OPENAI_URL = "https://api.openai.com/v1"
 TERMS = {"hour": "почасово", "week": "неделя", "month": "месяц", "quarter_year": "квартал", "half_year": "полгода", "year": "год"}
 
 
@@ -42,26 +44,29 @@ class AIError(RuntimeError):
 
 @dataclass(frozen=True)
 class AIConfig:
-    provider: str          # yandex | gigachat
-    api_key: str           # Yandex: API-ключ сервисного аккаунта; GigaChat: ключ авторизации (Basic)
+    provider: str          # yandex | gigachat | openai
+    api_key: str           # Yandex: API-ключ сервисного аккаунта; GigaChat: ключ авторизации (Basic); OpenAI: sk-…
     model: str
     folder_id: str | None = None   # только Yandex
     scope: str = "GIGACHAT_API_PERS"
     ca_bundle: str | None = None   # GigaChat: сертификат НУЦ Минцифры, если его нет в системе
+    base_url: str = OPENAI_URL     # OpenAI или совместимый сервис (OpenRouter, локальная Ollama…)
+    proxy: str | None = None       # исходящий прокси, если провайдер недоступен напрямую
     timeout: float = 40
 
 
 class AIClient:
-    def __init__(self, cfg: AIConfig) -> None:
+    def __init__(self, cfg: AIConfig, transport: httpx.BaseTransport | None = None) -> None:
         self.cfg = cfg
         self._token: tuple[str, float] | None = None
         self._lock = threading.Lock()
+        self._no_temperature = False   # модель не принимает temperature (рассуждающие модели) — больше не шлём
         verify = cfg.ca_bundle or True
-        self._http = httpx.Client(timeout=cfg.timeout, verify=verify)
+        self._http = httpx.Client(timeout=cfg.timeout, verify=verify, proxy=cfg.proxy, transport=transport)
 
     @property
     def title(self) -> str:
-        return {"yandex": "YandexGPT", "gigachat": "GigaChat"}.get(self.cfg.provider, self.cfg.provider)
+        return {"yandex": "YandexGPT", "gigachat": "GigaChat", "openai": "OpenAI"}.get(self.cfg.provider, self.cfg.provider)
 
     def complete(self, system: str, user: str, max_tokens: int = 700, temperature: float = 0.2) -> str:
         try:
@@ -69,6 +74,8 @@ class AIClient:
                 return self._yandex(system, user, max_tokens, temperature)
             if self.cfg.provider == "gigachat":
                 return self._gigachat(system, user, max_tokens, temperature)
+            if self.cfg.provider == "openai":
+                return self._openai(system, user, max_tokens, temperature)
         except httpx.HTTPError as e:
             raise AIError(f"{self.title} недоступен: {e}") from e
         raise AIError(f"Неизвестный провайдер {self.cfg.provider}")
@@ -88,6 +95,36 @@ class AIClient:
         if not alts:
             raise AIError("YandexGPT вернул пустой ответ")
         return alts[0]["message"]["text"].strip()
+
+    def _openai(self, system: str, user: str, max_tokens: int, temperature: float) -> str:
+        reasoning = self.cfg.model.startswith(("gpt-5", "o1", "o3", "o4"))
+        body: dict = {
+            "model": self.cfg.model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            # у рассуждающих моделей в лимит входят и скрытые рассуждения — даём запас
+            "max_completion_tokens": max_tokens * 4 if reasoning else max_tokens,
+        }
+        if reasoning:
+            body["reasoning_effort"] = "low"
+        if not (reasoning or self._no_temperature):
+            body["temperature"] = temperature
+        headers = {"Authorization": f"Bearer {self.cfg.api_key}"}
+        url = f"{self.cfg.base_url.rstrip('/')}/chat/completions"
+        r = self._http.post(url, headers=headers, json=body)
+        if r.status_code == 400 and "temperature" in r.text and "temperature" in body:
+            self._no_temperature = True
+            body.pop("temperature")
+            r = self._http.post(url, headers=headers, json=body)
+        if r.status_code == 403 and "region" in r.text.lower():
+            raise AIError("OpenAI недоступен из этой страны: задайте AI_PROXY или выберите YandexGPT / GigaChat")
+        if r.status_code == 404:
+            raise AIError(f"OpenAI: модели {self.cfg.model} нет — задайте AI_MODEL")
+        if r.status_code != 200:
+            raise AIError(f"OpenAI ответил {r.status_code}: {r.text[:200]}")
+        text = (r.json()["choices"][0]["message"].get("content") or "").strip()
+        if not text:
+            raise AIError("OpenAI вернул пустой ответ")
+        return text
 
     def _gigachat_token(self) -> str:
         with self._lock:
@@ -330,17 +367,18 @@ def config_from_env(env: dict) -> AIConfig | None:
     provider = (env.get("AI_PROVIDER") or "").strip().lower()
     if provider in ("", "off"):
         return None
-    if provider not in ("yandex", "gigachat"):
-        raise RuntimeError("AI_PROVIDER — yandex, gigachat или off")
+    if provider not in ("yandex", "gigachat", "openai"):
+        raise RuntimeError("AI_PROVIDER — yandex, gigachat, openai или off")
     key = env.get("AI_API_KEY") or ""
     if not key:
         raise RuntimeError("Для ИИ нужен AI_API_KEY")
     if provider == "yandex" and not env.get("AI_FOLDER_ID"):
         raise RuntimeError("Для YandexGPT нужен AI_FOLDER_ID (каталог Yandex Cloud)")
-    default_model = {"yandex": "yandexgpt/latest", "gigachat": "GigaChat-2"}[provider]
+    default_model = {"yandex": "yandexgpt/latest", "gigachat": "GigaChat-2", "openai": "gpt-4.1-mini"}[provider]
     return AIConfig(provider=provider, api_key=key, model=env.get("AI_MODEL") or default_model,
                     folder_id=env.get("AI_FOLDER_ID") or None, scope=env.get("AI_SCOPE") or "GIGACHAT_API_PERS",
-                    ca_bundle=env.get("AI_CA_BUNDLE") or None)
+                    ca_bundle=env.get("AI_CA_BUNDLE") or None, base_url=env.get("AI_BASE_URL") or OPENAI_URL,
+                    proxy=env.get("AI_PROXY") or None)
 
 
 __all__ = ["AIClient", "AIConfig", "AIError", "ask", "message", "digest", "gather", "portfolio_facts", "customer_facts",

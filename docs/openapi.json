@@ -1921,7 +1921,7 @@
               }
             ],
             "title": "Provider",
-            "description": "YandexGPT или GigaChat — данные обрабатываются в РФ"
+            "description": "YandexGPT, GigaChat (данные в РФ) или OpenAI"
           },
           "model": {
             "anyOf": [

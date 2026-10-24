@@ -47,3 +47,32 @@ def test_config_from_env():
     with pytest.raises(RuntimeError):
         ai.config_from_env({"AI_PROVIDER": "yandex", "AI_API_KEY": "k"})
     assert ai.config_from_env({"AI_PROVIDER": "gigachat", "AI_API_KEY": "k"}).model == "GigaChat-2"
+    assert ai.config_from_env({"AI_PROVIDER": "openai", "AI_API_KEY": "sk-x"}).base_url == "https://api.openai.com/v1"
+
+
+def test_openai_requests_and_fallbacks():
+    import httpx
+    import json
+    sent = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        sent.append(body)
+        assert request.headers["authorization"] == "Bearer sk-test" and request.url.path == "/v1/chat/completions"
+        if "temperature" in body and body["model"] == "strict-model":
+            return httpx.Response(400, json={"error": {"message": "Unsupported parameter: 'temperature'"}})
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": " Ответ "}}]})
+
+    def client(model):
+        return ai.AIClient(ai.AIConfig(provider="openai", api_key="sk-test", model=model), transport=httpx.MockTransport(handler))
+
+    assert client("gpt-4.1-mini").complete("s", "u") == "Ответ"
+    assert sent[-1]["temperature"] == 0.2 and sent[-1]["max_completion_tokens"] == 700
+    assert client("gpt-5-mini").complete("s", "u") == "Ответ"
+    assert "temperature" not in sent[-1] and sent[-1]["reasoning_effort"] == "low"
+    strict = client("strict-model")
+    assert strict.complete("s", "u") == "Ответ" and "temperature" not in sent[-1]      # повтор без temperature
+    region = ai.AIClient(ai.AIConfig(provider="openai", api_key="sk-test", model="m"), transport=httpx.MockTransport(
+        lambda r: httpx.Response(403, json={"error": {"code": "unsupported_country_region_territory"}})))
+    with pytest.raises(ai.AIError, match="AI_PROXY"):
+        region.complete("s", "u")

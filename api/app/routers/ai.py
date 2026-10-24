@@ -17,7 +17,7 @@ _slots = threading.BoundedSemaphore(2)
 
 class AIStatus(BaseModel):
     enabled: bool
-    provider: str | None = Field(description="YandexGPT или GigaChat — данные обрабатываются в РФ")
+    provider: str | None = Field(description="YandexGPT, GigaChat (данные в РФ) или OpenAI")
     model: str | None
     privacy: str = "В модель уходят суммы, сроки и причины; email клиентов заменяются на «клиент #ID» и наружу не передаются."
 

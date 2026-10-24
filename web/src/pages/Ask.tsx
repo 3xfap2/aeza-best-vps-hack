@@ -55,8 +55,8 @@ export default function Ask() {
           {status && !status.enabled ? (
             <div className="ask__off">
               <p className="ro-text">ИИ-помощник не подключён. Чтобы включить, задайте в <code>.env</code> провайдера и ключ:
-                <code className="formula">AI_PROVIDER=yandex · AI_API_KEY=… · AI_FOLDER_ID=…</code>
-                или <code>AI_PROVIDER=gigachat</code> с ключом авторизации GigaChat. Данные обрабатываются в РФ.</p>
+                <code className="formula">AI_PROVIDER=openai · AI_API_KEY=sk-…</code>
+                или <code>AI_PROVIDER=yandex</code> / <code>gigachat</code> — тогда данные обрабатываются в РФ.</p>
               <p className="ro-small">Без ИИ всё остальное работает: письма — по шаблонам, план дня — в «Удержании» и в боте (/today).</p>
             </div>
           ) : (
