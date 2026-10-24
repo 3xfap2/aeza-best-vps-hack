@@ -286,7 +286,7 @@ Prometheus из `compose.yaml` собирает их каждые 15 секун�
 | `prometheus` | Prometheus 3 | сбор метрик |
 | `dex` | Dex | OIDC-провайдер для входа через SSO |
 
-Подробно — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Подробно — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); почему именно так — 10 архитектурных решений в [docs/adr](docs/adr/README.md).
 
 ---
 
