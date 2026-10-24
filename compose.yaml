@@ -59,6 +59,9 @@ services:
       AI_CA_BUNDLE: ${AI_CA_BUNDLE:-}
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_PROXY: ${AI_PROXY:-}
+      # Внешние системы (CRM): события отзывов и работы с клиентами — JSON на этот адрес (см. app/integrations.py)
+      INTEGRATION_WEBHOOK_URL: ${INTEGRATION_WEBHOOK_URL:-}
+      INTEGRATION_WEBHOOK_SECRET: ${INTEGRATION_WEBHOOK_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

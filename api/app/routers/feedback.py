@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 from datetime import datetime
 from typing import Literal
 
@@ -41,12 +40,8 @@ class FeedbackStatus(BaseModel):
 def send(body: FeedbackIn, request: Request, user: User = Depends(current_user)) -> FeedbackItem:
     text = body.text.strip()
     with request.app.state.pool.connection() as conn:
-        fid = db.add_feedback(conn, user.login, user.display_name, body.kind, text, body.page)
-        item = next(r for r in db.list_feedback(conn, 1) if r["id"] == fid)
-    bot = request.app.state.bot
-    if bot:
-        bot.announce(f"<b>Отзыв о Радаре · {KIND_TITLES[body.kind]}</b>\n{html.escape(text[:500])}\n— "
-                     f"{html.escape(user.display_name)}" + (f", экран {html.escape(body.page)}" if body.page else ""))
+        item = db.add_feedback(conn, user.login, user.display_name, body.kind, text, body.page)
+    request.app.state.radar.integrations.publish("feedback.created", {**item, "kindTitle": KIND_TITLES[body.kind]})
     return FeedbackItem(**item)
 
 

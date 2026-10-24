@@ -179,7 +179,17 @@ def add_action(customer_id: int, body: ActionIn, request: Request, user: User = 
         row = db.add_action(conn, customer_id, body.kind, body.reason if body.kind == "churned" else None, body.note, user.login,
                             round(customer.expected_loss), follow_up, customer.score)
     request.app.state.radar.broker.publish("action", {"customerId": customer_id, "kind": body.kind})
+    publish_action(request.app.state.radar, customer, row)
     return ActionOut(**row)
+
+
+def publish_action(radar, customer, row: dict) -> None:
+    """Отметка работы с клиентом — во внешние системы (CRM): кто, что сделал и сколько было под угрозой."""
+    radar.integrations.publish("customer.action", {
+        "customerId": customer.account.id, "email": customer.account.email, "kind": row["kind"], "reason": row["reason"],
+        "note": row["note"], "author": row["author"], "followUp": row["followUp"], "score": customer.score,
+        "level": customer.level, "expectedLossEur": round(customer.expected_loss / 100, 2),
+    })
 
 
 class DeferIn(BaseModel):
@@ -228,6 +238,7 @@ def apply_deferral(state, customer_id: int, days: int, note: str | None, author:
                             {"customerId": customer_id, "days": days})
         after = radar.recalculate("event").result.by_id[customer_id]
     radar.broker.publish("action", {"customerId": customer_id, "kind": "deferred"})
+    publish_action(radar, before, row)
     return DeferOut(deferredUntil=until, services=names, scoreBefore=before.score, scoreAfter=after.score,
                     lossBefore=round(before.expected_loss / 100, 2), lossAfter=round(after.expected_loss / 100, 2),
                     action=ActionOut(**row))

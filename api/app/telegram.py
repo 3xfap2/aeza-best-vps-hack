@@ -211,10 +211,6 @@ class TelegramBot:
         lines.append(f"\nКому звонить: {self.public_url}/app/retention")
         return "\n".join(lines)
 
-    def announce(self, text: str) -> None:
-        """Сообщение всем подключённым чатам (например, новый отзыв о Радаре)."""
-        self._broadcast(text)
-
     def _broadcast(self, text: str) -> None:
         for chat_id in self._subscribers():
             try:

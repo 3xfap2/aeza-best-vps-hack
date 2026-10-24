@@ -148,7 +148,7 @@ function FeedbackList() {
       <div className="ro-cardhead"><h2 id="fb-list-t">Отзывы о Радаре</h2>
         <span className="ro-small">{data ? `новых: ${fresh}` : ''}</span></div>
       {!data ? <Skeleton h={80} /> : data.length === 0
-        ? <p className="ro-small fb-list__empty">Пока пусто. Сотрудники пишут через «Обратная связь» в меню; новые отзывы приходят и в Telegram-бот.</p>
+        ? <p className="ro-small fb-list__empty">Пока пусто. Сотрудники пишут через «Обратная связь» в меню. Отзывы можно передавать в вашу CRM — см. README, раздел «Подключить CRM».</p>
         : (
           <ul className="fb-list">
             {data.map((f) => (

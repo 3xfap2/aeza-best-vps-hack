@@ -79,6 +79,10 @@ export default function Model() {
   if (error && !data) return <ErrorBox message={error} />
   if (!data || !draft) return <Skeleton h={560} />
 
+  // веса, отличающиеся от стандартных (с ними модель проверялась): кнопка возвращает всё одним нажатием, затем «Сохранить»
+  const offDefault = data.features.filter((f) => draft.features[f.key].weight !== f.defaultWeight || !draft.features[f.key].enabled)
+  const resetToDefaults = () => setDraft({ ...draft, features: Object.fromEntries(
+    data.features.map((f) => [f.key, { ...draft.features[f.key], weight: f.defaultWeight, enabled: true }])) })
   const setFeature = (key: string, part: Partial<{ weight: number; enabled: boolean }>) =>
     setDraft({ ...draft, features: { ...draft.features, [key]: { ...draft.features[key], ...part } } })
 
@@ -88,7 +92,7 @@ export default function Model() {
         <div><h1>Модель</h1><StatusLine asOf={data.resolvedAsOf} /></div>
         <div className="ro-top__actions">
           <button className="ro-btn ro-btn--quiet ro-btn--sm" type="button" disabled={!dirty || saving}
-            onClick={() => setDraft(structuredClone(data.settings))}>Сбросить</button>
+            onClick={() => setDraft(structuredClone(data.settings))}>Отменить изменения</button>
           {editable ? <button className="ro-btn ro-btn--sm" type="button" disabled={!dirty || saving || !!invalid} onClick={save}>
             {saving ? 'Сохраняем…' : 'Сохранить'}</button>
             : <span className="work-tag" title="Веса можно подвигать для предпросмотра; сохранить может маркетолог или администратор">только просмотр</span>}
@@ -98,6 +102,12 @@ export default function Model() {
       <div className="model">
         <section className="ro-card model__weights" aria-labelledby="w-t">
           <div className="ro-cardhead"><h2 id="w-t">Коэффициенты</h2><span className="ro-small">версия настроек {data.version}</span></div>
+          {offDefault.length > 0 && (
+            <div className="weight__defaults">
+              <span className="ro-small">Изменено относительно стандартных весов: {offDefault.map((f) => f.title).join(', ')}</span>
+              <button className="ro-btn ro-btn--sm ro-btn--quiet" type="button" onClick={resetToDefaults}>Вернуть стандартные веса</button>
+            </div>
+          )}
           {data.features.map((f) => {
             const st = draft.features[f.key]
             return (
@@ -107,7 +117,7 @@ export default function Model() {
                   <label className="switch"><input type="checkbox" checked={st.enabled}
                     onChange={(e) => setFeature(f.key, { enabled: e.target.checked })} />включён</label>
                 </div>
-                <p className="ro-small">{f.description}</p>
+                <p className="ro-small">{f.description}{st.weight !== f.defaultWeight && <b> Стандартный вес — {f.defaultWeight}.</b>}</p>
                 <div className="weight__ctl">
                   <input id={`w-${f.key}`} className="ro-range" type="range" min={0} max={100} step={1} value={st.weight}
                     disabled={!st.enabled} style={{ ['--p' as string]: `${st.weight}%` }}
@@ -221,10 +231,19 @@ export default function Model() {
       </div>
       <BacktestCard />
       <SensitivityCard />
-      {dirty && preview && (
-        <div className="pv-dock" aria-hidden="true">
-          Высокий {preview.before.levels.high} → {preview.after.levels.high} · Потеря {eur(preview.after.expectedLoss - preview.before.expectedLoss)}
-          <button className="ro-btn ro-btn--sm" type="button" disabled={saving || !!invalid || !editable} onClick={save} tabIndex={-1}>Сохранить</button>
+      {dirty && (
+        // Плашка всегда на виду, пока есть несохранённые изменения: кнопку «Сохранить» не нужно искать вверху страницы
+        <div className="pv-dock" role="region" aria-label="Несохранённые изменения">
+          <div className="pv-dock__text">
+            <b>Изменения не сохранены</b>
+            <span>{invalid ? invalid
+              : preview ? `Высокий риск: ${preview.before.levels.high} → ${preview.after.levels.high} · потеря ${eur(preview.before.expectedLoss)} → ${eur(preview.after.expectedLoss)}`
+                : 'Считаем, что изменится…'}</span>
+          </div>
+          <button className="ro-btn ro-btn--sm ro-btn--quiet" type="button" disabled={saving} onClick={() => setDraft(structuredClone(data.settings))}>Отменить</button>
+          {editable
+            ? <button className="ro-btn ro-btn--sm" type="button" disabled={saving || !!invalid} onClick={save}>{saving ? 'Сохраняем…' : 'Сохранить изменения'}</button>
+            : <span className="pv-dock__note">Сохранить может маркетолог или администратор</span>}
         </div>
       )}
       {toast.node}

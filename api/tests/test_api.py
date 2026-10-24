@@ -699,3 +699,57 @@ def test_weight_sensitivity(client, auth):
     assert row["minus"]["lossPct"] < 0 < row["plus"]["lossPct"]
     assert s["maxChanged"] == max(max(r["minus"]["changed"], r["plus"]["changed"]) for r in s["rows"])
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_events_go_to_external_systems(client, auth):
+    """Отзыв и отметка работы с клиентом уходят во внешние системы (CRM) через подключаемый Sink."""
+    import time
+    from app.integrations import Publisher
+
+    got = []
+
+    class FakeCRM:
+        name = "crm"
+
+        def send(self, event):
+            got.append(event)
+
+    radar = client.app.state.radar
+    old, radar.integrations = radar.integrations, Publisher([FakeCRM()])
+    try:
+        client.post("/api/v1/feedback", headers=auth, json={"kind": "idea", "text": "Добавить выгрузку в CRM"})
+        client.post("/api/v1/customers/5/actions", headers=auth, json={"kind": "called", "note": "договорились"})
+        for _ in range(50):
+            if len(got) >= 2:
+                break
+            time.sleep(0.05)
+    finally:
+        radar.integrations.close()
+        radar.integrations = old
+    by_type = {e.type: e.data for e in got}
+    assert by_type["feedback.created"]["text"] == "Добавить выгрузку в CRM"
+    assert by_type["customer.action"]["customerId"] == 5 and by_type["customer.action"]["kind"] == "called"
+    assert "email" in by_type["customer.action"] and "expectedLossEur" in by_type["customer.action"]
+
+
+def test_webhook_sink_signs_body(monkeypatch):
+    import hashlib
+    import hmac
+
+    from app import integrations
+
+    sent = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+    def fake_post(url, content, headers, timeout):
+        sent.update(url=url, body=content, headers=headers)
+        return Resp()
+
+    monkeypatch.setattr(integrations.httpx, "post", fake_post)
+    integrations.WebhookSink("https://crm.example/hook", "s3cret").send(integrations.Event("feedback.created", {"id": 1}))
+    expected = "sha256=" + hmac.new(b"s3cret", sent["body"], hashlib.sha256).hexdigest()
+    assert sent["headers"]["X-Radar-Signature"] == expected and sent["headers"]["X-Radar-Event"] == "feedback.created"
+    assert integrations.build_sinks({}) == [] and len(integrations.build_sinks({"INTEGRATION_WEBHOOK_URL": "https://x.example"})) == 1

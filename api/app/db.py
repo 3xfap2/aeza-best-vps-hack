@@ -460,10 +460,11 @@ def history_info(conn: Connection) -> dict:
     return {"snapshots": row["n"], "first": row["first"], "last": row["last"], "demo": bool(row["demo"])}
 
 
-def add_feedback(conn: Connection, author: str, author_name: str, kind: str, text: str, page: str | None) -> int:
+def add_feedback(conn: Connection, author: str, author_name: str, kind: str, text: str, page: str | None) -> dict:
     return conn.execute(
-        "INSERT INTO feedback (author, author_name, kind, text, page) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-        (author, author_name, kind, text, page)).fetchone()["id"]
+        "INSERT INTO feedback (author, author_name, kind, text, page) VALUES (%s, %s, %s, %s, %s) "
+        "RETURNING id, author, author_name AS \"authorName\", kind, text, page, status, created_at AS \"createdAt\"",
+        (author, author_name, kind, text, page)).fetchone()
 
 
 def list_feedback(conn: Connection, limit: int) -> list[dict]:
