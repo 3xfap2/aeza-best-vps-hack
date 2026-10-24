@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from app import ai, db, demo_stream, http
 from app.config import load_config
 from app.inbox import Inbox
-from app.integrations import Publisher, build_sinks
+from app.integrations import Outbox, build_sinks
 from app.routers import ai as ai_router
 from app.routers import (
     analytics,
@@ -100,7 +100,8 @@ async def lifespan(app: FastAPI):
     if applied:
         log.info("Применены миграции: %s", ", ".join(applied))
     radar = AppState(pool)
-    radar.integrations = Publisher(build_sinks(dict(os.environ)))
+    radar.integrations = Outbox(build_sinks(dict(os.environ)), pool)
+    radar.integrations.start()
     radar.broker.bind(asyncio.get_running_loop())
     bootstrap(radar, config)
     radar.recalculate("startup")
@@ -136,7 +137,7 @@ async def lifespan(app: FastAPI):
     finally:
         scheduler.cancel()
         app.state.inbox.stop()
-        radar.integrations.close()
+        radar.integrations.stop()
         app.state.demo_stream.stop()
         if bot:
             bot.stop()

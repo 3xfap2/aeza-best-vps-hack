@@ -42,7 +42,7 @@ def send(body: FeedbackIn, request: Request, response: Response, user: User = De
     text = body.text.strip()
     with request.app.state.pool.connection() as conn:
         item = db.add_feedback(conn, user.login, user.display_name, body.kind, text, body.page)
-    request.app.state.radar.integrations.publish("feedback.created", {**item, "kindTitle": KIND_TITLES[body.kind]})
+        request.app.state.radar.integrations.enqueue(conn, "feedback.created", {**item, "kindTitle": KIND_TITLES[body.kind]})
     created(response, f"/api/v1/feedback/{item['id']}")
     return FeedbackItem(**item)
 

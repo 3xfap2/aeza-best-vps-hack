@@ -82,7 +82,7 @@ def _follow_up(radar, days: int | None) -> date | None:
 
 def _publish(radar, conn, customer: CustomerResult, row: dict) -> None:
     """Отметка — во внешние системы (CRM): кто, что сделал и сколько было под угрозой."""
-    radar.integrations.publish("customer.action", {
+    radar.integrations.enqueue(conn, "customer.action", {
         "customerId": customer.account.id, "email": customer.account.email, "kind": row["kind"], "reason": row["reason"],
         "note": row["note"], "author": row["author"], "followUp": row["followUp"], "score": customer.score,
         "level": customer.level, "expectedLossEur": round(customer.expected_loss / 100, 2),

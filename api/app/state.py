@@ -19,7 +19,7 @@ from psycopg_pool import ConnectionPool
 
 from app import db
 from app.domain import Snapshot
-from app.integrations import Publisher
+from app.integrations import Outbox
 from app.scoring.engine import EngineResult, Transition, evaluate, reevaluate
 from app.scoring.settings import ModelSettings, default_settings
 
@@ -79,7 +79,7 @@ class AppState:
         self.recalculations = 0
         self.partial_recalculations = 0
         # Внешние системы (CRM, вебхук): события отзывов и работы с клиентами. По умолчанию никуда не уходят.
-        self.integrations = Publisher([])
+        self.integrations = Outbox([], pool)
         # Вызываются после каждого пересчёта: (прошлый результат, новый результат, причина).
         self.listeners: list[Callable] = []
         # Изменения данных и настроек выполняются по одному: чтение → запись → пересчёт.

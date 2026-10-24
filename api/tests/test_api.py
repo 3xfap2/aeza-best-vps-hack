@@ -709,35 +709,38 @@ def test_weight_sensitivity(client, auth):
 
 
 def test_events_go_to_external_systems(client, auth):
-    """Отзыв и отметка работы с клиентом уходят во внешние системы (CRM) через подключаемый Sink."""
-    import time
+    """Отзыв и отметка работы с клиентом — в outbox в той же транзакции; доставка с повторами, пока CRM не ответит."""
+    from app.integrations import Outbox
 
-    from app.integrations import Publisher
+    got, fail = [], {"on": True}
 
-    got = []
-
-    class FakeCRM:
+    class FlakyCRM:
         name = "crm"
 
         def send(self, event):
+            if fail["on"]:
+                raise ConnectionError("CRM недоступна")
             got.append(event)
 
     radar = client.app.state.radar
-    old, radar.integrations = radar.integrations, Publisher([FakeCRM()])
+    old, radar.integrations = radar.integrations, Outbox([FlakyCRM()], radar.pool)
     try:
         client.post("/api/v1/feedback", headers=auth, json={"kind": "idea", "text": "Добавить выгрузку в CRM"})
         client.post("/api/v1/customers/5/actions", headers=auth, json={"kind": "called", "note": "договорились"})
-        for _ in range(50):
-            if len(got) >= 2:
-                break
-            time.sleep(0.05)
+        assert radar.integrations.deliver_due() == 0            # CRM лежит — события остаются в outbox
+        with psycopg.connect(TEST_URL, autocommit=True) as conn:
+            rows = conn.execute("SELECT attempts, last_error, delivered_at FROM outbox WHERE sink = 'crm'").fetchall()
+            assert len(rows) == 2 and all(r[0] == 1 and "недоступна" in r[1] and r[2] is None for r in rows)
+            conn.execute("UPDATE outbox SET next_attempt_at = now() WHERE sink = 'crm'")   # не ждём паузу
+        fail["on"] = False
+        assert radar.integrations.deliver_due() == 2 and radar.integrations.deliver_due() == 0
     finally:
-        radar.integrations.close()
         radar.integrations = old
-    by_type = {e.type: e.data for e in got}
-    assert by_type["feedback.created"]["text"] == "Добавить выгрузку в CRM"
-    assert by_type["customer.action"]["customerId"] == 5 and by_type["customer.action"]["kind"] == "called"
-    assert "email" in by_type["customer.action"] and "expectedLossEur" in by_type["customer.action"]
+    by_type = {e.type: e for e in got}
+    assert by_type["feedback.created"].data["text"] == "Добавить выгрузку в CRM"
+    action = by_type["customer.action"].data
+    assert action["customerId"] == 5 and action["kind"] == "called" and "email" in action and "expectedLossEur" in action
+    assert by_type["customer.action"].id > 0                     # номер доставки — для защиты от повтора у получателя
 
 
 def test_webhook_sink_signs_body(monkeypatch):
@@ -757,9 +760,12 @@ def test_webhook_sink_signs_body(monkeypatch):
         return Resp()
 
     monkeypatch.setattr(integrations.httpx, "post", fake_post)
-    integrations.WebhookSink("https://crm.example/hook", "s3cret").send(integrations.Event("feedback.created", {"id": 1}))
+    from datetime import datetime, timezone
+    integrations.WebhookSink("https://crm.example/hook", "s3cret").send(
+        integrations.Event(7, "feedback.created", {"id": 1}, datetime.now(timezone.utc)))
     expected = "sha256=" + hmac.new(b"s3cret", sent["body"], hashlib.sha256).hexdigest()
     assert sent["headers"]["X-Radar-Signature"] == expected and sent["headers"]["X-Radar-Event"] == "feedback.created"
+    assert sent["headers"]["X-Radar-Delivery"] == "7" and integrations.backoff(1).seconds == 5 and integrations.backoff(30).seconds == 3600
     assert integrations.build_sinks({}) == [] and len(integrations.build_sinks({"INTEGRATION_WEBHOOK_URL": "https://x.example"})) == 1
 
 

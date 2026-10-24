@@ -13,6 +13,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_l
 from prometheus_client.core import GaugeMetricFamily, HistogramMetricFamily
 
 from app import db
+from app.integrations import outbox_counts
 from app.money import to_euros
 from app.security import request_token, token_hash
 
@@ -102,6 +103,13 @@ class RadarCollector:
         for state, n in inbox.items():
             queue.add_metric([state], n)
         yield queue
+        with self.radar.pool.connection() as conn:
+            outbox = outbox_counts(conn)
+        sent = GaugeMetricFamily("churn_radar_outbox_events", "События во внешние системы (CRM): ждут, доставлены, не доставлены после всех попыток",
+                                 labels=["state"])
+        for state, n in outbox.items():
+            sent.add_metric([state], n)
+        yield sent
 
 
 def build_registry(radar) -> CollectorRegistry:

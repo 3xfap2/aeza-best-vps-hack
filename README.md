@@ -136,7 +136,9 @@ score клиента  = максимум по действующим услуг�
 
 Проще всего — вебхук: `INTEGRATION_WEBHOOK_URL=https://crm.example/hooks/radar` в `.env`. Каждое событие уходит POST-запросом с телом `{"type": "...", "data": {...}, "at": "..."}`, заголовком `X-Radar-Event` и, если задан `INTEGRATION_WEBHOOK_SECRET`, подписью `X-Radar-Signature: sha256=<HMAC тела>`.
 
-Подключить CRM напрямую — один класс в [api/app/integrations.py](api/app/integrations.py): метод `send(event)` (образец — `WebhookSink`) и строка в `build_sinks()`. Отправка идёт в фоне: если CRM недоступна, действие в панели всё равно сохраняется, ошибка пишется в лог.
+Подключить CRM напрямую — один класс в [api/app/integrations.py](api/app/integrations.py): атрибут `name`, метод `send(event)` (образец — `WebhookSink`) и строка в `build_sinks()`.
+
+Доставка надёжная — transactional outbox: событие пишется в таблицу `outbox` в той же транзакции, что и действие (отметка, отзыв), поэтому не теряется, если CRM недоступна или Радар перезапустился. Фоновый поток доставляет с повторами: пауза 5 с, 10 с, 20 с… до часа; после 10 неудачных попыток событие остаётся в `outbox` с `last_error`. Каждая доставка несёт `X-Radar-Delivery` — номер события, по нему получатель отбрасывает повтор. Метрика `churn_radar_outbox_events{state="pending|delivered|failed"}`.
 
 ---
 
