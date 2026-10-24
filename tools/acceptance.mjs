@@ -125,8 +125,14 @@ const run = async () => {
   const loss = Number((m.text.match(/^churn_radar_expected_loss_eur\{[^}]*\} ([\d.e+]+)/m) || [])[1])
   check('/metrics с токеном = сводка', m.status === 200 && Math.abs(loss - s.expectedLoss) < 0.01, `€ ${loss}`)
   try {
-    const t = await (await fetch(PROM + '/api/v1/targets')).json()
-    check('Prometheus собирает /metrics', t.data.activeTargets.some((x) => x.health === 'up'))
+    // сразу после запуска Prometheus ещё не успел сходить за метриками (раз в 15 с) — ждём до 30 с
+    let up = false
+    for (let i = 0; i < 15 && !up; i++) {
+      const t = await (await fetch(PROM + '/api/v1/targets')).json()
+      up = t.data.activeTargets.some((x) => x.health === 'up')
+      if (!up) await new Promise((r) => setTimeout(r, 2000))
+    }
+    check('Prometheus собирает /metrics', up)
     const rules = await (await fetch(PROM + '/api/v1/rules')).json()
     check('Prometheus: правила алертов', rules.data.groups.some((g) => g.name === 'churn-radar'))
   } catch (e) { check('Prometheus доступен', false, String(e.message)) }
