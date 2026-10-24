@@ -278,3 +278,28 @@ def test_demo_history_is_consistent_with_snapshot():
     assert b.caught / b.churned > 0.6
     rate = {k: v.churned / v.customers for k, v in b.levels.items()}
     assert rate["high"] > rate["medium"] > rate["low"]
+
+
+def test_partial_recalculation_matches_full():
+    """Пересчёт только затронутых клиентов даёт ровно то же, что полный пересчёт."""
+    from dataclasses import replace
+    from app.scoring.engine import reevaluate
+    root = Path(__file__).resolve().parents[2] / "data" / "demo"
+    snap0 = SnapshotIn.model_validate(json.loads((root / "data.json").read_text(encoding="utf-8"))).to_snapshot()
+    settings = default_settings()
+    before = evaluate(snap0, settings)
+    # клиент 42 потратил деньги и выключил автопродление, клиенту 7 пришёл сигнал из поддержки
+    accounts = {a.id: a for a in snap0.accounts}
+    changed_acc = [replace(accounts[42], balance=0, bonusBalance=0), replace(accounts[7], signals={"supportTickets30d": 4})]
+    ids = {a.id for a in changed_acc}
+    services = [replace(s, autoProlong=False) if s.ownerId == 42 else s for s in snap0.services if s.ownerId in ids]
+    service_ids = {s.id for s in services}
+    transactions = [t for t in snap0.transactions if t.serviceId in service_ids]
+    snap1 = snap0.with_accounts(changed_acc, services, transactions)
+    full = evaluate(snap1, settings)
+    part = reevaluate(before, changed_acc, services, transactions)
+    assert [(c.account.id, c.score, c.level, round(c.expected_loss, 6)) for c in part.customers] == \
+           [(c.account.id, c.score, c.level, round(c.expected_loss, 6)) for c in full.customers]
+    assert part.summary == full.summary
+    assert part.by_id[42].score != before.by_id[42].score
+    assert len(snap1.services) == len(snap0.services) and len(snap1.transactions) == len(snap0.transactions)

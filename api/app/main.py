@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from app import db
 from app.config import load_config
 from app import ai, demo_stream
+from app.inbox import Inbox
 from app.routers.source import snapshot_origin
 from app.routers import ai as ai_router
 from app.routers import analytics, auth, customers, feedback, fx, integrations, metrics, model, oidc, retention, source, stream, users
@@ -106,6 +107,8 @@ async def lifespan(app: FastAPI):
         app.state.demo_stream.start(int(os.environ.get("DEMO_STREAM_INTERVAL", "10")), 0)
     if ai_cfg:
         log.info("ИИ-помощник: %s, модель %s", app.state.ai.title, ai_cfg.model)
+    app.state.inbox = Inbox(radar, config.database_url)   # события из сервиса приёма (Go) пачками
+    app.state.inbox.start()
     app.state.metrics_registry = metrics.build_registry(radar)
     scheduler = asyncio.create_task(scheduled_recalc(radar))
     bot = None
@@ -118,6 +121,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         scheduler.cancel()
+        app.state.inbox.stop()
         app.state.demo_stream.stop()
         if bot:
             bot.stop()

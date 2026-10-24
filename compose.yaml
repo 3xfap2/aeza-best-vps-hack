@@ -64,6 +64,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Приём потока событий биллинга (Go): пачки в очередь event_inbox, API разбирает их и пересчитывает затронутых клиентов
+  ingest:
+    build: ./ingest
+    <<: *hardened
+    read_only: true
+    environment:
+      DATABASE_URL: postgres://radar:${DB_PASSWORD:-radar-db-demo}@db:5432/radar
+      INGEST_TOKEN: ${INGEST_TOKEN:-radar-ingest-demo-token}
+    depends_on:
+      api:
+        condition: service_healthy   # таблицу очереди создают миграции API
+    restart: unless-stopped
+
   web:
     build: ./web
     <<: *hardened
@@ -73,6 +86,8 @@ services:
       - "8080:8080"
     depends_on:
       api:
+        condition: service_healthy
+      ingest:
         condition: service_healthy
     restart: unless-stopped
 
@@ -89,6 +104,7 @@ services:
       - "9090:9090"
     depends_on:
       - api
+      - ingest
     restart: unless-stopped
 
   grafana:

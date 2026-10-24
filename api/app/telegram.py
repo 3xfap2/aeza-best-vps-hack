@@ -38,7 +38,8 @@ LOSS_GROWTH = 0.2          # рост реально собираемой пот
 LOSS_GROWTH_MIN = 5000     # и не меньше € 50 — мелкие колебания не беспокоят
 # После смены набора данных целиком (демо-набор, возврат к снимку) рост не сигнал: просто новая точка отсчёта.
 NEW_BASELINE = ("startup", "reset", "preset:case", "preset:extended")
-REASON_TITLES = {"event": "событие биллинга", "settings": "изменили настройки модели", "simulate": "прошло время (перемотка)",
+STREAMS = ("demo", "ingest")
+REASON_TITLES = {"event": "событие биллинга", "ingest": "поток событий из биллинга", "settings": "изменили настройки модели", "simulate": "прошло время (перемотка)",
                  "schedule": "плановый пересчёт: сроки приблизились", "snapshot": "загружен новый снимок данных",
                  "demo": "событие демо-потока"}
 MAX_TODAY = 8
@@ -134,14 +135,14 @@ class TelegramBot:
         if before is None or reason in NEW_BASELINE:
             self._loss_base = after.summary.expected_loss_paid
             return
-        # демо-поток шлёт событие раз в несколько секунд — уведомляем не чаще раза в 5 минут
-        if reason == "demo" and time.time() - self._last_demo_alert < 300:
+        # потоки событий (демо и биллинг пачками) пересчитывают часто — уведомляем не чаще раза в 5 минут
+        if reason in STREAMS and time.time() - self._last_demo_alert < 300:
             self.loss_growth(before, after, reason)   # только сдвинуть базу роста
             return
         growth = self.loss_growth(before, after, reason)
         if growth:
             self._broadcast(growth)
-            if reason == "demo":
+            if reason in STREAMS:
                 self._last_demo_alert = time.time()
         old = {c.account.id: c.level for c in before.customers}
         escalated = [c for c in after.customers if c.level == "high" and old.get(c.account.id) != "high"]
@@ -155,7 +156,7 @@ class TelegramBot:
         if len(escalated) > MAX_ALERTS_PER_RECALC:
             lines.append(f"\nи ещё {len(escalated) - MAX_ALERTS_PER_RECALC} — в панели: {self.public_url}/app/customers")
         self._broadcast("\n".join(lines))
-        if reason == "demo":
+        if reason in STREAMS:
             self._last_demo_alert = time.time()
 
     def _digest_loop(self) -> None:

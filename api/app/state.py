@@ -19,7 +19,7 @@ from psycopg_pool import ConnectionPool
 
 from app import db
 from app.domain import Snapshot
-from app.scoring.engine import EngineResult, Transition, evaluate
+from app.scoring.engine import EngineResult, Transition, evaluate, reevaluate
 from app.scoring.settings import ModelSettings, default_settings
 
 
@@ -76,6 +76,7 @@ class AppState:
         self.pool = pool
         self.broker = Broker()
         self.recalculations = 0
+        self.partial_recalculations = 0
         # Вызываются после каждого пересчёта: (прошлый результат, новый результат, причина).
         self.listeners: list[Callable] = []
         # Изменения данных и настроек выполняются по одному: чтение → запись → пересчёт.
@@ -103,15 +104,28 @@ class AppState:
                        if before.get(c.account.id) != (c.score, c.level)]
             db.save_score_changes(conn, changed, result.as_of, reason)
 
-    def recalculate(self, reason: str) -> Current:
+    def recalculate(self, reason: str, accounts: set[int] | None = None) -> Current:
+        """Пересчёт. accounts — затронутые клиенты (события биллинга): пересчитываются только они,
+        если настройки не менялись и дата расчёта не «сейчас»; иначе — полный пересчёт."""
         with self._lock:
             started = time.perf_counter()
+            cur = self._current
             with self.pool.connection() as conn:
-                snapshot = db.load_snapshot(conn)
                 found = db.current_settings(conn)
+                settings, settings_version = found if found else (default_settings(), 0)
+                partial = (accounts is not None and cur is not None and settings_version == cur.settings_version
+                           and settings.asOf.mode != "now")
+                if partial:
+                    rows = db.load_accounts(conn, accounts)
+                else:
+                    snapshot = db.load_snapshot(conn)
                 transitions = db.transitions(conn)
-            settings, settings_version = found if found else (default_settings(), 0)
-            result = evaluate(snapshot, settings)
+            if partial:
+                snapshot = cur.snapshot.with_accounts(*rows)
+                result = reevaluate(cur.result, *rows)
+            else:
+                result = evaluate(snapshot, settings)
+            self.partial_recalculations += partial
             previous = self._current.result if self._current else None
             self._record_history(previous, result, reason)
             version = (self._current.version + 1) if self._current else 1

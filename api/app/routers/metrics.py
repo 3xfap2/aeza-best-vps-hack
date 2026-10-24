@@ -93,6 +93,15 @@ class RadarCollector:
                                 value=s.as_of.timestamp())
         yield GaugeMetricFamily("churn_radar_live_clients", "Подключённые панели (SSE)",
                                 value=self.radar.broker.count)
+        yield GaugeMetricFamily("churn_radar_partial_recalculations", "Пересчёты только затронутых клиентов с момента запуска",
+                                value=self.radar.partial_recalculations)
+        with self.radar.pool.connection() as conn:
+            inbox = db.inbox_counts(conn)
+        queue = GaugeMetricFamily("churn_radar_inbox_events", "Очередь событий биллинга: ждут, применены, отклонены",
+                                  labels=["state"])
+        for state, n in inbox.items():
+            queue.add_metric([state], n)
+        yield queue
 
 
 def build_registry(radar) -> CollectorRegistry:

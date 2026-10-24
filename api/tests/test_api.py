@@ -626,3 +626,33 @@ def test_feedback_about_radar(client, auth):
     viewer = _login(client, "viewer2", "pass-2026-long")
     assert client.post("/api/v1/feedback", headers=viewer, json={"kind": "problem", "text": "Не грузится график"}).status_code == 201
     assert client.get("/api/v1/feedback", headers=viewer).status_code == 403
+
+
+def test_event_inbox_batches_and_partial_recalc(client, auth):
+    """Очередь событий (её наполняет сервис приёма на Go): пачка, один пересчёт затронутых, дубли и ошибки."""
+    client.post("/api/v1/source/preset/case", headers=auth)
+    state = client.app.state
+    before_balance = client.get("/api/v1/customers/3", headers=auth).json()["balance"]
+    partial = state.radar.partial_recalculations
+    events = [("t-1", {"type": "topup", "accountId": 3, "amount": 10}),
+              ("t-2", {"type": "topup", "accountId": 3, "amount": 5}),
+              ("t-3", {"type": "autoprolong", "serviceId": 999999, "enabled": True}),
+              ("t-4", {"type": "nonsense"})]
+    with psycopg.connect(TEST_URL, autocommit=True) as conn:
+        for eid, payload in events + [("t-1", {"type": "topup", "accountId": 3, "amount": 10})]:
+            conn.execute("INSERT INTO event_inbox (event_id, payload) VALUES (%s, %s) ON CONFLICT (event_id) DO NOTHING",
+                         (eid, json.dumps(payload)))
+    state.inbox.drain()
+    after = client.get("/api/v1/customers/3", headers=auth).json()["balance"]
+    assert round(after - before_balance, 2) == 15          # повтор t-1 не применился второй раз
+    with psycopg.connect(TEST_URL) as conn:
+        rows = dict(conn.execute("SELECT event_id, ok FROM event_inbox WHERE event_id LIKE 't-%'").fetchall())
+    assert rows == {"t-1": True, "t-2": True, "t-3": False, "t-4": False}
+    assert state.radar.partial_recalculations > partial
+    # частичный пересчёт совпадает с полным
+    partial_summary = client.get("/api/v1/analytics/summary", headers=auth).json()
+    state.radar.recalculate("check")
+    assert client.get("/api/v1/analytics/summary", headers=auth).json()["expectedLoss"] == partial_summary["expectedLoss"]
+    metrics = client.get("/metrics", headers={"Authorization": f"Bearer {METRICS_TOKEN}"}).text
+    assert 'churn_radar_inbox_events{state="rejected"} 2.0' in metrics
+    client.post("/api/v1/source/preset/case", headers=auth)

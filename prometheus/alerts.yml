@@ -17,6 +17,14 @@ groups:
         annotations:
           summary: "Радар не пересчитывался больше 3 часов"
           description: "Проверьте сервис api и плановый пересчёт (recalcMinutes)."
+      - alert: ChurnInboxBacklog
+        expr: churn_radar_inbox_events{state="pending"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Очередь событий биллинга не разбирается: ждут {{ $value }}"
+          description: "Сервис приёма принимает события, а API не успевает их применить. Проверьте сервис api."
       - alert: ChurnRadarDown
         expr: up{job="churn-radar"} == 0
         for: 2m

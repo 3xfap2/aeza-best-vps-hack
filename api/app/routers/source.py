@@ -226,18 +226,19 @@ def apply_event(state, event: Any, author: str, reason: str) -> tuple[str, int]:
     with radar.write_lock:
         at = radar.current.result.as_of
         with state.pool.connection() as conn:
-            summary = _apply_event(conn, event, at)
+            summary = write_event(conn, event, at)
+            account = affected_account(conn, event)
             db.log_activity(conn, "event", summary, author, event.model_dump())
-        cur = radar.recalculate(reason)
+        cur = radar.recalculate(reason, accounts={account} if account else None)
     return summary, cur.version
 
 
-_event_adapter = TypeAdapter(SourceEvent)
+event_adapter = TypeAdapter(SourceEvent)
 
 
 def demo_sender(state):
     """Для демо-потока: событие-словарь → тот же путь, что POST /source/events."""
-    return lambda event: apply_event(state, _event_adapter.validate_python(event), demo_stream.AUTHOR, "demo")[0]
+    return lambda event: apply_event(state, event_adapter.validate_python(event), demo_stream.AUTHOR, "demo")[0]
 
 
 class DemoStreamIn(BaseModel):
@@ -282,7 +283,17 @@ def demo_stream_set(body: DemoStreamIn, request: Request, user: User = Depends(r
     return _stream_out(stream)
 
 
-def _apply_event(conn, event: Any, at: datetime) -> str:
+def affected_account(conn, event: Any) -> int | None:
+    """Чей score меняет событие — пересчитывается только этот клиент."""
+    if isinstance(event, TopupEvent):
+        return event.accountId
+    if isinstance(event, SignalEvent):
+        return event.targetId if event.name == "supportTickets30d" else db.owner_of(conn, event.targetId)
+    return db.owner_of(conn, event.serviceId)
+
+
+def write_event(conn, event: Any, at: datetime) -> str:
+    """Записать событие биллинга в данные источника (без пересчёта)."""
     if isinstance(event, TopupEvent):
         return simulator.topup(conn, event.accountId, round(event.amount * 100))
     if isinstance(event, AutoprolongEvent):

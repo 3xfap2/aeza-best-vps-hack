@@ -63,6 +63,24 @@ def load_snapshot(conn: Connection) -> Snapshot:
     return Snapshot(accounts, services, transactions, row["reference_at"] if row else None)
 
 
+def load_accounts(conn: Connection, ids: set[int]) -> tuple[list[Account], list[Service], list[Transaction]]:
+    """Свежие строки только этих аккаунтов — для пересчёта затронутых клиентов."""
+    ids_ = list(ids)
+    accounts = [Account(**r) for r in conn.execute(
+        f"SELECT {_cols(ACCOUNT_COLS)} FROM accounts WHERE id = ANY(%s) ORDER BY id", (ids_,))]
+    services = [Service(**r) for r in conn.execute(
+        f'SELECT {_cols(SERVICE_COLS)} FROM services WHERE "ownerId" = ANY(%s) ORDER BY id', (ids_,))]
+    transactions = [Transaction(**r) for r in conn.execute(
+        f'SELECT {_cols(TX_COLS)} FROM transactions WHERE "serviceId" IN '
+        f'(SELECT id FROM services WHERE "ownerId" = ANY(%s)) ORDER BY id', (ids_,))]
+    return accounts, services, transactions
+
+
+def owner_of(conn: Connection, service_id: int) -> int | None:
+    row = conn.execute('SELECT "ownerId" FROM services WHERE id = %s', (service_id,)).fetchone()
+    return row["ownerId"] if row else None
+
+
 def source_is_empty(conn: Connection) -> bool:
     return conn.execute("SELECT NOT EXISTS (SELECT 1 FROM accounts) AS empty").fetchone()["empty"]
 
@@ -460,3 +478,13 @@ def set_feedback_status(conn: Connection, feedback_id: int, status: str) -> bool
 
 def clear_demo_history(conn: Connection) -> None:
     conn.execute("DELETE FROM history_snapshots WHERE source = 'demo'")
+
+
+def inbox_counts(conn: Connection) -> dict[str, int]:
+    r = conn.execute("SELECT count(*) FILTER (WHERE processed_at IS NULL) AS pending, count(*) FILTER (WHERE ok) AS applied, "
+                     "count(*) FILTER (WHERE ok = false) AS rejected FROM event_inbox").fetchone()
+    return dict(r)
+
+
+def prune_inbox(conn: Connection, days: int = 7) -> None:
+    conn.execute("DELETE FROM event_inbox WHERE processed_at < now() - make_interval(days => %s)", (days,))

@@ -10,3 +10,6 @@ scrape_configs:
       credentials_file: /tmp/metrics_token
     static_configs:
       - targets: ["api:8000"]
+  - job_name: churn-radar-ingest
+    static_configs:
+      - targets: ["ingest:8090"]

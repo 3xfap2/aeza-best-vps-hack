@@ -13,7 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from app.domain import GRACE_PERIOD, Account, Service, Snapshot
+from app.domain import GRACE_PERIOD, Account, Service, Snapshot, Transaction
 
 from .features import FEATURES, ServiceContext
 from .features.base import days_word, eur, humanize_days
@@ -199,6 +199,28 @@ def evaluate(snapshot: Snapshot, settings: ModelSettings, now: datetime | None =
         _evaluate_customer(a, services_by_owner.get(a.id, []), tx_stats, settings, as_of)
         for a in snapshot.accounts
     ]
+    summary = _summarize(customers, settings, as_of)
+    return EngineResult(as_of, settings, customers, summary, {c.account.id: c for c in customers})
+
+
+def reevaluate(previous: EngineResult, accounts: list[Account], services: list[Service],
+               transactions: list[Transaction]) -> EngineResult:
+    """Пересчёт только затронутых клиентов (после событий биллинга).
+
+    Оценка клиента зависит лишь от его аккаунта, услуг и транзакций, поэтому результат совпадает
+    с полным пересчётом, а событие стоит миллисекунды вместо секунд на 100 000 клиентов.
+    Сводка пересобирается из готовых оценок остальных клиентов.
+    """
+    settings, as_of = previous.settings, previous.as_of
+    by_owner: dict[int, list[Service]] = defaultdict(list)
+    for s in services:
+        by_owner[s.ownerId].append(s)
+    tx_stats: dict[int, list[int]] = defaultdict(lambda: [0, 0])
+    for t in transactions:
+        tx_stats[t.serviceId][0] += 1
+        tx_stats[t.serviceId][1] += t.status != "performed"
+    fresh = {a.id: _evaluate_customer(a, by_owner.get(a.id, []), tx_stats, settings, as_of) for a in accounts}
+    customers = [fresh.get(c.account.id, c) for c in previous.customers]
     summary = _summarize(customers, settings, as_of)
     return EngineResult(as_of, settings, customers, summary, {c.account.id: c for c in customers})
 
@@ -433,5 +455,5 @@ def timeline(result: EngineResult, snapshot: Snapshot, transitions: list[Transit
 
 __all__ = [
     "LEVELS", "LEVEL_TITLES", "STATUS_TITLES", "EngineResult", "CustomerResult", "ServiceResult",
-    "Summary", "Transition", "TimelinePoint", "evaluate", "timeline", "days_word",
+    "Summary", "Transition", "TimelinePoint", "evaluate", "reevaluate", "timeline", "days_word",
 ]

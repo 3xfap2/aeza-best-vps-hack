@@ -79,6 +79,19 @@ class Snapshot:
     transactions: list[Transaction] = field(default_factory=list)
     reference_at: datetime | None = None
 
+    def with_accounts(self, accounts: list[Account], services: list[Service],
+                      transactions: list[Transaction]) -> "Snapshot":
+        """Тот же снимок, где аккаунты из accounts заменены свежими строками вместе с их услугами и транзакциями."""
+        fresh = {a.id: a for a in accounts}
+        old_services = {s.id for s in self.services if s.ownerId in fresh}
+        gone = old_services | {s.id for s in services}
+        return Snapshot(
+            [fresh.get(a.id, a) for a in self.accounts],
+            [s for s in self.services if s.ownerId not in fresh] + services,
+            [t for t in self.transactions if t.serviceId not in gone] + transactions,
+            self.reference_at,
+        )
+
     def latest_timestamp(self) -> datetime | None:
         """Самый поздний момент, известный из данных (без будущих expiresAt)."""
         moments = [s.createdAt for s in self.services]
