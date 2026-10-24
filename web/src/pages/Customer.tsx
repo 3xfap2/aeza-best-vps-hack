@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ACTION_TITLE, api, ApiError, can, CHURN_REASONS, LEVEL_TITLE, type AIStatus, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
+import { ACTION_TITLE, api, ApiError, can, CHURN_REASONS, LEVEL_TITLE, type AIStatus, type DeferResult, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
 import { useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, shortDate, Skeleton } from '../ui'
 import { StatusLine, useUser } from './Shell'
@@ -235,6 +235,16 @@ function WorkCard({ customerId }: { customerId: number }) {
   const [followUp, setFollowUp] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deferDays, setDeferDays] = useState(7)
+  const [deferred, setDeferred] = useState<string | null>(null)
+  async function defer() {
+    setBusy(true); setError(null); setDeferred(null)
+    try {
+      const r = await api<DeferResult>(`/api/v1/customers/${customerId}/defer`, { method: 'POST', json: { days: deferDays } })
+      setDeferred(`Перенесли: ${r.services.join(', ')}. Score ${r.scoreBefore} → ${r.scoreAfter}, потеря ${eur(r.lossBefore)} → ${eur(r.lossAfter)}.`)
+      await load()
+    } catch (e) { setError(e instanceof ApiError ? e.message : 'Не удалось перенести') } finally { setBusy(false) }
+  }
   const load = () => api<RetentionAction[]>(`/api/v1/customers/${customerId}/actions`).then(setItems).catch(() => setItems([]))
   useEffect(() => { load() }, [customerId]) // eslint-disable-line react-hooks/exhaustive-deps
   async function mark(kind: string) {
@@ -266,6 +276,16 @@ function WorkCard({ customerId }: { customerId: number }) {
         <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={busy} onClick={() => mark('churned')}>Ушёл</button>
       </div>
       </> : <p className="ro-small">Роль «Наблюдатель»: отмечать работу может маркетолог или администратор.</p>}
+      {editable && (
+        <div className="work__churn">
+          <label className="field"><span>Не успевает оплатить — перенести платёж</span>
+            <select value={deferDays} onChange={(e) => setDeferDays(Number(e.target.value))}>
+              {[3, 7, 14].map((d) => <option key={d} value={d}>на {d} дней</option>)}
+            </select></label>
+          <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={busy} onClick={defer}>Перенести платёж</button>
+        </div>
+      )}
+      {deferred && <p className="ro-small work__ok" role="status">{deferred}</p>}
       {error && <p className="form__error" role="alert">{error}</p>}
       {items && items.length > 0 && (
         <ul className="log">

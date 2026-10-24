@@ -47,10 +47,14 @@ export interface Message { subject: string; text: string; cause: string; email: 
 export interface AIStatus { enabled: boolean; provider: string | null; model: string | null; privacy: string }
 export interface AskAnswer { answer: string; grounded: boolean; unverified: string[]; customers: { id: number; email: string }[]; provider: string }
 export const ACTION_TITLE: Record<string, string> = {
-  called: 'Позвонили', no_answer: 'Не дозвонились', messaged: 'Написали', offer: 'Сделали предложение',
+  called: 'Позвонили', no_answer: 'Не дозвонились', messaged: 'Написали', offer: 'Сделали предложение', deferred: 'Перенесли платёж',
   renewed: 'Продлил', churned: 'Ушёл',
 }
 export const CHURN_REASONS = ['Дорого', 'Ушёл к конкуренту', 'Проект закрыт', 'Технические проблемы', 'Не пользуется', 'Другое']
+export interface DeferResult {
+  deferredUntil: string; services: string[]; scoreBefore: number | null; scoreAfter: number | null
+  lossBefore: number; lossAfter: number
+}
 export interface WhatIf { key: string; title: string; score: number | null; level: Level; expectedLoss: number; saved: number }
 export interface Renewal {
   date: string; customerId: number; email: string; serviceId: number; service: string; paymentTerm: string

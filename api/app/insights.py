@@ -60,6 +60,17 @@ def what_if(result: EngineResult, snapshot: Snapshot, account_id: int) -> list[d
         snap.accounts[0] = replace(account, balance=account.balance + cost, totalReplenished=account.totalReplenished + cost)
         scenarios.append(("pay", f"Оплатит ожидающие услуги на {eur(cost)}", snap))
 
+    soon = result.as_of + timedelta(days=7)
+    due = [s for s in live if s.status == "prolong_wait" or s.expiresAt <= soon]
+    if due:
+        snap = copy.deepcopy(base)
+        ids = {s.id for s in due}
+        until = result.as_of + timedelta(days=7)
+        snap.services = [replace(s, status="active", expiresAt=until) if s.id in ids and s.status == "prolong_wait"
+                         else replace(s, expiresAt=max(s.expiresAt, result.as_of) + timedelta(days=7)) if s.id in ids else s
+                         for s in snap.services]
+        scenarios.append(("defer", "Перенесём платёж на 7 дней", snap))
+
     suspended = [s for s in live if s.status == "suspended"]
     if suspended:
         snap = copy.deepcopy(base)

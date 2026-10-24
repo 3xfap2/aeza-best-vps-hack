@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from app import ai, db
+from app import ai, db, simulator
 from app.insights import message, what_if
 from app.security import User, current_user, require
 from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
@@ -137,7 +137,7 @@ def customer_what_if(customer_id: int, request: Request) -> list[WhatIfOut]:
     return [WhatIfOut(**x) for x in what_if(cur.result, cur.snapshot, customer_id)]
 
 
-ActionKind = Literal["called", "no_answer", "messaged", "offer", "renewed", "churned"]
+ActionKind = Literal["called", "no_answer", "messaged", "offer", "deferred", "renewed", "churned"]
 CHURN_REASONS = ("Дорого", "Ушёл к конкуренту", "Проект закрыт", "Технические проблемы", "Не пользуется", "Другое")
 
 
@@ -180,6 +180,57 @@ def add_action(customer_id: int, body: ActionIn, request: Request, user: User = 
                             round(customer.expected_loss), follow_up, customer.score)
     request.app.state.radar.broker.publish("action", {"customerId": customer_id, "kind": body.kind})
     return ActionOut(**row)
+
+
+class DeferIn(BaseModel):
+    days: int = Field(7, ge=1, le=14, description="На сколько дней перенести платёж")
+    note: str | None = Field(None, max_length=500)
+
+
+class DeferOut(BaseModel):
+    deferredUntil: datetime
+    services: list[str] = Field(description="Услуги и их новые сроки")
+    scoreBefore: int | None
+    scoreAfter: int | None
+    lossBefore: float = Field(description="Ожидаемая потеря до переноса, €")
+    lossAfter: float
+    action: ActionOut
+
+
+@router.post("/{customer_id}/defer", response_model=DeferOut, status_code=201,
+             summary="Перенести платёж: отсрочка оплаты на 1–14 дней, чтобы сервер не удалился",
+             description="Услуги, ждущие оплаты, снова работают до новой даты; у услуг со сроком в ближайшую неделю срок сдвигается. "
+                         "Один перенос на клиента за 30 дней. В день новой оплаты клиент вернётся в очередь «Сегодня».",
+             responses={404: {"description": "Клиент не найден"}, 409: {"description": "Переносить нечего или уже переносили"}})
+def defer(customer_id: int, body: DeferIn, request: Request, user: User = Depends(require("marketer"))) -> DeferOut:
+    return apply_deferral(request.app.state, customer_id, body.days, body.note, user.login)
+
+
+def apply_deferral(state, customer_id: int, days: int, note: str | None, author: str) -> DeferOut:
+    """Общая логика для панели и Telegram-бота."""
+    radar = state.radar
+    with radar.write_lock:
+        cur = radar.current
+        before = cur.result.by_id.get(customer_id)
+        if before is None:
+            raise HTTPException(404, f"Клиент #{customer_id} не найден")
+        with state.pool.connection() as conn, conn.transaction():
+            if db.recent_action(conn, customer_id, "deferred", 30):
+                raise HTTPException(409, "Клиенту уже переносили платёж за последние 30 дней")
+            try:
+                until, names = simulator.defer_payment(conn, customer_id, days, cur.result.as_of)
+            except simulator.SimulationError as e:
+                raise HTTPException(409, str(e)) from e
+            text = f"Платёж перенесён на {days} дн.: " + ", ".join(names) + (f". {note}" if note else "")
+            row = db.add_action(conn, customer_id, "deferred", None, text, author, round(before.expected_loss),
+                                until.date(), before.score)
+            db.log_activity(conn, "event", f"Перенос платежа клиенту #{customer_id} на {days} дн.", author,
+                            {"customerId": customer_id, "days": days})
+        after = radar.recalculate("event").result.by_id[customer_id]
+    radar.broker.publish("action", {"customerId": customer_id, "kind": "deferred"})
+    return DeferOut(deferredUntil=until, services=names, scoreBefore=before.score, scoreAfter=after.score,
+                    lossBefore=round(before.expected_loss / 100, 2), lossAfter=round(after.expected_loss / 100, 2),
+                    action=ActionOut(**row))
 
 
 class MessageOut(BaseModel):

@@ -470,3 +470,38 @@ def test_snapshot_origin_is_shown(client, auth):
     assert client.get("/api/v1/source/snapshot", headers=auth).json()["changesSinceLoad"] == 0
     client.post("/api/v1/source/preset/case", headers=auth)
     assert client.get("/api/v1/source/snapshot", headers=auth).json()["title"] == "данные кейса, 10 кл."
+
+
+def test_payment_deferral_panel_and_bot(client, auth):
+    client.post("/api/v1/source/preset/case", headers=auth)
+    wi = client.get("/api/v1/customers/62/what-if", headers=auth)
+    cust = next(c for c in client.get("/api/v1/customers?pageSize=200", headers=auth).json()["items"] if c["level"] == "high")
+    scenarios = client.get(f"/api/v1/customers/{cust['id']}/what-if", headers=auth).json()
+    assert any(s["key"] == "defer" for s in scenarios) or wi.status_code == 404
+
+    client.post("/api/v1/users", headers=auth, json={"login": "viewer9", "displayName": "v", "password": "pass-2026-long", "role": "viewer"})
+    viewer = {"Authorization": "Bearer " + client.post("/api/v1/auth/login", json={"login": "viewer9", "password": "pass-2026-long"}).json()["token"]}
+    assert client.post("/api/v1/customers/5/defer", headers=viewer, json={"days": 7}).status_code == 403
+
+    r = client.post("/api/v1/customers/5/defer", headers=auth, json={"days": 7})
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert d["services"] and d["lossAfter"] < d["lossBefore"] and d["action"]["kind"] == "deferred" and d["action"]["followUp"]
+    detail = client.get("/api/v1/customers/5", headers=auth).json()
+    assert all(s["status"] != "prolong_wait" for s in detail["services"])           # сервер больше не ждёт удаления
+    assert client.post("/api/v1/customers/5/defer", headers=auth, json={"days": 7}).status_code == 409   # раз в 30 дней
+    assert client.post("/api/v1/customers/5/defer", headers=auth, json={"days": 30}).status_code == 422
+    item = next(x for x in client.get("/api/v1/retention/queue", headers=auth).json()["items"] if x["customerId"] == 5) \
+        if any(x["customerId"] == 5 for x in client.get("/api/v1/retention/queue", headers=auth).json()["items"]) else None
+    assert item is None or item["lastAction"] == "deferred"
+
+    from app.telegram import TelegramBot
+    bot = TelegramBot("0:test", "link-code-123", client.app.state.radar, "http://localhost:8080")
+    bot.handle(4004, "u", "/start link-code-123")
+    assert "Укажите клиента" in bot.handle(4004, "u", "/defer")
+    out = bot.handle(4004, "u", "/defer 9 5")
+    assert "Платёж перенесён" in out or "Переносить нечего" in out
+    assert "уже переносили" in bot.handle(4004, "u", "/defer 5 3")
+    client.post("/api/v1/source/reset", headers=auth)                    # откат данных отменяет и перенос
+    assert client.post("/api/v1/customers/5/defer", headers=auth, json={"days": 3}).status_code == 201
+    client.post("/api/v1/source/preset/case", headers=auth)

@@ -137,6 +137,36 @@ def pay_renewal(conn: Connection, service_id: int, at: datetime) -> str:
     return f"{service['name']}: оплачено продление {eur(service['price'])}, новый срок {new_expiry:%d.%m.%Y %H:%M}"
 
 
+DEFER_MAX_DAYS = 14
+DEFER_SOON_DAYS = 7   # переносим платежи, срок которых наступит в ближайшую неделю или уже прошёл
+
+
+def defer_payment(conn: Connection, account_id: int, days: int, at: datetime) -> tuple[datetime, list[str]]:
+    """Отсрочка платежа: услуги клиента со сроком в ближайшую неделю (или ждущие оплаты) работают ещё days дней.
+
+    Ждущая оплаты услуга снова активна до новой даты — удаление не наступит; у остальных срок сдвигается.
+    В продукте это вызов API биллинга; здесь — демонстрационный биллинг на тех же правилах.
+    """
+    if not 1 <= days <= DEFER_MAX_DAYS:
+        raise SimulationError(f"Перенести можно на 1–{DEFER_MAX_DAYS} дней")
+    _account(conn, account_id)
+    soon = at + timedelta(days=DEFER_SOON_DAYS)
+    services = list(conn.execute(
+        "SELECT * FROM services WHERE \"ownerId\" = %s AND (status = 'prolong_wait' OR "
+        "(status IN ('active', 'suspended') AND \"expiresAt\" <= %s)) ORDER BY id FOR UPDATE", (account_id, soon)))
+    if not services:
+        raise SimulationError("Переносить нечего: у клиента нет платежей в ближайшую неделю")
+    until = at + timedelta(days=days)
+    names = []
+    for s in services:
+        new_expiry = until if s["status"] == "prolong_wait" else max(s["expiresAt"], at) + timedelta(days=days)
+        conn.execute('UPDATE services SET "expiresAt" = %s WHERE id = %s', (new_expiry, s["id"]))
+        if s["status"] == "prolong_wait":
+            _set_status(conn, s, "active", at, "event")
+        names.append(f"{s['name']} до {new_expiry:%d.%m}")
+    return until, names
+
+
 def advance(conn: Connection, since: datetime, until: datetime) -> list[str]:
     """Прогнать жизненный цикл живых услуг на промежутке (since, until].
 

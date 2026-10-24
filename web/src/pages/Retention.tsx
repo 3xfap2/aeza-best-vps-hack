@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ACTION_TITLE, ApiError, api, can, type Effect, type Message, type Queue, type QueueItem } from '../api'
+import { ACTION_TITLE, ApiError, api, can, type DeferResult, type Effect, type Message, type Queue, type QueueItem } from '../api'
 import { useLiveData } from '../live'
 import { Empty, ErrorBox, eur, eur0, Skeleton, shortDate, useToast } from '../ui'
 import { StatusLine, useUser } from './Shell'
@@ -53,6 +53,15 @@ export default function Retention() {
       toast.show(`${x.email}: ${ACTION_TITLE[kind].toLowerCase()}${followUpDays ? ' — перезвоним завтра' : ''}`)
       setTick((t) => t + 1)
     } catch (e) { toast.show(e instanceof ApiError ? e.message : 'Не удалось сохранить', 'error') } finally { setBusy(null) }
+  }
+
+  async function defer(x: QueueItem) {
+    setBusy(x.customerId)
+    try {
+      const r = await api<DeferResult>(`/api/v1/customers/${x.customerId}/defer`, { method: 'POST', json: { days: 7 } })
+      toast.show(`${x.email}: платёж перенесён до ${shortDate(r.deferredUntil)} · потеря ${eur(r.lossBefore)} → ${eur(r.lossAfter)}`)
+      setTick((t) => t + 1)
+    } catch (e) { toast.show(e instanceof ApiError ? e.message : 'Не удалось перенести', 'error') } finally { setBusy(null) }
   }
 
   async function copyMessage(x: QueueItem) {
@@ -166,7 +175,7 @@ export default function Retention() {
                           <td><div className="queue__act">
                             {x.lastAction && <div><span className={`work-tag work-tag--${x.lastAction}`}>{ACTION_TITLE[x.lastAction]}</span>
                               <span className="ro-small"> {x.lastAuthor} · {shortDate(x.lastActionAt!)}</span>
-                              {x.followUp && !x.followUpDue && <div className="ro-small">перезвонить {shortDate(x.followUp)}</div>}
+                              {x.followUp && !x.followUpDue && <div className="ro-small">{x.lastAction === 'deferred' ? 'новая дата оплаты' : 'перезвонить'} {shortDate(x.followUp)}</div>}
                               {x.riskAtContact != null && Math.abs(x.riskAtContact - x.expectedLoss) >= 0.01 &&
                                 <div className="ro-small">после контакта: {eur0(x.riskAtContact)} → {eur0(x.expectedLoss)}</div>}</div>}
                             {editable && x.status !== 'done' && (x.channel === 'call' ? <>
@@ -177,6 +186,10 @@ export default function Retention() {
                               <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" onClick={() => copyMessage(x)}>Скопировать письмо</button>
                               <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={busy === x.customerId} onClick={() => mark(x, 'messaged')}>Написали</button>
                             </>)}
+                            {editable && x.status !== 'done' && x.kind === 'involuntary' && x.lastAction !== 'deferred' &&
+                              <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={busy === x.customerId}
+                                title="Отсрочка оплаты: сервер не удалится, в день новой оплаты клиент вернётся в «Сегодня»"
+                                onClick={() => defer(x)}>Отсрочка 7 дн.</button>}
                             {editable && x.status !== 'done' && x.status !== 'new' &&
                               <button type="button" className="ro-btn ro-btn--sm" disabled={busy === x.customerId} onClick={() => mark(x, 'renewed')}>Продлил</button>}
                             {(!editable || x.status === 'done') && <Link className="ro-link" to={`/app/customers/${x.customerId}`}>Карточка</Link>}

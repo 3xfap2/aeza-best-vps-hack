@@ -330,6 +330,21 @@ def add_action(conn: Connection, account_id: int, kind: str, reason: str | None,
     ).fetchone()
 
 
+def data_epoch(conn: Connection) -> datetime | None:
+    """Когда данные последний раз заменили: загрузка снимка или «вернуть к снимку»."""
+    return conn.execute(
+        "SELECT GREATEST((SELECT max(loaded_at) FROM source_snapshots), "
+        "(SELECT max(created_at) FROM activity_log WHERE kind = 'reset')) AS at").fetchone()["at"]
+
+
+def recent_action(conn: Connection, account_id: int, kind: str, days: int) -> bool:
+    """Была ли такая отметка за days дней — но только после последней замены данных (откат отменяет и её эффект)."""
+    return conn.execute(
+        "SELECT 1 FROM retention_actions WHERE account_id = %s AND kind = %s AND created_at > now() - make_interval(days => %s) "
+        "AND created_at > coalesce(%s, '-infinity'::timestamptz)",
+        (account_id, kind, days, data_epoch(conn))).fetchone() is not None
+
+
 def actions_for(conn: Connection, account_id: int, limit: int = 50) -> list[dict]:
     return list(conn.execute(
         "SELECT id, kind, reason, note, author, created_at AS \"createdAt\", follow_up AS \"followUp\" FROM retention_actions "

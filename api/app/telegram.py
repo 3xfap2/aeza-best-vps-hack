@@ -18,6 +18,7 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import httpx
@@ -47,6 +48,7 @@ HELP = (
     "<b>Команды</b>\n"
     "/today — кому звонить и писать сегодня, сколько можно сохранить\n"
     "/ask вопрос — спросить Радар простыми словами (если подключён ИИ)\n"
+    "/defer 62 7 — перенести клиенту платёж на 7 дней, чтобы сервер не удалился\n"
     "/summary — сколько денег под угрозой и клиенты по уровням\n"
     "/top — 5 клиентов с наибольшей ожидаемой потерей\n"
     "/client 42 — карточка клиента: причины риска и что сделать\n"
@@ -58,6 +60,7 @@ HELP = (
 COMMANDS = [
     ("today", "Кому звонить сегодня"),
     ("ask", "Спросить Радар: /ask почему выросла потеря?"),
+    ("defer", "Перенести платёж: /defer 62 7"),
     ("summary", "Сколько денег под угрозой"),
     ("top", "5 клиентов с наибольшей потерей"),
     ("client", "Карточка клиента: /client 42"),
@@ -250,6 +253,8 @@ class TelegramBot:
                       f"{channel} · сохраним {_money(x['expectedSaved'] * 100)} · {html.escape(x['causeTitle'] or '')}"]
             if x["action"]:
                 lines.append(f"→ {html.escape(x['action'])}")
+            if x["kind"] == "involuntary" and x["lastAction"] != "deferred":
+                lines.append(f"↷ не успевает оплатить — /defer {x['customerId']} 7")
             if x["followUpDue"]:
                 lines.append(f"↻ перезвонить — договорились ({x['lastAuthor']})")
             elif x["lastAction"]:
@@ -258,6 +263,26 @@ class TelegramBot:
             lines.append(f"\nи ещё {len(today) - MAX_TODAY}")
         lines.append(f"\nОчередь и отметки: {self.public_url}/app/retention")
         return "\n".join(lines)
+
+    def _defer(self, arg: str, username: str | None) -> str:
+        from fastapi import HTTPException
+
+        from app.routers.customers import apply_deferral
+        parts = arg.replace("#", " ").split()
+        if not parts or not parts[0].isdigit() or (len(parts) > 1 and not parts[1].isdigit()):
+            return "Укажите клиента и дни: /defer 62 7 — перенести платёж клиенту #62 на 7 дней (1–14)."
+        customer_id, days = int(parts[0]), int(parts[1]) if len(parts) > 1 else 7
+        if not 1 <= days <= 14:
+            return "Перенести можно на 1–14 дней."
+        try:
+            state = SimpleNamespace(radar=self.radar, pool=self.radar.pool)
+            out = apply_deferral(state, customer_id, days, "через Telegram", f"telegram:{username or 'бот'}")
+        except HTTPException as e:
+            return f"Не получилось: {html.escape(str(e.detail))}"
+        email = self.radar.current.result.by_id[customer_id].account.email
+        return (f"<b>Платёж перенесён: {html.escape(email)}</b>\n" + "\n".join(html.escape(s) for s in out.services) +
+                f"\nScore {out.scoreBefore} → {out.scoreAfter}, потеря {_money(out.lossBefore * 100)} → {_money(out.lossAfter * 100)}"
+                f"\nВ день новой оплаты клиент вернётся в «Сегодня». {self.public_url}/app/customers/{customer_id}")
 
     def _ask(self, question: str) -> str:
         if self.ai is None:
@@ -346,6 +371,8 @@ class TelegramBot:
             return self._today()
         if command == "/ask":
             return self._ask(arg)
+        if command == "/defer":
+            return self._defer(arg, username)
         if command == "/summary":
             return self._summary()
         if command == "/top":

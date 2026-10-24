@@ -681,6 +681,70 @@
         ]
       }
     },
+    "/api/v1/customers/{customer_id}/defer": {
+      "post": {
+        "tags": [
+          "Клиенты"
+        ],
+        "summary": "Перенести платёж: отсрочка оплаты на 1–14 дней, чтобы сервер не удалился",
+        "description": "Услуги, ждущие оплаты, снова работают до новой даты; у услуг со сроком в ближайшую неделю срок сдвигается. Один перенос на клиента за 30 дней. В день новой оплаты клиент вернётся в очередь «Сегодня».",
+        "operationId": "defer_api_v1_customers__customer_id__defer_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeferIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Клиент не найден"
+          },
+          "409": {
+            "description": "Переносить нечего или уже переносили"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/customers/{customer_id}/message": {
       "get": {
         "tags": [
@@ -2026,6 +2090,7 @@
               "no_answer",
               "messaged",
               "offer",
+              "deferred",
               "renewed",
               "churned"
             ],
@@ -2762,6 +2827,94 @@
           "version"
         ],
         "title": "CustomerPage"
+      },
+      "DeferIn": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "maximum": 14.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "description": "На сколько дней перенести платёж",
+            "default": 7
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "DeferIn"
+      },
+      "DeferOut": {
+        "properties": {
+          "deferredUntil": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deferreduntil"
+          },
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Services",
+            "description": "Услуги и их новые сроки"
+          },
+          "scoreBefore": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scorebefore"
+          },
+          "scoreAfter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scoreafter"
+          },
+          "lossBefore": {
+            "type": "number",
+            "title": "Lossbefore",
+            "description": "Ожидаемая потеря до переноса, €"
+          },
+          "lossAfter": {
+            "type": "number",
+            "title": "Lossafter"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ActionOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deferredUntil",
+          "services",
+          "scoreBefore",
+          "scoreAfter",
+          "lossBefore",
+          "lossAfter",
+          "action"
+        ],
+        "title": "DeferOut"
       },
       "EffectItem": {
         "properties": {
@@ -4481,6 +4634,24 @@
             "type": "string",
             "format": "date-time",
             "title": "Loadedat"
+          },
+          "origin": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Origin",
+            "description": "kind: case | extended | custom; caseAccounts — клиентов из данных кейса, otherAccounts — остальных (синтетических или из своего снимка)"
+          },
+          "changesSinceLoad": {
+            "type": "integer",
+            "title": "Changessinceload",
+            "description": "Событий биллинга и перемоток после загрузки — данные уже не совпадают со снимком",
+            "default": 0
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Подпись для панели: какие данные сейчас загружены",
+            "default": ""
           }
         },
         "type": "object",
