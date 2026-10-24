@@ -190,7 +190,7 @@ export default function Customer() {
 
 
 const REASONS: Record<string, string> = {
-  startup: 'запуск', settings: 'настройки модели', event: 'событие биллинга', simulate: 'перемотка времени',
+  startup: 'запуск', schedule: 'плановый пересчёт', settings: 'настройки модели', event: 'событие биллинга', simulate: 'перемотка времени',
   snapshot: 'новый снимок', reset: 'возврат к снимку', 'preset:case': 'данные кейса', 'preset:extended': 'расширенный набор',
 }
 

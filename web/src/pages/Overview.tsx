@@ -117,7 +117,7 @@ export default function Overview() {
           </section>
 
           <RadarCard customers={data!.customers} total={s.expectedLoss} />
-          <ChartCard timeline={data!.timeline} />
+          <ChartCard timeline={data!.timeline} servicesAtRisk={s.servicesAtRisk} />
 
           <CausesCard summary={s} />
           <RenewalsCard renewals={data!.renewals} />
@@ -191,39 +191,48 @@ function RadarCard({ customers, total }: { customers: CustomerItem[]; total: num
   )
 }
 
-function ChartCard({ timeline }: { timeline: Timeline }) {
+function ChartCard({ timeline, servicesAtRisk }: { timeline: Timeline; servicesAtRisk: number }) {
   const host = useRef<HTMLDivElement>(null)
+  const [mode, setMode] = useState<'count' | 'eur'>('count')
   const today = timeline.asOf.slice(0, 10)
   const idx = timeline.points.findIndex((p) => p.date === today)
   const factPts = timeline.points.slice(Math.max(0, idx - 22), idx + 1)
   const fcPts = timeline.points.slice(idx + 1, idx + 8)
-  const fact = factPts.map((p) => +(p.factRecordedEur + p.factRestoredEur).toFixed(2))
-  const forecast = fcPts.map((p) => p.forecastEur)
+  const fact = factPts.map((p) => mode === 'count' ? p.factRecorded + p.factRestored : +(p.factRecordedEur + p.factRestoredEur).toFixed(2))
+  const forecast = fcPts.map((p) => mode === 'count' ? +p.forecast.toFixed(1) : p.forecastEur)
   const labels = factPts.concat(fcPts).map((p, i) => {
     const d = Number(p.date.slice(8)); const isToday = p.date === today
     return isToday ? `${d} ${['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][Number(p.date.slice(5, 7)) - 1]}` : i % 5 === 0 ? String(d) : ''
   })
   useEffect(() => {
     if (!host.current) return
-    const max = Math.max(10, ...fact, ...forecast)
+    const max = Math.max(mode === 'count' ? 2 : 10, ...fact, ...forecast)
+    const step = mode === 'count' ? 2 : 10
     const chart = window.Ottok.ForecastChart.mount(host.current, {
-      fact, forecast, labels, width: 720, height: 330, max: Math.ceil(max / 10) * 10,
-      alt: `Отток по дням, € выручки: ${fact.length} дней факта и ${forecast.length} дней прогноза`,
+      fact, forecast, labels, width: 720, height: 330, max: Math.ceil(max / step) * step, unit: mode,
+      alt: mode === 'count'
+        ? `Отток по дням, услуг: ${fact.length} дней удалений и ${forecast.length} дней ожидаемых непродлений`
+        : `Отток по дням, € выручки: ${fact.length} дней факта и ${forecast.length} дней прогноза`,
     })
     return () => chart.destroy()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeline])
+  }, [timeline, mode])
   const sum = (a: number[]) => a.reduce((x, y) => x + y, 0)
+  const fmt = (v: number) => mode === 'count' ? v.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) : eur0(v)
   return (
     <section className="ro-card ro-pchart" aria-labelledby="ch-t">
-      <div className="ro-cardhead"><h2 id="ch-t">Отток по дням</h2><span className="ro-small">€ выручки в день · факт и прогноз</span></div>
+      <div className="ro-cardhead"><h2 id="ch-t">Отток по дням</h2>
+        <div className="chips" role="group" aria-label="Единицы графика">
+          <button type="button" aria-pressed={mode === 'count'} onClick={() => setMode('count')}>Услуги</button>
+          <button type="button" aria-pressed={mode === 'eur'} onClick={() => setMode('eur')}>€ выручки</button>
+        </div></div>
       <div ref={host} />
       <div className="ro-pchart__stats">
-        <div><span className="ro-small">Ушло за {fact.length} дн.</span><b>{eur0(sum(fact))}</b></div>
-        <div><span className="ro-small">Прогноз на {forecast.length} дн.</span><b>{eur0(sum(forecast))}</b></div>
-        <div><span className="ro-small">Средний день, прогноз</span><b>{eur0(forecast.length ? sum(forecast) / forecast.length : 0)}</b></div>
+        <div><span className="ro-small">Услуг под риском сейчас</span><b>{servicesAtRisk}</b></div>
+        <div><span className="ro-small">{mode === 'count' ? 'Удалено' : 'Ушло'} за {fact.length} дн.</span><b>{fmt(sum(fact))}</b></div>
+        <div><span className="ro-small">{mode === 'count' ? 'Ожидается непродлений' : 'Прогноз'} на {forecast.length} дн.</span><b>{fmt(sum(forecast))}</b></div>
       </div>
-      <p className="ro-small">{timeline.summary} Для удалений из исходного снимка дата восстановлена по правилу «срок + 5 дней», остальные — из журнала переходов.</p>
+      <p className="ro-small">{timeline.summary} Сплошные столбцы — факт удалений (из журнала переходов; для исходного снимка дата восстановлена по правилу «срок + 5 дней»), штриховка — прогноз: сумма вероятностей непродления по дням.</p>
     </section>
   )
 }

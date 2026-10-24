@@ -112,6 +112,6 @@ def oidc_callback(request: Request, code: str | None = None, state: str | None =
     name = claims.get("name") or email
     with request.app.state.pool.connection() as conn:
         user = db.upsert_oidc_user(conn, claims["sub"], email, name)
-    response = RedirectResponse("/", status_code=302)
+    response = RedirectResponse("/app", status_code=302)
     start_session(request, response, user["id"])
     return response

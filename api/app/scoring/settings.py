@@ -49,6 +49,7 @@ class ModelSettings(BaseModel):
     thresholds: Thresholds = Thresholds()
     horizonDays: int = Field(30, ge=1, le=365, description="Горизонт прогноза и денежной оценки, дней")
     ltvMonthlyChurn: float = Field(5, ge=0.5, le=50, description="Базовый месячный отток для LTV, %: LTV = месячная выручка / отток")
+    recalcMinutes: int = Field(5, ge=1, le=1440, description="Периодичность прогноза: плановый пересчёт раз в N минут (кроме пересчётов на каждое изменение)")
     asOf: AsOf = AsOf()
 
     @model_validator(mode="after")
@@ -102,6 +103,8 @@ def diff_settings(old: ModelSettings, new: ModelSettings) -> list[str]:
         changes.append(f"Горизонт: {old.horizonDays} → {new.horizonDays} дн.")
     if old.ltvMonthlyChurn != new.ltvMonthlyChurn:
         changes.append(f"Базовый отток для LTV: {_num(old.ltvMonthlyChurn)} → {_num(new.ltvMonthlyChurn)} %")
+    if old.recalcMinutes != new.recalcMinutes:
+        changes.append(f"Плановый пересчёт: раз в {old.recalcMinutes} → {new.recalcMinutes} мин")
     if old.asOf != new.asOf:
         changes.append(f"Дата расчёта: {_as_of(old.asOf)} → {_as_of(new.asOf)}")
     return changes

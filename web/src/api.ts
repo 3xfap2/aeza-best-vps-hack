@@ -60,6 +60,7 @@ export interface ModelSettings {
   thresholds: { high: number; medium: number }
   horizonDays: number
   ltvMonthlyChurn: number
+  recalcMinutes: number
   asOf: { mode: 'snapshot' | 'now' | 'fixed'; value: string | null }
 }
 export interface SettingsOut {

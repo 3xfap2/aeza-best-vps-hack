@@ -558,7 +558,7 @@
       var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(o.alt || 'Отток по дням: факт слева от линии «сегодня», прогноз справа') + '"><defs><pattern id="' + id + '" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#FFFFFF"/><rect width="2.2" height="6" fill="#6E6158"/></pattern></defs>';
       [0, 0.5, 1].forEach(function (k) {
         var y = padT + (H - padT - padB) * (1 - k);
-        svg += '<line class="ro-chart__grid" x1="' + padL + '" x2="' + W + '" y1="' + y + '" y2="' + y + '"/><text class="ro-chart__axis" x="0" y="' + (y + 4) + '">' + esc(eur(max * k, true)) + '</text>';
+        svg += '<line class="ro-chart__grid" x1="' + padL + '" x2="' + W + '" y1="' + y + '" y2="' + y + '"/><text class="ro-chart__axis" x="0" y="' + (y + 4) + '">' + esc(o.unit === 'count' ? String(Math.round(max * k * 10) / 10).replace('.', ',') : eur(max * k, true)) + '</text>';
       });
       fact.concat(fc).forEach(function (v, i) {
         var isFc = i >= fact.length, bh = (H - padT - padB) * v / max, x = padL + i * step + (step - bw) / 2, y = H - padB - bh;
@@ -568,7 +568,7 @@
       var tx = padL + fact.length * step;
       svg += '<line class="ro-chart__today" x1="' + tx + '" x2="' + tx + '" y1="4" y2="' + (H - padB) + '"/><text class="ro-chart__todaylabel" x="' + (tx + 6) + '" y="12">сегодня</text></svg>';
       host.innerHTML = (o.legend === false ? '' : '<div class="ro-chart__legend"><span><i class="ro-sw-fact"></i>факт, сплошные</span><span><i class="ro-sw-fc"></i>прогноз, штриховка</span></div>') + svg +
-        '<p class="ro-sr">' + esc('Факт: ' + fact.map(function (v) { return eur(v, true); }).join(', ') + '. Прогноз: ' + fc.map(function (v) { return eur(v, true); }).join(', ') + '.') + '</p>';
+        '<p class="ro-sr">' + esc((function (fmt) { return 'Факт: ' + fact.map(fmt).join(', ') + '. Прогноз: ' + fc.map(fmt).join(', ') + '.'; })(o.unit === 'count' ? function (v) { return String(v).replace('.', ','); } : function (v) { return eur(v, true); })) + '</p>';
       var bars = $$(host, '.ro-chart__bar');
       function grow() {
         host.classList.remove('is-pending');

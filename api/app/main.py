@@ -4,13 +4,16 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from datetime import datetime, timezone
 
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.config import load_config
@@ -48,6 +51,23 @@ def bootstrap(app_state: AppState, config) -> None:
         log.info("Загружен стартовый снимок %s", config.seed_path)
 
 
+async def scheduled_recalc(radar: AppState) -> None:
+    """Периодичность прогноза: плановый пересчёт раз в recalcMinutes.
+
+    Изменения данных и настроек пересчитываются сразу; плановый пересчёт нужен, когда время
+    идёт само (дата расчёта «сейчас»): сроки приближаются, вероятности растут.
+    """
+    while True:
+        await asyncio.sleep(30)
+        try:
+            cur = radar.current
+            due = (datetime.now(timezone.utc) - cur.computed_at).total_seconds() >= cur.result.settings.recalcMinutes * 60
+            if due:
+                await asyncio.to_thread(radar.recalculate, "schedule")
+        except Exception:  # пересчёт по расписанию не должен ронять сервер
+            log.exception("Плановый пересчёт не удался")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
@@ -65,6 +85,7 @@ async def lifespan(app: FastAPI):
     app.state.radar = radar
     app.state.login_limiter = LoginLimiter()
     app.state.metrics_registry = metrics.build_registry(radar)
+    scheduler = asyncio.create_task(scheduled_recalc(radar))
     bot = None
     if config.telegram_token and config.telegram_link_code:
         bot = TelegramBot(config.telegram_token, config.telegram_link_code, radar, config.public_url)
@@ -73,6 +94,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        scheduler.cancel()
         if bot:
             bot.stop()
         pool.close()
@@ -82,7 +104,7 @@ app = FastAPI(
     title="Радар оттока API",
     version="1.0.0",
     description=DESCRIPTION,
-    docs_url="/api/v1/docs",
+    docs_url=None,  # Swagger отдаём сами — со своими файлами, без внешнего CDN
     openapi_url="/api/v1/openapi.json",
     redoc_url=None,
     lifespan=lifespan,
@@ -112,6 +134,21 @@ async def security_headers(request: Request, call_next):
     if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/v1/docs"):
         response.headers.setdefault("Cache-Control", "no-store")
     return response
+
+
+STATIC = Path(__file__).resolve().parent / "static"
+app.mount("/api/v1/docs-static", StaticFiles(directory=STATIC / "swagger"), name="swagger-static")
+
+
+@app.get("/api/v1/docs", include_in_schema=False)
+def swagger_ui():
+    return get_swagger_ui_html(
+        openapi_url="/api/v1/openapi.json", title="Радар оттока API",
+        swagger_js_url="/api/v1/docs-static/swagger-ui-bundle.js",
+        swagger_css_url="/api/v1/docs-static/swagger-ui.css",
+        swagger_favicon_url="/favicon.svg",
+        swagger_ui_parameters={"persistAuthorization": True},
+    )
 
 
 @app.get("/health", include_in_schema=False)

@@ -17,6 +17,7 @@ function diffPatch(saved: ModelSettings, draft: ModelSettings) {
   if (saved.thresholds.high !== draft.thresholds.high || saved.thresholds.medium !== draft.thresholds.medium) patch.thresholds = draft.thresholds
   if (saved.horizonDays !== draft.horizonDays) patch.horizonDays = draft.horizonDays
   if (saved.ltvMonthlyChurn !== draft.ltvMonthlyChurn) patch.ltvMonthlyChurn = draft.ltvMonthlyChurn
+  if (saved.recalcMinutes !== draft.recalcMinutes) patch.recalcMinutes = draft.recalcMinutes
   if (saved.asOf.mode !== draft.asOf.mode || saved.asOf.value !== draft.asOf.value) patch.asOf = draft.asOf
   return patch
 }
@@ -135,6 +136,12 @@ export default function Model() {
                   onClick={() => setDraft({ ...draft, horizonDays: d })}>{d} дней</button>
               ))}
             </div>
+          </div>
+          <div className="model__group">
+            <h3 className="ro-label">Периодичность прогноза</h3>
+            <label className="field"><span>Плановый пересчёт раз в N минут (изменения данных и настроек пересчитываются сразу)</span>
+              <input type="number" min={1} max={1440} value={draft.recalcMinutes}
+                onChange={(e) => setDraft({ ...draft, recalcMinutes: Number(e.target.value) })} /></label>
           </div>
           <div className="model__group">
             <h3 className="ro-label">LTV</h3>
