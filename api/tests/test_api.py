@@ -46,6 +46,7 @@ def test_everything_requires_auth(client):
         assert client.get(path).status_code == 401, path
     assert client.put("/api/v1/source/snapshot", json={}).status_code == 401
     assert client.patch("/api/v1/model/settings", json={}).status_code == 401
+    assert client.post("/api/v1/feedback", json={"kind": "idea", "text": "без входа"}).status_code == 401
 
 
 def test_docs_and_openapi_available(client):
@@ -590,3 +591,38 @@ def test_demo_event_stream(client, auth):
     assert client.get("/api/v1/source/snapshot", headers=auth).json()["changesSinceLoad"] >= 5
     client.post("/api/v1/source/reset", headers=auth)
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_backtest_feedback_loop(client, auth):
+    client.post("/api/v1/source/preset/extended", headers=auth)
+    assert client.get("/api/v1/source/history", headers=auth).json()["snapshots"] == 3
+    b = client.get("/api/v1/model/backtest", headers=auth).json()
+    assert b["available"] and b["demo"] and len(b["rounds"]) == 3
+    assert 0 < b["caught"] <= b["churned"] and b["actualLoss"] > 0
+    assert {lvl["level"] for lvl in b["levels"]} == {"high", "medium", "low"}
+    assert all(f["verdict"] in ("ok", "under", "over", "few") for f in b["features"])
+    # предпросмотр весов показывает, как изменится сверка
+    p = client.post("/api/v1/model/preview", headers=auth,
+                    json={"features": {"insufficient_funds": {"weight": 0}, "prolong_wait": {"weight": 0}}}).json()
+    assert p["backtestBefore"]["caught"] == b["caught"] and p["backtestAfter"]["caught"] < b["caught"]
+    # прошлый снимок из архива биллинга заменяет демо-историю; дата должна быть в прошлом
+    case = json.loads(CASE.read_text(encoding="utf-8"))
+    assert client.post("/api/v1/source/history", headers=auth, json=case).status_code == 422
+    r = client.post("/api/v1/source/history", headers=auth, json={**case, "referenceAt": "2026-09-19T15:00:00.000Z"})
+    assert r.status_code == 200 and r.json() == {**r.json(), "snapshots": 1, "demo": False}
+    client.post("/api/v1/source/preset/case", headers=auth)
+    assert client.get("/api/v1/model/backtest", headers=auth).json()["available"] is False
+
+
+def test_feedback_about_radar(client, auth):
+    r = client.post("/api/v1/feedback", headers=auth, json={"kind": "idea", "text": "Добавить выгрузку в Excel", "page": "/app/retention"})
+    assert r.status_code == 201 and r.json()["status"] == "new" and r.json()["authorName"]
+    assert client.post("/api/v1/feedback", headers=auth, json={"kind": "idea", "text": "x"}).status_code == 422
+    fid = r.json()["id"]
+    assert client.patch(f"/api/v1/feedback/{fid}", headers=auth, json={"status": "done"}).status_code == 204
+    assert client.get("/api/v1/feedback", headers=auth).json()[0]["status"] == "done"
+    assert client.patch("/api/v1/feedback/999999", headers=auth, json={"status": "done"}).status_code == 404
+    client.post("/api/v1/users", headers=auth, json={"login": "viewer2", "displayName": "Наблюдатель", "password": "pass-2026-long", "role": "viewer"})
+    viewer = _login(client, "viewer2", "pass-2026-long")
+    assert client.post("/api/v1/feedback", headers=viewer, json={"kind": "problem", "text": "Не грузится график"}).status_code == 201
+    assert client.get("/api/v1/feedback", headers=viewer).status_code == 403

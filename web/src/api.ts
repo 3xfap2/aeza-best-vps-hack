@@ -117,6 +117,20 @@ export interface Preview {
   after: { levels: Record<Level, number>; expectedLoss: number }
   changed: { id: number; email: string; fromLevel: Level; toLevel: Level; fromScore: number | null; toScore: number | null }[]
   changes: string[]
+  backtestBefore: BacktestBrief | null
+  backtestAfter: BacktestBrief | null
+}
+export interface BacktestBrief { churned: number; caught: number; falseAlarms: number }
+export interface Backtest extends BacktestBrief {
+  available: boolean; demo: boolean; horizonDays: number; customers: number; predictedLoss: number; actualLoss: number
+  rounds: { asOf: string; outcomeAt: string; customers: number; churned: number; caught: number }[]
+  levels: { level: Level; customers: number; churned: number; actualRate: number; predictedRate: number }[]
+  features: { feature: string; title: string; weight: number; services: number; churned: number; actualRate: number
+    predictedRate: number; verdict: 'ok' | 'under' | 'over' | 'few' }[]
+}
+export interface FeedbackItem {
+  id: number; author: string; authorName: string; kind: 'idea' | 'problem' | 'other'; text: string; page: string | null
+  status: 'new' | 'done'; createdAt: string
 }
 export interface HistoryItem { version: number; changes: string[]; author: string; createdAt: string }
 export interface ActivityItem { id: number; kind: string; summary: string; author: string; createdAt: string }

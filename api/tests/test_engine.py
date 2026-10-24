@@ -240,3 +240,41 @@ def test_effect_after_contact():
     first = {1: {"author": "anna", "created_at": T0, "at_risk": round(r.by_id[1].expected_loss) + 1000, "score_at": 90}}
     e = effect(r, first)
     assert e[0]["reduced"] == 10.0 and e[0]["scoreBefore"] == 90
+
+
+def test_backtest_compares_past_scores_with_outcomes():
+    from app import backtest
+    past_at = T0 - timedelta(days=30)
+
+    def svc(id, owner, autoprolong, expires, status):
+        return Service(id, f"service-{id}", owner, "month", autoprolong, expires - timedelta(days=30), expires, status, 1000)
+
+    past = Snapshot([account(1, balance=0), account(2, balance=50_000)],
+                    [svc(1, 1, False, past_at + timedelta(days=5), "active"),
+                     svc(2, 2, True, past_at + timedelta(days=20), "active")], [], reference_at=past_at)
+    now = snap([account(1, balance=0), account(2, balance=49_000)],
+               [svc(1, 1, False, past_at + timedelta(days=5), "deleted"),
+                svc(2, 2, True, past_at + timedelta(days=50), "active")])
+    b = backtest.run([past], now, T0, default_settings())
+    assert (len(b.rounds), b.customers, b.churned, b.caught, b.false_alarms) == (1, 2, 1, 1, 0)
+    assert b.levels["high"].churned == 1 and b.levels["low"].churned == 0
+    assert b.actual_loss == revenue_over_horizon(past.services[0], 30)
+    # без весов модель никого не отмечает — сверка это видит
+    zero = merge_patch(default_settings().model_dump(mode="json"),
+                       {"features": {k: {"weight": 0} for k in default_settings().features}})
+    assert backtest.run([past], now, T0, ModelSettings.model_validate(zero)).caught == 0
+    # исхода ещё нет (прошло меньше горизонта) — раунд не считается
+    assert backtest.run([past], now, past_at + timedelta(days=10), default_settings()).rounds == []
+
+
+def test_demo_history_is_consistent_with_snapshot():
+    from app import backtest
+    root = Path(__file__).resolve().parents[2] / "data" / "demo"
+    current = SnapshotIn.model_validate(json.loads((root / "data.json").read_text(encoding="utf-8"))).to_snapshot()
+    history = [SnapshotIn.model_validate(s).to_snapshot()
+               for s in json.loads((root / "history.json").read_text(encoding="utf-8"))["snapshots"]]
+    b = backtest.run(history, current, current.reference_at, default_settings())
+    assert len(b.rounds) == 3 and b.churned > 10
+    assert b.caught / b.churned > 0.6
+    rate = {k: v.churned / v.customers for k, v in b.levels.items()}
+    assert rate["high"] > rate["medium"] > rate["low"]

@@ -21,7 +21,7 @@ from app.config import load_config
 from app import ai, demo_stream
 from app.routers.source import snapshot_origin
 from app.routers import ai as ai_router
-from app.routers import analytics, auth, customers, fx, integrations, metrics, model, oidc, retention, source, stream, users
+from app.routers import analytics, auth, customers, feedback, fx, integrations, metrics, model, oidc, retention, source, stream, users
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
@@ -55,6 +55,10 @@ def bootstrap(app_state: AppState, config) -> None:
             db.log_activity(conn, "snapshot", f"Загружены данные кейса: {counts['accounts']} аккаунтов, "
                             f"{counts['services']} услуг, {counts['transactions']} транзакций", "system", counts)
         log.info("Загружен стартовый снимок %s", config.seed_path)
+    with app_state.pool.connection() as conn:   # история к расширенному набору (в том числе после обновления)
+        info = db.snapshot_info(conn)
+        if info and info["origin"].get("kind") == "extended" and not db.history_info(conn)["snapshots"]:
+            db.replace_history(conn, source.demo_history(config), "demo")
 
 
 async def scheduled_recalc(radar: AppState) -> None:
@@ -131,7 +135,7 @@ app = FastAPI(
 )
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
-          users.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):
+          users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):
     app.include_router(r)
 
 

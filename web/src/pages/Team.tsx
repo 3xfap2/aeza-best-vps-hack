@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ApiError, api, can, ROLE_TITLE, type Member, type Role } from '../api'
+import { ApiError, api, can, ROLE_TITLE, type FeedbackItem, type Member, type Role } from '../api'
 import { useLiveData } from '../live'
-import { ErrorBox, eur, Icon, Skeleton, shortDate, useToast } from '../ui'
+import { dateTime, ErrorBox, eur, Icon, Skeleton, shortDate, useToast } from '../ui'
 import { StatusLine, useUser } from './Shell'
 
 const ROLES: Role[] = ['admin', 'marketer', 'viewer']
@@ -75,6 +75,7 @@ export default function Team() {
           </section>
 
           {isAdmin && <AddMember onDone={(login) => { toast.show(`${login} добавлен`); setTick((t) => t + 1) }} />}
+          {isAdmin && <FeedbackList />}
 
           <section className={`ro-card team__rights${isAdmin ? '' : ' span12'}`} aria-labelledby="rights-t">
             <div className="ro-cardhead"><h2 id="rights-t">Что может каждая роль</h2></div>
@@ -127,6 +128,42 @@ function AddMember({ onDone }: { onDone: (login: string) => void }) {
         {error && <p className="form__error" role="alert">{error}</p>}
         <button className="ro-btn ro-btn--sm" type="submit" disabled={busy}>Добавить</button>
       </form>
+    </section>
+  )
+}
+
+const KIND_TITLE: Record<FeedbackItem['kind'], string> = { idea: 'идея', problem: 'проблема', other: 'другое' }
+
+/** Отзывы сотрудников о Радаре (кнопка «Обратная связь» в меню). Видит администратор. */
+function FeedbackList() {
+  const [tick, setTick] = useState(0)
+  const { data } = useLiveData(() => api<FeedbackItem[]>('/api/v1/feedback?limit=50'), [tick])
+  async function toggle(f: FeedbackItem) {
+    await api(`/api/v1/feedback/${f.id}`, { method: 'PATCH', json: { status: f.status === 'new' ? 'done' : 'new' } }).catch(() => undefined)
+    setTick((t) => t + 1)
+  }
+  const fresh = (data ?? []).filter((f) => f.status === 'new').length
+  return (
+    <section className="ro-card ro-top5 span12" aria-labelledby="fb-list-t">
+      <div className="ro-cardhead"><h2 id="fb-list-t">Отзывы о Радаре</h2>
+        <span className="ro-small">{data ? `новых: ${fresh}` : ''}</span></div>
+      {!data ? <Skeleton h={80} /> : data.length === 0
+        ? <p className="ro-small fb-list__empty">Пока пусто. Сотрудники пишут через «Обратная связь» в меню; новые отзывы приходят и в Telegram-бот.</p>
+        : (
+          <ul className="fb-list">
+            {data.map((f) => (
+              <li key={f.id} className={f.status === 'done' ? 'is-done' : undefined}>
+                <div className="fb-list__head">
+                  <span className={`work-tag${f.kind === 'problem' ? ' work-tag--churned' : f.kind === 'idea' ? ' work-tag--renewed' : ''}`}>{KIND_TITLE[f.kind]}</span>
+                  <b>{f.authorName}</b><span className="ro-small ro-mono">{dateTime(f.createdAt)}{f.page ? ` · ${f.page}` : ''}</span>
+                  <button className="ro-btn ro-btn--sm ro-btn--quiet" type="button" onClick={() => toggle(f)}>
+                    {f.status === 'new' ? 'Разобрано' : 'Вернуть в новые'}</button>
+                </div>
+                <p>{f.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
     </section>
   )
 }

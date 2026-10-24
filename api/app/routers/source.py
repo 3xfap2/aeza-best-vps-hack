@@ -113,6 +113,24 @@ def origin_title(origin: dict, accounts: int, changes: int) -> str:
     return title + (f" · изменений после загрузки: {changes}" if changes else "")
 
 
+def demo_history(config) -> list[dict]:
+    """Прошлые снимки к расширенному набору (tools/gen_history.py) — для сверки модели с исходами."""
+    path = config.demo_path.with_name("history.json") if config.demo_path else None
+    return json.loads(path.read_text(encoding="utf-8"))["snapshots"] if path and path.exists() else []
+
+
+def sync_history(conn, config, snap: SnapshotIn, kind: str) -> None:
+    """История идёт вместе с данными: у набора кейса её нет, у расширенного — демо, снимок биллинга сам становится историей."""
+    if kind == "preset:extended":
+        db.replace_history(conn, demo_history(config), "demo")
+    elif kind == "preset:case":
+        db.clear_history(conn)
+    elif snap.referenceAt:
+        db.add_history(conn, snap.model_dump(mode="json"), "billing")
+    else:
+        db.clear_demo_history(conn)
+
+
 def load_snapshot(request: Request, snap: SnapshotIn, author: str, kind: str) -> LoadResult:
     radar = request.app.state.radar
     origin = snapshot_origin(snap, request.app.state.config.case_path,
@@ -120,6 +138,7 @@ def load_snapshot(request: Request, snap: SnapshotIn, author: str, kind: str) ->
     with radar.write_lock:
         with request.app.state.pool.connection() as conn:
             counts = db.replace_snapshot(conn, snap, author, datetime.now(timezone.utc), origin=origin)
+            sync_history(conn, request.app.state.config, snap, kind)
             db.log_activity(
                 conn, kind,
                 f"Загружен снимок: {counts['accounts']} аккаунтов, {counts['services']} услуг, "
@@ -160,6 +179,33 @@ def load_preset(name: Literal["case", "extended"], request: Request, user: User 
     except ValidationError as e:
         raise HTTPException(500, f"Набор повреждён: {e.errors()[0]['msg']}") from e
     return load_snapshot(request, snap, user.login, f"preset:{name}")
+
+
+class HistoryOut(BaseModel):
+    snapshots: int
+    first: datetime | None
+    last: datetime | None
+    demo: bool = Field(description="История сгенерирована для демонстрации (а не пришла из биллинга)")
+
+
+@router.get("/history", response_model=HistoryOut, summary="Прошлые снимки для сверки модели с исходами")
+def history_info(request: Request, _: User = Depends(current_user)) -> HistoryOut:
+    with request.app.state.pool.connection() as conn:
+        return HistoryOut(**db.history_info(conn))
+
+
+@router.post("/history", response_model=HistoryOut,
+             summary="Добавить прошлый снимок из архива биллинга (для сверки модели с исходами)",
+             description="Формат — как у PUT /snapshot, поле referenceAt обязательно и раньше текущей даты расчёта. "
+                         "Текущие данные не меняются. Снимок с той же датой заменяется; демо-история удаляется.")
+def add_history(request: Request, snap: SnapshotIn, user: User = Depends(require("admin"))) -> HistoryOut:
+    if snap.referenceAt is None or snap.referenceAt >= request.app.state.radar.current.result.as_of:
+        raise HTTPException(422, "Нужен referenceAt раньше текущей даты расчёта")
+    with request.app.state.pool.connection() as conn:
+        db.add_history(conn, snap.model_dump(mode="json"), "billing")
+        db.log_activity(conn, "snapshot", f"Добавлен прошлый снимок на {snap.referenceAt:%d.%m.%Y}: "
+                        f"{len(snap.accounts)} аккаунтов — для сверки модели с исходами", user.login)
+        return HistoryOut(**db.history_info(conn))
 
 
 @router.post("/events", response_model=EventResult,

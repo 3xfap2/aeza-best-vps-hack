@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
-import { api, ApiError, can, LEVEL_TITLE, type HistoryItem, type ModelSettings, type Preview, type SettingsOut } from '../api'
+import { api, ApiError, can, LEVEL_TITLE, type Backtest, type HistoryItem, type ModelSettings, type Preview, type SettingsOut } from '../api'
 import { useLive, useLiveData } from '../live'
-import { dateTime, ErrorBox, eur, RiskBadge, Skeleton, useToast } from '../ui'
+import { dateTime, ErrorBox, eur, RiskBadge, shortDate, Skeleton, useToast } from '../ui'
 import { StatusLine, useUser } from './Shell'
 
 /** Разница между сохранёнными и черновыми настройками — тело PATCH (JSON Merge Patch). */
@@ -180,6 +180,12 @@ export default function Model() {
                         return <li key={l}><RiskBadge level={l} title={LEVEL_TITLE[l]} /><span className="ro-mono">{a} → <b>{b}</b>{b !== a && ` (${b > a ? '+' : ''}${b - a})`}</span></li>
                       })}
                       <li><span>Ожидаемая потеря</span><span className="ro-mono">{eur(preview.before.expectedLoss)} → <b>{eur(preview.after.expectedLoss)}</b></span></li>
+                      {preview.backtestBefore && preview.backtestAfter && <>
+                        <li><span>Сверка с историей: заранее отмечено уходов</span>
+                          <span className="ro-mono">{preview.backtestBefore.caught} → <b>{preview.backtestAfter.caught}</b> из {preview.backtestAfter.churned}</span></li>
+                        <li><span>Ложные тревоги (высокий риск, но продлил)</span>
+                          <span className="ro-mono">{preview.backtestBefore.falseAlarms} → <b>{preview.backtestAfter.falseAlarms}</b></span></li>
+                      </>}
                     </ul>
                     {preview.changed.length > 0 && (
                       <details className="pv__list" open={preview.changed.length <= 8}>
@@ -213,6 +219,7 @@ export default function Model() {
           </section>
         </aside>
       </div>
+      <BacktestCard />
       {dirty && preview && (
         <div className="pv-dock" aria-hidden="true">
           Высокий {preview.before.levels.high} → {preview.after.levels.high} · Потеря {eur(preview.after.expectedLoss - preview.before.expectedLoss)}
@@ -221,5 +228,63 @@ export default function Model() {
       )}
       {toast.node}
     </>
+  )
+}
+
+const pct = (v: number) => `${Math.round(v * 100)} %`
+const VERDICT: Record<Backtest['features'][number]['verdict'], [string, string]> = {
+  ok: ['совпадает', ''],
+  under: ['недооценивает — поднять вес', 'work-tag--churned'],
+  over: ['переоценивает — снизить вес', 'work-tag--deferred'],
+  few: ['мало случаев', ''],
+}
+
+/** Обратная связь: прошлые снимки, оценённые текущими весами, против того, что случилось потом. */
+function BacktestCard() {
+  const { data } = useLiveData(() => api<Backtest>('/api/v1/model/backtest'))
+  if (!data) return <Skeleton h={240} />
+  return (
+    <section className="ro-card backtest" aria-labelledby="bt-t">
+      <div className="ro-cardhead"><h2 id="bt-t">Сверка с исходами</h2>
+        {data.demo && <span className="work-tag" title="История восстановлена по правилам кейса из снимка (tools/gen_history.py)">история демо</span>}</div>
+      {!data.available ? (
+        <p className="ro-small">Истории пока нет. Радар сравнит прогноз с фактом, когда накопятся снимки хотя бы за {data.horizonDays} дней:
+          каждый снимок биллинга с датой (<code>PUT /api/v1/source/snapshot</code> с <code>referenceAt</code>) сохраняется сам,
+          архив можно догрузить через <code>POST /api/v1/source/history</code>.</p>
+      ) : <>
+        <p>Модель оценила прошлые снимки ({data.rounds.map((r) => shortDate(r.asOf)).join(', ')}) нынешними весами и сравнила с тем,
+          что случилось за {data.horizonDays} дней. Из <b>{data.churned}</b> клиентов, не продливших услугу, заранее отмечены
+          (высокий или средний риск) <b>{data.caught}</b> — {pct(data.churned ? data.caught / data.churned : 0)}.
+          Ложных тревог (высокий риск, но клиент продлил): <b>{data.falseAlarms}</b>.</p>
+        <p className="ro-small">Ожидаемая потеря на те даты — <b className="ro-mono">{eur(data.predictedLoss)}</b>, фактически не продлено
+          услуг на <b className="ro-mono">{eur(data.actualLoss)}</b> выручки за {data.horizonDays} дн. Двигаете веса — сверка в предпросмотре пересчитывается на той же истории.</p>
+        <div className="backtest__grid">
+          <div className="table-scroll">
+            <table className="ro-table">
+              <caption className="ro-sr">Факт и прогноз по уровням риска</caption>
+              <thead><tr><th>Уровень риска на ту дату</th><th className="r">Клиентов</th><th className="r">Не продлили</th><th className="r">Факт</th><th className="r">Прогноз</th></tr></thead>
+              <tbody>{data.levels.map((l) => (
+                <tr key={l.level}><td><RiskBadge level={l.level} title={LEVEL_TITLE[l.level]} /></td><td className="r mono">{l.customers}</td>
+                  <td className="r mono">{l.churned}</td><td className="r mono"><b>{pct(l.actualRate)}</b></td><td className="r mono">{pct(l.predictedRate)}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div className="table-scroll">
+            <table className="ro-table">
+              <caption className="ro-sr">Факт и прогноз по признакам</caption>
+              <thead><tr><th>Признак</th><th className="r">Вес</th><th className="r">Услуг</th><th className="r">Факт</th><th className="r">Прогноз</th><th>Вывод</th></tr></thead>
+              <tbody>{data.features.map((f) => (
+                <tr key={f.feature}><td>{f.title}</td><td className="r mono">{f.weight}</td><td className="r mono">{f.services}</td>
+                  <td className="r mono"><b>{pct(f.actualRate)}</b></td><td className="r mono">{pct(f.predictedRate)}</td>
+                  <td><span className={`work-tag ${VERDICT[f.verdict][1]}`}>{VERDICT[f.verdict][0]}</span></td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+        <p className="ro-small">Факт — доля услуг с этим признаком, которые за {data.horizonDays} дней не продлили (удалены, ждут оплаты или заблокированы);
+          прогноз — средняя вероятность непродления по модели. Подсказка «поднять» или «снизить» появляется, если они расходятся больше чем на 15 п. п.
+          {data.demo && ' История восстановлена из снимка по правилам кейса для демонстрации; на снимках биллинга расчёт тот же.'}</p>
+      </>}
+    </section>
   )
 }

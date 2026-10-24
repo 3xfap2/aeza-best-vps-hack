@@ -406,3 +406,57 @@ def action_counts(conn: Connection) -> dict[str, int]:
 def churn_reasons(conn: Connection) -> dict[str, int]:
     return {r["reason"]: r["n"] for r in conn.execute(
         "SELECT reason, count(*) AS n FROM retention_actions WHERE kind = 'churned' AND reason IS NOT NULL GROUP BY reason")}
+
+
+# --- обратная связь: история снимков и отзывы ---------------------------------
+
+def replace_history(conn: Connection, snapshots: list[dict], source: str) -> int:
+    """Прошлые снимки для сверки модели с исходами. Демо-история заменяется целиком."""
+    conn.execute("DELETE FROM history_snapshots")
+    for s in snapshots:
+        add_history(conn, s, source)
+    return len(snapshots)
+
+
+def add_history(conn: Connection, snapshot: dict, source: str) -> None:
+    """Снимок на дату referenceAt; снимок с той же датой заменяется. Демо-история уступает место данным биллинга."""
+    if source == "billing":
+        conn.execute("DELETE FROM history_snapshots WHERE source = 'demo'")
+    conn.execute(
+        "INSERT INTO history_snapshots (reference_at, data, source) VALUES (%s, %s, %s) "
+        "ON CONFLICT (reference_at) DO UPDATE SET data = EXCLUDED.data, source = EXCLUDED.source, loaded_at = now()",
+        (snapshot["referenceAt"], Jsonb(snapshot), source))
+
+
+def clear_history(conn: Connection) -> None:
+    conn.execute("DELETE FROM history_snapshots")
+
+
+def history(conn: Connection) -> list[dict]:
+    return [r["data"] for r in conn.execute("SELECT data FROM history_snapshots ORDER BY reference_at")]
+
+
+def history_info(conn: Connection) -> dict:
+    row = conn.execute("SELECT count(*) AS n, min(reference_at) AS first, max(reference_at) AS last, "
+                       "bool_or(source = 'demo') AS demo FROM history_snapshots").fetchone()
+    return {"snapshots": row["n"], "first": row["first"], "last": row["last"], "demo": bool(row["demo"])}
+
+
+def add_feedback(conn: Connection, author: str, author_name: str, kind: str, text: str, page: str | None) -> int:
+    return conn.execute(
+        "INSERT INTO feedback (author, author_name, kind, text, page) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (author, author_name, kind, text, page)).fetchone()["id"]
+
+
+def list_feedback(conn: Connection, limit: int) -> list[dict]:
+    return list(conn.execute(
+        "SELECT id, author, author_name AS \"authorName\", kind, text, page, status, created_at AS \"createdAt\" "
+        "FROM feedback ORDER BY id DESC LIMIT %s", (limit,)))
+
+
+def set_feedback_status(conn: Connection, feedback_id: int, status: str) -> bool:
+    return conn.execute("UPDATE feedback SET status = %s WHERE id = %s", (status, feedback_id)).rowcount > 0
+
+
+def clear_demo_history(conn: Connection) -> None:
+    conn.execute("DELETE FROM history_snapshots WHERE source = 'demo'")

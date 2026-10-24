@@ -1326,6 +1326,33 @@
         ]
       }
     },
+    "/api/v1/model/backtest": {
+      "get": {
+        "tags": [
+          "Модель"
+        ],
+        "summary": "Сверка модели с исходами: прошлые снимки, оценённые текущими весами, против того, что случилось потом",
+        "description": "Обратная связь для настройки весов. Исход услуги — её статус в первом снимке не раньше чем через горизонт: удалена, ждёт оплаты или заблокирована — не продлена. Прошлые снимки — POST /api/v1/source/history или каждый PUT /snapshot с referenceAt.",
+        "operationId": "get_backtest_api_v1_model_backtest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/model/settings/history": {
       "get": {
         "tags": [
@@ -1481,6 +1508,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoadResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/source/history": {
+      "get": {
+        "tags": [
+          "Данные источника"
+        ],
+        "summary": "Прошлые снимки для сверки модели с исходами",
+        "operationId": "history_info_api_v1_source_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Данные источника"
+        ],
+        "summary": "Добавить прошлый снимок из архива биллинга (для сверки модели с исходами)",
+        "description": "Формат — как у PUT /snapshot, поле referenceAt обязательно и раньше текущей даты расчёта. Текущие данные не меняются. Снимок с той же датой заменяется; демо-история удаляется.",
+        "operationId": "add_history_api_v1_source_history_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryOut"
                 }
               }
             }
@@ -1919,6 +2017,154 @@
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feedback": {
+      "post": {
+        "tags": [
+          "Отзывы о Радаре"
+        ],
+        "summary": "Отправить отзыв о Радаре: идея, проблема или другое (любая роль)",
+        "operationId": "send_api_v1_feedback_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Отзывы о Радаре"
+        ],
+        "summary": "Отзывы сотрудников о Радаре (администратор)",
+        "operationId": "list_all_api_v1_feedback_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeedbackItem"
+                  },
+                  "title": "Response List All Api V1 Feedback Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feedback/{feedback_id}": {
+      "patch": {
+        "tags": [
+          "Отзывы о Радаре"
+        ],
+        "summary": "Отметить отзыв разобранным или вернуть в новые (администратор)",
+        "operationId": "set_status_api_v1_feedback__feedback_id__patch",
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Feedback Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackStatus"
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -2766,6 +3012,242 @@
         ],
         "title": "AutoprolongEvent"
       },
+      "BacktestBrief": {
+        "properties": {
+          "churned": {
+            "type": "integer",
+            "title": "Churned",
+            "description": "Клиентов, которые за горизонт не продлили хотя бы одну услугу"
+          },
+          "caught": {
+            "type": "integer",
+            "title": "Caught",
+            "description": "Из них модель заранее отнесла к высокому или среднему риску"
+          },
+          "falseAlarms": {
+            "type": "integer",
+            "title": "Falsealarms",
+            "description": "Высокий риск, но клиент продлил"
+          }
+        },
+        "type": "object",
+        "required": [
+          "churned",
+          "caught",
+          "falseAlarms"
+        ],
+        "title": "BacktestBrief"
+      },
+      "BacktestFeature": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "services": {
+            "type": "integer",
+            "title": "Services",
+            "description": "У скольких услуг признак был на дату прошлого снимка"
+          },
+          "churned": {
+            "type": "integer",
+            "title": "Churned"
+          },
+          "actualRate": {
+            "type": "number",
+            "title": "Actualrate"
+          },
+          "predictedRate": {
+            "type": "number",
+            "title": "Predictedrate"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "under",
+              "over",
+              "few"
+            ],
+            "title": "Verdict",
+            "description": "ok — прогноз совпал с фактом; under — модель недооценивает (поднять вес); over — переоценивает (снизить вес); few — мало случаев для вывода"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "title",
+          "weight",
+          "services",
+          "churned",
+          "actualRate",
+          "predictedRate",
+          "verdict"
+        ],
+        "title": "BacktestFeature"
+      },
+      "BacktestLevel": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "churned": {
+            "type": "integer",
+            "title": "Churned"
+          },
+          "actualRate": {
+            "type": "number",
+            "title": "Actualrate",
+            "description": "Доля клиентов уровня, которые не продлили, 0–1"
+          },
+          "predictedRate": {
+            "type": "number",
+            "title": "Predictedrate",
+            "description": "Средняя вероятность непродления по модели, 0–1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "customers",
+          "churned",
+          "actualRate",
+          "predictedRate"
+        ],
+        "title": "BacktestLevel"
+      },
+      "BacktestOut": {
+        "properties": {
+          "churned": {
+            "type": "integer",
+            "title": "Churned",
+            "description": "Клиентов, которые за горизонт не продлили хотя бы одну услугу"
+          },
+          "caught": {
+            "type": "integer",
+            "title": "Caught",
+            "description": "Из них модель заранее отнесла к высокому или среднему риску"
+          },
+          "falseAlarms": {
+            "type": "integer",
+            "title": "Falsealarms",
+            "description": "Высокий риск, но клиент продлил"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "demo": {
+            "type": "boolean",
+            "title": "Demo",
+            "description": "История сгенерирована для демонстрации"
+          },
+          "horizonDays": {
+            "type": "integer",
+            "title": "Horizondays"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers",
+            "description": "Оценок клиентов на датах прошлых снимков"
+          },
+          "predictedLoss": {
+            "type": "number",
+            "title": "Predictedloss",
+            "description": "Ожидаемая потеря на даты прошлых снимков, €"
+          },
+          "actualLoss": {
+            "type": "number",
+            "title": "Actualloss",
+            "description": "Выручка за горизонт по услугам, которые не продлили, €"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestRound"
+            },
+            "type": "array",
+            "title": "Rounds"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestLevel"
+            },
+            "type": "array",
+            "title": "Levels"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "churned",
+          "caught",
+          "falseAlarms",
+          "available",
+          "demo",
+          "horizonDays",
+          "customers",
+          "predictedLoss",
+          "actualLoss",
+          "rounds",
+          "levels",
+          "features"
+        ],
+        "title": "BacktestOut"
+      },
+      "BacktestRound": {
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Asof"
+          },
+          "outcomeAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Outcomeat"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "churned": {
+            "type": "integer",
+            "title": "Churned"
+          },
+          "caught": {
+            "type": "integer",
+            "title": "Caught"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asOf",
+          "outcomeAt",
+          "customers",
+          "churned",
+          "caught"
+        ],
+        "title": "BacktestRound"
+      },
       "CauseOut": {
         "properties": {
           "feature": {
@@ -3551,6 +4033,121 @@
         ],
         "title": "FeatureSetting"
       },
+      "FeedbackIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "idea",
+              "problem",
+              "other"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Text"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page",
+            "description": "Экран, с которого отправлен отзыв"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "FeedbackIn"
+      },
+      "FeedbackItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
+          },
+          "authorName": {
+            "type": "string",
+            "title": "Authorname"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "done"
+            ],
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "authorName",
+          "kind",
+          "text",
+          "page",
+          "status",
+          "createdAt"
+        ],
+        "title": "FeedbackItem"
+      },
+      "FeedbackStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "done"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "FeedbackStatus"
+      },
       "Finances": {
         "properties": {
           "balance": {
@@ -3678,6 +4275,51 @@
           "createdAt"
         ],
         "title": "HistoryItem"
+      },
+      "HistoryOut": {
+        "properties": {
+          "snapshots": {
+            "type": "integer",
+            "title": "Snapshots"
+          },
+          "first": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "demo": {
+            "type": "boolean",
+            "title": "Demo",
+            "description": "История сгенерирована для демонстрации (а не пришла из биллинга)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "snapshots",
+          "first",
+          "last",
+          "demo"
+        ],
+        "title": "HistoryOut"
       },
       "HistoryPoint": {
         "properties": {
@@ -4219,6 +4861,28 @@
             },
             "type": "array",
             "title": "Changes"
+          },
+          "backtestBefore": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestBrief"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Сверка с историей при текущих настройках"
+          },
+          "backtestAfter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestBrief"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Сверка с историей при новых настройках"
           }
         },
         "type": "object",

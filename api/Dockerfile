@@ -5,7 +5,7 @@ COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY api/ .
 COPY data/case/data.json /app/data/case/data.json
-COPY data/demo/data.json /app/data/demo/data.json
+COPY data/demo/data.json data/demo/history.json /app/data/demo/
 RUN useradd --system --uid 10001 radar
 USER radar
 EXPOSE 8000

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api, ROLE_TITLE, type SnapshotInfo, type User } from '../api'
 import { LiveProvider, useLive, useLiveData } from '../live'
 import CurrencySwitch from '../CurrencySwitch'
+import FeedbackButton from '../Feedback'
 import { currentFx, isRub } from '../currency'
 import ThemeSwitch from '../ThemeSwitch'
 import { Icon, Wordmark } from '../ui'
@@ -64,6 +65,7 @@ export default function Shell() {
           <div className="ro-side__foot side__foot">
             <NavLink to="/app/guide"><Icon name="book" />Как пользоваться</NavLink>
             <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
+            <FeedbackButton />
             <ThemeSwitch />
             <CurrencySwitch onChange={setMoney} />
             <div className="side__user">
@@ -92,6 +94,7 @@ export default function Shell() {
           <div className="more" id="more-menu">
             {MORE.map((n) => <NavLink key={n.to} to={n.to}><Icon name={n.icon} />{n.label}</NavLink>)}
             <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
+            <FeedbackButton />
             <ThemeSwitch />
             <CurrencySwitch onChange={setMoney} />
             <div className="more__user"><b>{user.displayName}</b><span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}</span></div>
