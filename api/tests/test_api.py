@@ -445,7 +445,7 @@ def test_snapshot_origin_is_shown(client, auth):
     assert "синтетических" in info["title"] and info["changesSinceLoad"] == 0
     client.post("/api/v1/source/events", headers=auth, json={"type": "topup", "accountId": 5, "amount": 10})
     info = client.get("/api/v1/source/snapshot", headers=auth).json()
-    assert info["changesSinceLoad"] == 1 and "изменены событиями" in info["title"]
+    assert info["changesSinceLoad"] == 1 and "изменений после загрузки: 1" in info["title"]
     client.post("/api/v1/source/reset", headers=auth)
     assert client.get("/api/v1/source/snapshot", headers=auth).json()["changesSinceLoad"] == 0
     client.post("/api/v1/source/preset/case", headers=auth)

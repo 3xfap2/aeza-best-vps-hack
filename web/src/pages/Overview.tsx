@@ -207,6 +207,7 @@ function ChartCard({ timeline, servicesAtRisk }: { timeline: Timeline; servicesA
   const fcPts = timeline.points.slice(idx + 1, idx + 8)
   const fact = factPts.map((p) => mode === 'count' ? p.factRecorded + p.factRestored : +(p.factRecordedEur + p.factRestoredEur).toFixed(2))
   const forecast = fcPts.map((p) => mode === 'count' ? +p.forecast.toFixed(1) : p.forecastEur)
+  const restored = factPts.map((p) => mode === 'count' ? p.factRestored : +p.factRestoredEur.toFixed(2))
   const labels = factPts.concat(fcPts).map((p, i) => {
     const d = Number(p.date.slice(8)); const isToday = p.date === today
     return isToday ? `${d} ${['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][Number(p.date.slice(5, 7)) - 1]}` : i % 5 === 0 ? String(d) : ''
@@ -216,7 +217,7 @@ function ChartCard({ timeline, servicesAtRisk }: { timeline: Timeline; servicesA
     const max = Math.max(mode === 'count' ? 2 : 10, ...fact, ...forecast)
     const step = mode === 'count' ? 2 : 10
     const chart = window.Ottok.ForecastChart.mount(host.current, {
-      fact, forecast, labels, width: 720, height: 330, max: Math.ceil(max / step) * step, unit: mode,
+      fact, forecast, restored, labels, width: 720, height: 330, max: Math.ceil(max / step) * step, unit: mode,
       alt: mode === 'count'
         ? `Отток по дням, услуг: ${fact.length} дней удалений и ${forecast.length} дней ожидаемых непродлений`
         : `Отток по дням, € выручки: ${fact.length} дней факта и ${forecast.length} дней прогноза`,
@@ -239,7 +240,7 @@ function ChartCard({ timeline, servicesAtRisk }: { timeline: Timeline; servicesA
         <div><span className="ro-small">{mode === 'count' ? 'Удалено' : 'Ушло'} за {fact.length} дн.</span><b>{fmt(sum(fact))}</b></div>
         <div><span className="ro-small">{mode === 'count' ? 'Ожидается непродлений' : 'Прогноз'} на {forecast.length} дн.</span><b>{fmt(sum(forecast))}</b></div>
       </div>
-      <p className="ro-small">{timeline.summary} Сплошные столбцы — факт удалений (из журнала переходов; для исходного снимка дата восстановлена по правилу «срок + 5 дней»), штриховка — прогноз: сумма вероятностей непродления по дням.</p>
+      <p className="ro-small">{timeline.summary} Тёмные столбцы — удаления из журнала переходов, светлые — удаления из исходного снимка: даты в данных нет, она восстановлена по правилу «срок + 5 дней». Штриховка — прогноз: сумма вероятностей непродления по дням.</p>
     </section>
   )
 }

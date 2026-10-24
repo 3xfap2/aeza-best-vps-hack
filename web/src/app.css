@@ -323,3 +323,7 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
   .queue__act { grid-template-columns: 1fr 1fr; min-width: 0; }
   .queue__act > div, .queue__act > .ro-link { grid-column: 1 / -1; }
 }
+
+/* факт с восстановленной датой — светлее факта из журнала */
+.ro-chart__bar--restored { fill: var(--ink-3); opacity: .55; }
+.ro-sw-restored { background: var(--ink-3); opacity: .55; }

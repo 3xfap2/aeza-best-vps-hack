@@ -555,6 +555,8 @@
       var fact = o.fact || [22, 31, 18, 40, 27, 35, 52, 29, 44];
       var fc = o.forecast || [38, 46, 33, 49, 41];
       var labels = o.labels;
+      // необязательно: часть факта, у которой дата восстановлена по правилу, а не взята из журнала
+      var restored = o.restored && o.restored.some(function (v) { return v > 0; }) ? o.restored : null;
       var n = fact.length + fc.length;
       var W = o.width || 640, H = o.height || 220, padL = 44, padB = 26, padT = 18;
       var max = o.max || Math.ceil(Math.max.apply(null, fact.concat(fc)) / 20) * 20;
@@ -568,12 +570,16 @@
       });
       fact.concat(fc).forEach(function (v, i) {
         var isFc = i >= fact.length, bh = (H - padT - padB) * v / max, x = padL + i * step + (step - bw) / 2, y = H - padB - bh;
-        svg += '<rect class="ro-chart__bar ' + (isFc ? 'ro-chart__bar--fc' : 'ro-chart__bar--fact') + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2"' + (isFc ? ' fill="url(#' + id + ')"' : '') + '/>';
+        var rv = !isFc && restored ? Math.min(restored[i] || 0, v) : 0, rh = (H - padT - padB) * rv / max;
+        svg += '<rect class="ro-chart__bar ' + (isFc ? 'ro-chart__bar--fc' : 'ro-chart__bar--fact') + '" x="' + x.toFixed(1) + '" y="' + (y + rh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (bh - rh).toFixed(1) + '" rx="2"' + (isFc ? ' fill="url(#' + id + ')"' : '') + '/>';
+        if (rh > 0) svg += '<rect class="ro-chart__bar ro-chart__bar--restored" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + rh.toFixed(1) + '" rx="2"/>';
         if (labels && labels[i]) svg += '<text class="ro-chart__axis" x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(labels[i]) + '</text>';
       });
       var tx = padL + fact.length * step;
       svg += '<line class="ro-chart__today" x1="' + tx + '" x2="' + tx + '" y1="4" y2="' + (H - padB) + '"/><text class="ro-chart__todaylabel" x="' + (tx + 6) + '" y="12">сегодня</text></svg>';
-      host.innerHTML = (o.legend === false ? '' : '<div class="ro-chart__legend"><span><i class="ro-sw-fact"></i>факт, сплошные</span><span><i class="ro-sw-fc"></i>прогноз, штриховка</span></div>') + svg +
+      host.innerHTML = (o.legend === false ? '' : '<div class="ro-chart__legend"><span><i class="ro-sw-fact"></i>' + (restored ? 'факт из журнала' : 'факт, сплошные') + '</span>' +
+        (restored ? '<span><i class="ro-sw-restored"></i>факт, дата по правилу «срок + 5 дней»</span>' : '') +
+        '<span><i class="ro-sw-fc"></i>прогноз, штриховка</span></div>') + svg +
         '<p class="ro-sr">' + esc((function (fmt) { return 'Факт: ' + fact.map(fmt).join(', ') + '. Прогноз: ' + fc.map(fmt).join(', ') + '.'; })(o.unit === 'count' ? function (v) { return String(v).replace('.', ','); } : function (v) { return eur(v, true); })) + '</p>';
       var bars = $$(host, '.ro-chart__bar');
       function grow() {

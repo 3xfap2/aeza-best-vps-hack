@@ -110,7 +110,7 @@ def origin_title(origin: dict, accounts: int, changes: int) -> str:
         title = f"данные кейса, {case} кл."
     else:
         title = f"загруженный снимок, {accounts} кл." + (f" (из них {case} — из кейса)" if case else "")
-    return title + (f" · изменены событиями: {changes}" if changes else "")
+    return title + (f" · изменений после загрузки: {changes}" if changes else "")
 
 
 def load_snapshot(request: Request, snap: SnapshotIn, author: str, kind: str) -> LoadResult:
