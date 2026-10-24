@@ -26,7 +26,8 @@ docker compose up -d --build
 | Метрики | http://localhost:8080/metrics | Bearer `radar-metrics-demo-token` или вход в панель |
 | Prometheus | http://localhost:9090/targets | цель `churn-radar` в состоянии UP; правила алертов — /alerts |
 | Grafana | http://localhost:3000 | дашборд «Радар оттока» открыт на просмотр; админ — `admin` / `radar-grafana-demo` |
-| Вход через SSO (Dex) | кнопка «Войти через SSO» на странице входа | `marketing@radar.example` / `radar-sso-2026` |
+| Вход через SSO (Dex) | кнопка «Войти через SSO» на странице входа | `marketing@radar.example` (маркетолог) или `viewer@radar.example` (наблюдатель), пароль `radar-sso-2026` |
+| Grafana | http://localhost:3000 | дашборд открыт на просмотр |
 
 Без файла `.env` используются демо-значения выше. Чтобы задать свои пароли и токены, скопируйте `.env.example` в `.env` и поменяйте значения.
 
@@ -34,7 +35,7 @@ docker compose up -d --build
 
 > Свободными должны быть порты 8080, 9090, 3000 и 5556. Если порт занят, поменяйте левую часть в `compose.yaml` (например, `"8081:8080"`).
 
-Проверить стенд по пунктам ТЗ одной командой: `node tools/acceptance.mjs` — около 40 проверок (вход, сортировки, деньги, настройки и 409, SSE, событие биллинга, роли, /metrics = сводка, Prometheus, Grafana, Swagger). Данные и настройки проверка возвращает как были.
+Проверить стенд по пунктам ТЗ одной командой: `node tools/acceptance.mjs` — 36 проверок (вход, сортировки, деньги, настройки и 409, SSE, событие биллинга, роли, /metrics = сводка, Prometheus, Grafana, Swagger). Данные и настройки проверка возвращает как были.
 
 ---
 
@@ -281,7 +282,11 @@ Prometheus из `compose.yaml` собирает их каждые 15 секун�
 | Загружать данные, события, перематывать время | да | нет | нет |
 | Команда: добавлять сотрудников, менять роли | да | нет | нет |
 
-Права проверяет сервер (403 без нужной роли). Учётная запись из `ADMIN_LOGIN` — администратор; вход через SSO по умолчанию получает роль «Маркетолог».
+Права проверяет сервер (403 без нужной роли). Учётная запись из `ADMIN_LOGIN` — администратор.
+
+**Роль из системы входа компании.** При входе через SSO роль берётся из claim `groups` (Keycloak, Authentik, Azure AD) по таблице `OIDC_ROLE_MAP`, например `radar-admins=admin,radar-marketing=marketer,radar-viewers=viewer`; ключом может быть и email. Если совпадение есть, роль обновляется при каждом входе — права ведутся в IdP, а не в Радаре. Если нет — новый пользователь получает `OIDC_DEFAULT_ROLE` (маркетолог), роль можно сменить в «Команде». В демо: `marketing@radar.example` — маркетолог, `viewer@radar.example` — наблюдатель (пароль у обоих `radar-sso-2026`).
+
+**Защита сайта и контейнеров.** Content-Security-Policy: скрипты только с нашего домена, без inline и eval; запрет встраивания в чужие сайты; Permissions-Policy. Контейнеры api и web работают не от root, с файловой системой только для чтения, без capabilities Linux и с `no-new-privileges`; Prometheus, Grafana и Dex — без capabilities и `no-new-privileges`.
 
 ## Персональные данные
 
