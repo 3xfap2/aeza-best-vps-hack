@@ -6,7 +6,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, ValidationError
 
-from app import backtest, db
+from app import backtest, db, sensitivity
 from app.scoring.engine import evaluate
 from app.scoring.features import FEATURES
 from app.scoring.settings import ModelSettings, diff_settings, merge_patch
@@ -107,6 +107,32 @@ class BacktestOut(BacktestBrief):
     rounds: list[BacktestRound]
     levels: list[BacktestLevel]
     features: list[BacktestFeature]
+
+
+class Shift(BaseModel):
+    changed: int = Field(description="Клиентов сменят уровень")
+    lossPct: float = Field(description="Изменение ожидаемой потери, %")
+    planSame: int = Field(description="Сколько клиентов плана звонков на день останется в плане")
+
+
+class SensitivityRow(BaseModel):
+    feature: str
+    title: str
+    weight: float
+    minus: Shift = Field(description="Вес меньше на 20 %")
+    plus: Shift = Field(description="Вес больше на 20 %")
+
+
+class SensitivityOut(BaseModel):
+    delta: float
+    sampled: bool = Field(description="Посчитано на выборке клиентов (большая база)")
+    customers: int
+    scored: int
+    planSize: int
+    maxChanged: int
+    maxLossPct: float
+    minPlanSame: int
+    rows: list[SensitivityRow]
 
 
 class HistoryItem(BaseModel):
@@ -240,3 +266,19 @@ def get_backtest(request: Request, _: User = Depends(current_user)) -> BacktestO
 def history(request: Request, limit: int = Query(50, ge=1, le=500), _: User = Depends(current_user)) -> list[HistoryItem]:
     with request.app.state.pool.connection() as conn:
         return [HistoryItem(**r) for r in db.settings_history(conn, limit)]
+
+
+_sensitivity_cache: dict[int, SensitivityOut] = {}
+
+
+@router.get("/sensitivity", response_model=SensitivityOut,
+            summary="Устойчивость к весам: что изменится, если каждый вес ошибочен на ±20 %",
+            description="Для каждого признака вес сдвигается на −20 % и +20 %: сколько клиентов сменят уровень, "
+                        "насколько изменится ожидаемая потеря и сколько клиентов останется в плане звонков на день. "
+                        "Пересчитывается при каждом изменении данных или настроек.")
+def get_sensitivity(request: Request, _: User = Depends(current_user)) -> SensitivityOut:
+    cur = request.app.state.radar.current
+    if cur.version not in _sensitivity_cache:
+        _sensitivity_cache.clear()
+        _sensitivity_cache[cur.version] = SensitivityOut(**sensitivity.run(cur.snapshot, cur.result))
+    return _sensitivity_cache[cur.version]

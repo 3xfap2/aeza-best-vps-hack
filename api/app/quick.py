@@ -8,7 +8,7 @@ from __future__ import annotations
 from app import backtest, db
 from app.ai import _eur, _rub_fmt
 from app.insights import what_if
-from app.retention import queue as retention_queue
+from app.retention import compare_strategies, queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES
 from app.source import SnapshotIn
 
@@ -47,6 +47,10 @@ def today(radar) -> tuple[str, list[int]]:
                      f"{x['action']}")
     if len(plan) > 5:
         lines.append(f"…и ещё {len(plan) - 5} — в «Удержании».")
+    st = {x["key"]: x for x in compare_strategies(items, 10)}
+    lines += ["", f"Почему такой порядок: при 10 звонках в день за неделю план сохранит {_rub_fmt(st['plan']['saved'])}, "
+                  f"а список «по риску» — {_rub_fmt(st['score']['saved'])} и упустит {_rub_fmt(st['score']['missed'])}: "
+                  "у кого-то срок пройдёт раньше, чем дойдёт очередь."]
     return "\n".join(lines), [x["customerId"] for x in plan[:5]]
 
 

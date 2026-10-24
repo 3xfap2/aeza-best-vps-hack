@@ -91,6 +91,8 @@ export interface Queue {
     expectedSaved: number; calls: number; emails: number; callsCost: number; net: number
     worked: number; renewed: number; churned: number; savedFact: number
     followUpsDue: number; planned: number; plannedSaved: number; reducedAfterContact: number; improvedAfterContact: number }
+  strategies: { key: 'plan' | 'loss' | 'score'; title: string; saved: number; missed: number; missedCustomers: number }[]
+  strategyCallsPerDay: number
   items: QueueItem[]
 }
 export interface TimelinePoint {
@@ -192,4 +194,10 @@ export const CAUSE_TITLE: Record<string, string> = {
 
 export const LEVEL_TITLE: Record<Level, string> = {
   high: 'Высокий', medium: 'Средний', low: 'Низкий', no_score: 'Нет оценки', churned: 'Ушёл',
+}
+export interface Shift { changed: number; lossPct: number; planSame: number }
+export interface Sensitivity {
+  delta: number; sampled: boolean; customers: number; scored: number; planSize: number
+  maxChanged: number; maxLossPct: number; minPlanSame: number
+  rows: { feature: string; title: string; weight: number; minus: Shift; plus: Shift }[]
 }

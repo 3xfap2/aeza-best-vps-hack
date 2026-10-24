@@ -9,9 +9,11 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import db
-from app.retention import BUCKETS, effect, queue
+from app.retention import BUCKETS, compare_strategies, effect, queue
 from app.security import current_user
 from app.views import eur
+
+STRATEGY_CALLS = 10   # если ёмкость не задана — сравниваем на 10 звонках в день
 
 router = APIRouter(prefix="/api/v1/retention", tags=["Удержание"], dependencies=[Depends(current_user)])
 
@@ -85,12 +87,23 @@ class EffectItem(BaseModel):
     reduced: float = Field(description="max(0, было − стало), €")
 
 
+class Strategy(BaseModel):
+    key: Literal["plan", "loss", "score"]
+    title: str
+    saved: float = Field(description="Ожидаемо сохраним за неделю при том же числе звонков в день, €")
+    missed: float = Field(description="Упустим: срок потери прошёл раньше, чем дошла очередь звонка, €")
+    missedCustomers: int
+
+
 class QueueOut(BaseModel):
     asOf: datetime
     horizonDays: int
     saveRate: float
     callCost: float
     summary: QueueSummary
+    strategies: list[Strategy] = Field(description="Сравнение порядка звонков на неделю при том же ресурсе: план Радара, "
+                                                    "по сумме потери, по риску. Сценарий на текущих данных")
+    strategyCallsPerDay: int
     items: list[QueueItem]
 
 
@@ -130,6 +143,8 @@ def retention_queue(request: Request, saveRate: float = SaveRate, callCost: floa
             reducedAfterContact=round(sum(x["reduced"] for x in after), 2),
             improvedAfterContact=sum(1 for x in after if x["reduced"] > 0),
         ),
+        strategies=[Strategy(**x) for x in compare_strategies(items, callsPerDay or STRATEGY_CALLS)],
+        strategyCallsPerDay=callsPerDay or STRATEGY_CALLS,
         items=[QueueItem(**x) for x in items],
     )
 

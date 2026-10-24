@@ -624,3 +624,11 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 :root[data-theme="soft"] .ro-source { border-radius: 999px; }
 :root[data-theme="soft"] .ro-sum .ro-sum__paid { background: var(--marker-100); border-left-color: var(--marker-hover); border-radius: 0 16px 16px 0; }
 :root[data-theme="soft"] .work-tag { border-radius: 999px; }
+
+/* сравнение порядка звонков на «Удержании» */
+.strat { display: grid; gap: 6px; margin: 4px 0; }
+.ro .strat ul { display: grid; gap: 2px; }
+.strat li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: baseline; padding: 6px 10px;
+  border-radius: 10px; font-size: 14px; }
+.strat li .ro-small { grid-column: 1 / -1; }
+.strat li.is-ours { background: var(--marker-100); font-weight: 600; }

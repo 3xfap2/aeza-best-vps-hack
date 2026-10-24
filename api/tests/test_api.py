@@ -675,3 +675,27 @@ def test_quick_answers_without_ai(client, auth):
     assert client.post("/api/v1/ai/quick", headers=auth, json={"intent": "customer"}).status_code == 422
     assert client.post("/api/v1/ai/quick", headers=auth, json={"intent": "whatever"}).status_code == 422
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_plan_beats_risk_list(client, auth):
+    """Тот же ресурс звонков: план Радара (срок, затем выгода) сохраняет не меньше, чем списки по сумме и по score."""
+    client.post("/api/v1/source/preset/extended", headers=auth)
+    q = client.get("/api/v1/retention/queue?callsPerDay=10", headers=auth).json()
+    st = {x["key"]: x for x in q["strategies"]}
+    assert q["strategyCallsPerDay"] == 10 and set(st) == {"plan", "loss", "score"}
+    assert st["plan"]["saved"] >= st["loss"]["saved"] and st["plan"]["saved"] > st["score"]["saved"]
+    assert st["plan"]["missed"] <= st["score"]["missed"]
+    assert "список «по риску»" in client.post("/api/v1/ai/quick", headers=auth, json={"intent": "today"}).json()["answer"]
+    client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_weight_sensitivity(client, auth):
+    """±20 % к каждому весу: сколько клиентов сменят уровень, как изменятся деньги и план звонков."""
+    client.post("/api/v1/source/preset/extended", headers=auth)
+    s = client.get("/api/v1/model/sensitivity", headers=auth).json()
+    assert s["delta"] == 0.2 and not s["sampled"] and s["planSize"] == 10
+    assert len(s["rows"]) == 10
+    row = next(r for r in s["rows"] if r["feature"] == "insufficient_funds")
+    assert row["minus"]["lossPct"] < 0 < row["plus"]["lossPct"]
+    assert s["maxChanged"] == max(max(r["minus"]["changed"], r["plus"]["changed"]) for r in s["rows"])
+    client.post("/api/v1/source/preset/case", headers=auth)

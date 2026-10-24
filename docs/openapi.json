@@ -1407,6 +1407,33 @@
         ]
       }
     },
+    "/api/v1/model/sensitivity": {
+      "get": {
+        "tags": [
+          "Модель"
+        ],
+        "summary": "Устойчивость к весам: что изменится, если каждый вес ошибочен на ±20 %",
+        "description": "Для каждого признака вес сдвигается на −20 % и +20 %: сколько клиентов сменят уровень, насколько изменится ожидаемая потеря и сколько клиентов останется в плане звонков на день. Пересчитывается при каждом изменении данных или настроек.",
+        "operationId": "get_sensitivity_api_v1_model_sensitivity_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensitivityOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/source/snapshot": {
       "get": {
         "tags": [
@@ -5223,6 +5250,18 @@
           "summary": {
             "$ref": "#/components/schemas/QueueSummary"
           },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/Strategy"
+            },
+            "type": "array",
+            "title": "Strategies",
+            "description": "Сравнение порядка звонков на неделю при том же ресурсе: план Радара, по сумме потери, по риску. Сценарий на текущих данных"
+          },
+          "strategyCallsPerDay": {
+            "type": "integer",
+            "title": "Strategycallsperday"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/QueueItem"
@@ -5238,6 +5277,8 @@
           "saveRate",
           "callCost",
           "summary",
+          "strategies",
+          "strategyCallsPerDay",
           "items"
         ],
         "title": "QueueOut"
@@ -5473,6 +5514,96 @@
         ],
         "title": "RenewalOut"
       },
+      "SensitivityOut": {
+        "properties": {
+          "delta": {
+            "type": "number",
+            "title": "Delta"
+          },
+          "sampled": {
+            "type": "boolean",
+            "title": "Sampled",
+            "description": "Посчитано на выборке клиентов (большая база)"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "scored": {
+            "type": "integer",
+            "title": "Scored"
+          },
+          "planSize": {
+            "type": "integer",
+            "title": "Plansize"
+          },
+          "maxChanged": {
+            "type": "integer",
+            "title": "Maxchanged"
+          },
+          "maxLossPct": {
+            "type": "number",
+            "title": "Maxlosspct"
+          },
+          "minPlanSame": {
+            "type": "integer",
+            "title": "Minplansame"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SensitivityRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "delta",
+          "sampled",
+          "customers",
+          "scored",
+          "planSize",
+          "maxChanged",
+          "maxLossPct",
+          "minPlanSame",
+          "rows"
+        ],
+        "title": "SensitivityOut"
+      },
+      "SensitivityRow": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "minus": {
+            "$ref": "#/components/schemas/Shift",
+            "description": "Вес меньше на 20 %"
+          },
+          "plus": {
+            "$ref": "#/components/schemas/Shift",
+            "description": "Вес больше на 20 %"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "title",
+          "weight",
+          "minus",
+          "plus"
+        ],
+        "title": "SensitivityRow"
+      },
       "ServiceIn": {
         "properties": {
           "id": {
@@ -5696,6 +5827,32 @@
           "resolvedAsOf"
         ],
         "title": "SettingsOut"
+      },
+      "Shift": {
+        "properties": {
+          "changed": {
+            "type": "integer",
+            "title": "Changed",
+            "description": "Клиентов сменят уровень"
+          },
+          "lossPct": {
+            "type": "number",
+            "title": "Losspct",
+            "description": "Изменение ожидаемой потери, %"
+          },
+          "planSame": {
+            "type": "integer",
+            "title": "Plansame",
+            "description": "Сколько клиентов плана звонков на день останется в плане"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changed",
+          "lossPct",
+          "planSame"
+        ],
+        "title": "Shift"
       },
       "SignalEvent": {
         "properties": {
@@ -5959,6 +6116,46 @@
           "status"
         ],
         "title": "StatusEvent"
+      },
+      "Strategy": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "loss",
+              "score"
+            ],
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "saved": {
+            "type": "number",
+            "title": "Saved",
+            "description": "Ожидаемо сохраним за неделю при том же числе звонков в день, €"
+          },
+          "missed": {
+            "type": "number",
+            "title": "Missed",
+            "description": "Упустим: срок потери прошёл раньше, чем дошла очередь звонка, €"
+          },
+          "missedCustomers": {
+            "type": "integer",
+            "title": "Missedcustomers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "saved",
+          "missed",
+          "missedCustomers"
+        ],
+        "title": "Strategy"
       },
       "SummaryOut": {
         "properties": {

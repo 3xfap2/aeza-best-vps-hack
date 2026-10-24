@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
-import { api, ApiError, can, LEVEL_TITLE, type Backtest, type HistoryItem, type ModelSettings, type Preview, type SettingsOut } from '../api'
+import { api, ApiError, can, LEVEL_TITLE, type Backtest, type HistoryItem, type Sensitivity, type Shift, type ModelSettings, type Preview, type SettingsOut } from '../api'
 import { useLive, useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, shortDate, Skeleton, useToast } from '../ui'
 import { StatusLine, useUser } from './Shell'
@@ -220,6 +220,7 @@ export default function Model() {
         </aside>
       </div>
       <BacktestCard />
+      <SensitivityCard />
       {dirty && preview && (
         <div className="pv-dock" aria-hidden="true">
           Высокий {preview.before.levels.high} → {preview.after.levels.high} · Потеря {eur(preview.after.expectedLoss - preview.before.expectedLoss)}
@@ -285,6 +286,39 @@ function BacktestCard() {
           прогноз — средняя вероятность непродления по модели. Подсказка «поднять» или «снизить» появляется, если они расходятся больше чем на 15 п. п.
           {data.demo && ' История восстановлена из снимка по правилам кейса для демонстрации; на снимках биллинга расчёт тот же.'}</p>
       </>}
+    </section>
+  )
+}
+
+const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('ru-RU')} %`
+function ShiftCell({ x, plan }: { x: Shift; plan: number }) {
+  return <td className="r mono">{x.changed} кл. · {signed(x.lossPct)} · {x.planSame}/{plan}</td>
+}
+
+/** Устойчивость к весам: каждый вес −20 % и +20 % — меняются ли выводы. */
+function SensitivityCard() {
+  const { data } = useLiveData(() => api<Sensitivity>('/api/v1/model/sensitivity'))
+  if (!data) return <Skeleton h={200} />
+  const pct = Math.round(data.delta * 100)
+  return (
+    <section className="ro-card backtest" aria-labelledby="sens-t">
+      <div className="ro-cardhead"><h2 id="sens-t">Устойчивость к весам</h2>
+        {data.sampled && <span className="work-tag">выборка {data.customers} клиентов</span>}</div>
+      <p>Если любой вес ошибочен на ±{pct} %, уровень сменят не больше <b>{data.maxChanged}</b> из {data.scored} клиентов с оценкой,
+        ожидаемая потеря изменится не больше чем на <b>{data.maxLossPct.toLocaleString('ru-RU')} %</b>, а в плане звонков на день останутся
+        минимум <b>{data.minPlanSame} из {data.planSize}</b> клиентов. Выводы держатся не на точной подгонке весов.</p>
+      <div className="table-scroll">
+        <table className="ro-table">
+          <caption className="ro-sr">Что меняется при сдвиге каждого веса</caption>
+          <thead><tr><th>Признак</th><th className="r">Вес</th>
+            <th className="r">−{pct} %: сменят уровень · потеря · план</th><th className="r">+{pct} %: сменят уровень · потеря · план</th></tr></thead>
+          <tbody>{data.rows.map((r) => (
+            <tr key={r.feature}><td>{r.title}</td><td className="r mono">{r.weight}</td>
+              <ShiftCell x={r.minus} plan={data.planSize} /><ShiftCell x={r.plus} plan={data.planSize} /></tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p className="ro-small">Пересчёт той же моделью на тех же данных и дате; «план» — сколько клиентов из сегодняшнего плана звонков останется в нём.</p>
     </section>
   )
 }

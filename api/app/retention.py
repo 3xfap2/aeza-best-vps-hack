@@ -111,3 +111,42 @@ def effect(result: EngineResult, first: dict[int, dict]) -> list[dict]:
             "reduced": round(max(0.0, before - now), 2),
         })
     return sorted(out, key=lambda x: -x["reduced"])
+
+
+STRATEGIES = (("plan", "План Радара: срок потери, затем выгода звонка"),
+              ("loss", "По сумме потери"),
+              ("score", "По риску (score)"))
+
+
+def compare_strategies(items: list[dict], calls_per_day: int, days: int = 7) -> list[dict]:
+    """Тот же ресурс звонков — разный порядок. Каждый день звоним calls_per_day клиентам; деньги клиента
+    сохраняются (expectedSaved), только если позвонили до срока, когда они пропадут безвозвратно.
+
+    Сценарий на текущих данных: новые клиенты и события за эти дни не учитываются. Он показывает,
+    почему очередь сортируется по сроку: дорогого клиента со сроком через неделю можно набрать завтра,
+    а того, чья услуга удалится сегодня, — нет.
+    """
+    pool = [x for x in items if x["status"] != "done"]
+    rank = {x["customerId"]: i for i, x in enumerate(pool)}
+    keys = {
+        "plan": lambda x: (x["channel"] != "call", rank[x["customerId"]]),   # письмо вместо звонка — в конец
+        "loss": lambda x: -x["expectedLoss"],
+        "score": lambda x: (-(x["score"] or 0), -x["expectedLossPaid"]),
+    }
+    out = []
+    for key, title in STRATEGIES:
+        left = sorted(pool, key=keys[key])
+        saved = missed = 0.0
+        missed_customers = 0
+        for day in range(days):
+            alive = [x for x in left if x["deadlineKind"] == "overdue" or x["daysLeft"] >= day]
+            gone = len(left) - len(alive)
+            missed += sum(x["expectedSaved"] for x in left) - sum(x["expectedSaved"] for x in alive)
+            missed_customers += gone
+            pick, left = alive[:calls_per_day], alive[calls_per_day:]
+            saved += sum(x["expectedSaved"] for x in pick)
+        late = [x for x in left if x["deadlineKind"] != "overdue" and x["daysLeft"] < days]
+        missed += sum(x["expectedSaved"] for x in late)
+        out.append({"key": key, "title": title, "saved": round(saved, 2), "missed": round(missed, 2),
+                    "missedCustomers": missed_customers + len(late)})
+    return out
