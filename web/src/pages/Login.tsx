@@ -97,7 +97,7 @@ export default function Login() {
           </form>
         )}
         {notice && <p className="ro-small login__notice" role="status">{notice}</p>}
-        <p className="ro-small login__hint">Доступ выдаёт администратор Радара.</p>
+        <p className="ro-small login__hint">Доступ выдаёт администратор Радара. Входя, вы соглашаетесь с <Link className="ro-link" to="/privacy">политикой обработки персональных данных</Link>.</p>
       </div>
     </div>
   )

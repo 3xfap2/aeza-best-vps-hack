@@ -951,7 +951,7 @@
       '<p class="ro-final__sum" id="final-t" data-reveal="title"><span class="ro-mark" data-draw="pending">' + eur(OD.total) + '</span> под угрозой прямо сейчас</p>' +
       '<p class="ro-lead" data-reveal="body">' + esc(C.finalSub) + '</p><a class="ro-btn" href="/login" data-reveal="body">Войти в панель' + I.arrow + '</a></div></section>' +
       '</main>' +
-      '<footer class="ro-footer"><div class="ro-wrap"><span class="ro-wordmark" style="font-size:17px">' + WORDMARK_SVG + 'Радар оттока</span><a class="ro-link" href="/api/v1/docs">Документация API</a><span>© 2026</span></div></footer>';
+      '<footer class="ro-footer"><div class="ro-wrap"><span class="ro-wordmark" style="font-size:17px">' + WORDMARK_SVG + 'Радар оттока</span><a class="ro-link" href="/api/v1/docs">Документация API</a><a class="ro-link" href="/privacy">Политика обработки персональных данных</a><span>© 2026</span></div></footer>';
 
     var parts = [];
     parts.push(SiteHeader.mount($(root, '[data-header]'), { tag: C.tag }));

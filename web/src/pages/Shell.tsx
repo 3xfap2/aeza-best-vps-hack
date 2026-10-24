@@ -69,6 +69,7 @@ export default function Shell() {
             <div className="side__user">
               <b>{user.displayName}</b>
               <span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}{user.viaSso ? ' · вход через SSO' : ''}</span>
+              <NavLink className="ro-small side__privacy" to="/privacy">Обработка персональных данных</NavLink>
             </div>
             <button type="button" onClick={logout}><Icon name="out" />Выйти</button>
           </div>

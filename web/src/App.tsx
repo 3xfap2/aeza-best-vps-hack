@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
+import Privacy from './pages/Privacy'
 import Shell from './pages/Shell'
 
 const Overview = lazy(() => import('./pages/Overview'))
@@ -19,6 +20,7 @@ const page = (node: ReactNode) => <Suspense fallback={null}>{node}</Suspense>
 const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
   { path: '/login', element: <Login /> },
+  { path: '/privacy', element: <Privacy /> },
   {
     path: '/app',
     element: <Shell />,

@@ -136,6 +136,18 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 .login__or { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: 13px; }
 .login__or::before, .login__or::after { content: ""; flex: 1; border-top: 1.5px dashed var(--line-draft); }
 .login__hint { margin: 0; }
+
+/* --- политика обработки персональных данных --- */
+.side__user .side__privacy { color: var(--ink-3); text-decoration: underline; text-underline-offset: 3px; }
+.privacy { min-height: 100vh; background: var(--paper); padding: 0 16px 64px; }
+.privacy__head { max-width: 860px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 24px 0; }
+.privacy__body { max-width: 860px; margin: 0 auto; display: grid; gap: 12px; line-height: 1.6; }
+.privacy__body h1 { font-family: var(--font-display); font-size: 36px; line-height: 1.15; margin: 8px 0 0; }
+.privacy__body h2 { font-family: var(--font-display); font-size: 22px; margin: 18px 0 0; }
+.privacy__body p, .privacy__body ul { margin: 0; }
+.privacy__body ul { padding-left: 20px; display: grid; gap: 8px; }
+.privacy__table td { vertical-align: top; }
+@media (max-width: 860px) { .privacy__body h1 { font-size: 28px; } }
 .login__aeza { gap: 10px; }
 .login__aeza .ro-small, .login .login__notice { margin: 0; }
 .login .login__notice { padding: 10px 12px; border-radius: 10px; background: var(--marker-100); color: var(--ink); }
