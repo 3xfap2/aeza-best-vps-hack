@@ -1,0 +1,51 @@
+# То же, что .sourcecraft/ci.yaml, для зеркала на GitHub.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: radar
+          POSTGRES_PASSWORD: radar
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U radar" --health-interval 5s --health-retries 20
+    env:
+      REQUIRE_DB: "1"
+      TEST_ADMIN_URL: postgresql://radar:radar@127.0.0.1:5432/postgres
+      TEST_DATABASE_URL: postgresql://radar:radar@127.0.0.1:5432/radar_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r api/requirements-dev.txt
+      - run: python -m pytest
+        working-directory: api
+
+  ingest-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - run: go vet ./... && go test ./...
+        working-directory: ingest
+
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund && npm run build
+        working-directory: web

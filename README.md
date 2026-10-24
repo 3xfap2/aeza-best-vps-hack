@@ -373,6 +373,15 @@ Prometheus из `compose.yaml` собирает их каждые 15 секун�
 
 ---
 
+## CI
+
+На каждый пуш в `main` и пулл-реквест — три проверки: тесты API на настоящем PostgreSQL (без базы они падают, а не пропускаются — `REQUIRE_DB=1`), `go vet` и тесты сервиса приёма, сборка сайта с проверкой типов TypeScript.
+
+- SourceCraft: [.sourcecraft/ci.yaml](.sourcecraft/ci.yaml) — workflow `ci`, кубики `api-tests`, `ingest-go`, `web-build`;
+- GitHub: [.github/workflows/ci.yml](.github/workflows/ci.yml) — то же самое для зеркала.
+
+Каждый кубик проверен локально в том же образе на чистом клоне репозитория. Приёмка по ТЗ на работающем стенде — `node tools/acceptance.mjs` (36 проверок).
+
 ## Разработка без Docker
 
 ```bash

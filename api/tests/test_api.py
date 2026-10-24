@@ -24,6 +24,8 @@ def client():
             conn.execute("DROP DATABASE IF EXISTS radar_test WITH (FORCE)")
             conn.execute("CREATE DATABASE radar_test")
     except psycopg.OperationalError as e:
+        if os.environ.get("REQUIRE_DB"):   # в CI база обязательна: пропуск тестов выглядел бы как успех
+            raise
         pytest.skip(f"PostgreSQL недоступен: {e}")
     os.environ.update(DATABASE_URL=TEST_URL, ADMIN_PASSWORD=PASSWORD, METRICS_TOKEN=METRICS_TOKEN,
                       SEED_PATH=str(CASE))
