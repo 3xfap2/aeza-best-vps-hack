@@ -67,7 +67,8 @@ def source_is_empty(conn: Connection) -> bool:
     return conn.execute("SELECT NOT EXISTS (SELECT 1 FROM accounts) AS empty").fetchone()["empty"]
 
 
-def replace_snapshot(conn: Connection, snap: SnapshotIn, author: str, at: datetime, record: bool = True) -> dict[str, Any]:
+def replace_snapshot(conn: Connection, snap: SnapshotIn, author: str, at: datetime, record: bool = True,
+                     origin: dict | None = None) -> dict[str, Any]:
     """Полная замена данных источника в одной транзакции + журнал смен статусов.
 
     record=False — откат к уже сохранённому снимку: ни журнала, ни новой записи снимка.
@@ -93,8 +94,8 @@ def replace_snapshot(conn: Connection, snap: SnapshotIn, author: str, at: dateti
     if not record:
         return {**counts, "statusChanges": 0}
     conn.execute(
-        "INSERT INTO source_snapshots (data, reference_at, counts, loaded_by) VALUES (%s, %s, %s, %s)",
-        (Jsonb(snap.model_dump(mode="json")), snap.referenceAt, Jsonb(counts), author),
+        "INSERT INTO source_snapshots (data, reference_at, counts, loaded_by, origin) VALUES (%s, %s, %s, %s, %s)",
+        (Jsonb(snap.model_dump(mode="json")), snap.referenceAt, Jsonb(counts), author, Jsonb(origin or {})),
     )
     return {**counts, "statusChanges": changed}
 
@@ -117,16 +118,24 @@ def last_snapshot_raw(conn: Connection) -> dict | None:
 
 def snapshot_info(conn: Connection) -> dict | None:
     row = conn.execute(
-        "SELECT id, reference_at, counts, loaded_by, loaded_at FROM source_snapshots ORDER BY id DESC LIMIT 1"
+        "SELECT id, reference_at, counts, loaded_by, loaded_at, origin FROM source_snapshots ORDER BY id DESC LIMIT 1"
     ).fetchone()
     if not row:
         return None
+    # события биллинга и перемотка после загрузки или последнего «вернуть к снимку»
+    changes = conn.execute(
+        "SELECT count(*) AS n FROM activity_log WHERE kind IN ('event', 'simulate') AND created_at > GREATEST(%s, "
+        "coalesce((SELECT max(created_at) FROM activity_log WHERE kind = 'reset'), %s))",
+        (row["loaded_at"], row["loaded_at"]),
+    ).fetchone()["n"]
     return {
         "id": row["id"],
         "referenceAt": row["reference_at"],
         "counts": row["counts"],
         "loadedBy": row["loaded_by"],
         "loadedAt": row["loaded_at"],
+        "origin": row["origin"],
+        "changesSinceLoad": changes,
     }
 
 

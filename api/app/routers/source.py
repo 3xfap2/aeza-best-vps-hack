@@ -79,6 +79,10 @@ class SnapshotInfo(BaseModel):
     counts: dict[str, int]
     loadedBy: str
     loadedAt: datetime
+    origin: dict = Field(default_factory=dict, description="kind: case | extended | custom; caseAccounts — клиентов из данных кейса, "
+                                                          "otherAccounts — остальных (синтетических или из своего снимка)")
+    changesSinceLoad: int = Field(0, description="Событий биллинга и перемоток после загрузки — данные уже не совпадают со снимком")
+    title: str = Field("", description="Подпись для панели: какие данные сейчас загружены")
 
 
 class ActivityItem(BaseModel):
@@ -89,11 +93,33 @@ class ActivityItem(BaseModel):
     createdAt: datetime
 
 
+def snapshot_origin(snap: SnapshotIn, case_path, kind: str) -> dict:
+    """Сколько клиентов из данных кейса (тот же id и email), а сколько — синтетических или своих."""
+    case: set[tuple[int, str]] = set()
+    if case_path and case_path.exists():
+        case = {(a["id"], a["email"]) for a in json.loads(case_path.read_text(encoding="utf-8"))["accounts"]}
+    from_case = sum(1 for a in snap.accounts if (a.id, a.email) in case)
+    return {"kind": kind, "caseAccounts": from_case, "otherAccounts": len(snap.accounts) - from_case}
+
+
+def origin_title(origin: dict, accounts: int, changes: int) -> str:
+    kind, case, other = origin.get("kind"), origin.get("caseAccounts", 0), origin.get("otherAccounts", 0)
+    if kind == "extended":
+        title = f"кейс ({case} кл.) + {other} синтетических"
+    elif kind == "case":
+        title = f"данные кейса, {case} кл."
+    else:
+        title = f"загруженный снимок, {accounts} кл." + (f" (из них {case} — из кейса)" if case else "")
+    return title + (f" · изменены событиями: {changes}" if changes else "")
+
+
 def load_snapshot(request: Request, snap: SnapshotIn, author: str, kind: str) -> LoadResult:
     radar = request.app.state.radar
+    origin = snapshot_origin(snap, request.app.state.config.case_path,
+                             {"preset:case": "case", "preset:extended": "extended"}.get(kind, "custom"))
     with radar.write_lock:
         with request.app.state.pool.connection() as conn:
-            counts = db.replace_snapshot(conn, snap, author, datetime.now(timezone.utc))
+            counts = db.replace_snapshot(conn, snap, author, datetime.now(timezone.utc), origin=origin)
             db.log_activity(
                 conn, kind,
                 f"Загружен снимок: {counts['accounts']} аккаунтов, {counts['services']} услуг, "
@@ -117,7 +143,9 @@ def put_snapshot(request: Request, snap: SnapshotIn, user: User = Depends(requir
 def snapshot_info(request: Request, _: User = Depends(current_user)) -> SnapshotInfo | None:
     with request.app.state.pool.connection() as conn:
         info = db.snapshot_info(conn)
-    return SnapshotInfo(**info) if info else None
+    if not info:
+        return None
+    return SnapshotInfo(**info, title=origin_title(info["origin"], info["counts"].get("accounts", 0), info["changesSinceLoad"]))
 
 
 @router.post("/preset/{name}", response_model=LoadResult,

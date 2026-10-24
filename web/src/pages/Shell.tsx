@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { api, ROLE_TITLE, type User } from '../api'
-import { LiveProvider, useLive } from '../live'
+import { api, ROLE_TITLE, type SnapshotInfo, type User } from '../api'
+import { LiveProvider, useLive, useLiveData } from '../live'
 import { Icon, Wordmark } from '../ui'
 
 const NAV = [
@@ -18,6 +18,13 @@ const TABS = NAV.filter((n) => ['/app', '/app/customers', '/app/retention', '/ap
 const MORE = [...NAV.filter((n) => !TABS.includes(n)), { to: '/app/guide', end: false, icon: 'book', label: 'Как пользоваться' }]
 
 const UserContext = createContext<User | null>(null)
+const SourceContext = createContext<SnapshotInfo | null>(null)
+
+/** Какие данные загружены — перечитывается после каждого пересчёта. */
+function SourceProvider({ children }: { children: React.ReactNode }) {
+  const { data } = useLiveData(() => api<SnapshotInfo | null>('/api/v1/source/snapshot'))
+  return <SourceContext.Provider value={data ?? null}>{children}</SourceContext.Provider>
+}
 /** Текущий пользователь панели (роль решает, какие кнопки доступны). */
 export const useUser = () => useContext(UserContext)
 
@@ -38,6 +45,7 @@ export default function Shell() {
   return (
     <UserContext.Provider value={user}>
     <LiveProvider>
+    <SourceProvider>
       <div className="ro ro-app">
         <a className="ro-sr" href="#main">К содержанию</a>
         <aside className="ro-side" aria-label="Навигация панели">
@@ -80,6 +88,7 @@ export default function Shell() {
           </div>
         )}
       </div>
+    </SourceProvider>
     </LiveProvider>
     </UserContext.Provider>
   )
@@ -88,6 +97,7 @@ export default function Shell() {
 /** Строка статуса: дата данных, сколько секунд назад пересчитано, живое соединение. */
 export function StatusLine({ asOf }: { asOf?: string }) {
   const { connected, computedAt } = useLive()
+  const source = useContext(SourceContext)
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t) }, [])
   const ago = computedAt ? Math.max(0, Math.round((now - new Date(computedAt).getTime()) / 1000)) : null
@@ -100,6 +110,11 @@ export function StatusLine({ asOf }: { asOf?: string }) {
           пересчитано <b>{ago ?? '—'}</b> с назад
         </span>
       ) : <span>нет связи, переподключаемся…</span>}
+      {source?.title && (
+        <span className={`ro-source ro-source--${source.origin.kind ?? 'custom'}${source.changesSinceLoad ? ' is-changed' : ''}`}
+          title="Откуда данные: синтетические клиенты сгенерированы для демонстрации на большом портфеле, данные кейса не менялись">
+          данные: {source.title}</span>
+      )}
     </p>
   )
 }

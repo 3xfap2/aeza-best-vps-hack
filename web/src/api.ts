@@ -116,7 +116,11 @@ export interface Preview {
 }
 export interface HistoryItem { version: number; changes: string[]; author: string; createdAt: string }
 export interface ActivityItem { id: number; kind: string; summary: string; author: string; createdAt: string }
-export interface SnapshotInfo { id: number; referenceAt: string | null; counts: Record<string, number>; loadedBy: string; loadedAt: string }
+export interface SnapshotInfo {
+  id: number; referenceAt: string | null; counts: Record<string, number>; loadedBy: string; loadedAt: string
+  origin: { kind?: 'case' | 'extended' | 'custom'; caseAccounts?: number; otherAccounts?: number }
+  changesSinceLoad: number; title: string
+}
 export interface LoadResult { accounts: number; services: number; transactions: number; statusChanges: number; version: number }
 
 export class ApiError extends Error {

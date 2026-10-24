@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from app import db
 from app.config import load_config
 from app import ai
+from app.routers.source import snapshot_origin
 from app.routers import ai as ai_router
 from app.routers import analytics, auth, customers, integrations, metrics, model, oidc, retention, source, stream, users
 from app.scoring.settings import default_settings
@@ -48,7 +49,9 @@ def bootstrap(app_state: AppState, config) -> None:
     if empty and config.seed_path and config.seed_path.exists():
         snap = SnapshotIn.model_validate(json.loads(config.seed_path.read_text(encoding="utf-8")))
         with app_state.pool.connection() as conn:
-            counts = db.replace_snapshot(conn, snap, "system", datetime.now(timezone.utc))
+            kind = "extended" if config.seed_path == config.demo_path else "case" if config.seed_path == config.case_path else "custom"
+            counts = db.replace_snapshot(conn, snap, "system", datetime.now(timezone.utc),
+                                         origin=snapshot_origin(snap, config.case_path, kind))
             db.log_activity(conn, "snapshot", f"Загружены данные кейса: {counts['accounts']} аккаунтов, "
                             f"{counts['services']} услуг, {counts['transactions']} транзакций", "system", counts)
         log.info("Загружен стартовый снимок %s", config.seed_path)

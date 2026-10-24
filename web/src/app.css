@@ -22,6 +22,11 @@ body { margin: 0; background: var(--paper); }
 .tabbar, .more { display: none; }
 .ro-side nav a:focus-visible, .side__foot > a:focus-visible, .side__foot > button:focus-visible { outline-offset: 0; border-radius: var(--radius-button); }
 .ro-live-dot.is-off { background: var(--ink-3); animation: none; }
+.ro-status { flex-wrap: wrap; row-gap: 4px; }
+.ro-source { font: 500 12px var(--font-sans); letter-spacing: 0; text-transform: none; padding: 2px 8px; border-radius: 6px;
+  background: var(--neutral-100); color: var(--ink-2); margin-left: 8px; white-space: nowrap; }
+.ro-source--extended { background: var(--marker-100); color: var(--ink); }
+.ro-source.is-changed { box-shadow: inset 0 0 0 1px var(--marker); }
 
 /* --- формы --- */
 .form { display: grid; gap: 14px; }
