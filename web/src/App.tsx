@@ -1,10 +1,11 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider, useRouteError } from 'react-router-dom'
 import CookieNotice from './CookieNotice'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Privacy from './pages/Privacy'
 import Shell from './pages/Shell'
+import { ErrorBox } from './ui'
 
 const Overview = lazy(() => import('./pages/Overview'))
 const Customers = lazy(() => import('./pages/Customers'))
@@ -18,6 +19,14 @@ const Ask = lazy(() => import('./pages/Ask'))
 
 const page = (node: ReactNode) => <Suspense fallback={null}>{node}</Suspense>
 
+/** Экран упал — сообщение на его месте, меню панели остаётся. */
+function ScreenError() {
+  const e = useRouteError()
+  const msg = e instanceof Error ? e.message : String(e)
+  return <ErrorBox message={`Экран не открылся (${msg}). Обновите страницу; если повторится — напишите через «Обратная связь».`}
+    onRetry={() => window.location.reload()} />
+}
+
 const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
   { path: '/login', element: <Login /> },
@@ -25,7 +34,7 @@ const router = createBrowserRouter([
   {
     path: '/app',
     element: <Shell />,
-    children: [
+    children: [{ errorElement: <ScreenError />, children: [
       { index: true, element: page(<Overview />) },
       { path: 'customers', element: page(<Customers />) },
       { path: 'customers/:id', element: page(<Customer />) },
@@ -35,7 +44,7 @@ const router = createBrowserRouter([
       { path: 'team', element: page(<Team />) },
       { path: 'ask', element: page(<Ask />) },
       { path: 'guide', element: page(<Guide />) },
-    ],
+    ] }],
   },
   { path: '*', element: <Navigate to="/" replace /> },
 ])

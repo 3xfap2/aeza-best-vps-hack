@@ -108,7 +108,7 @@ export default function Retention() {
                 <p className="ro-text">План на день — <b>{s.planned} звонков</b>: сохраним <b className="ro-mono">{eur(s.plannedSaved)}</b>.
                   {s.followUpsDue > 0 && <> Из них перезвонить по договорённости: <b>{s.followUpsDue}</b>.</>}</p>
               )}
-              {data!.strategies.length > 0 && (
+              {(data!.strategies?.length ?? 0) > 0 && (
                 <div className="strat" aria-labelledby="strat-t">
                   <p className="ro-small" id="strat-t">Почему такой порядок — те же <b>{data!.strategyCallsPerDay} звонков в день</b>, неделя:</p>
                   <ul>
