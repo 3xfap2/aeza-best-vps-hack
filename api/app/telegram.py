@@ -1,8 +1,9 @@
 """Telegram-бот маркетолога.
 
 Подписка: /start <TELEGRAM_LINK_CODE>. Без кода бот ничего не показывает — в нём данные клиентов.
-Уведомления: после каждого пересчёта — о клиентах, которые перешли в высокий риск.
-Команды: /summary, /top, /client <id или email>, /stop.
+Уведомления: после каждого пересчёта — о клиентах, которые перешли в высокий риск;
+каждое утро (TELEGRAM_DIGEST_HOUR по Москве) — план на день из очереди удержания.
+Команды: /today, /summary, /top, /client <id или email>, /stop.
 Работает в фоновом потоке через long polling; сообщения отправляются из очереди,
 поэтому пересчёт никогда не ждёт Telegram.
 """
@@ -14,10 +15,13 @@ import logging
 import queue
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import httpx
 
+from app import db
+from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES, CustomerResult, EngineResult
 from app.views import eur
 
@@ -27,8 +31,13 @@ if TYPE_CHECKING:
 log = logging.getLogger("radar.telegram")
 
 MAX_ALERTS_PER_RECALC = 5
+MAX_TODAY = 8
+MSK = timezone(timedelta(hours=3))
+# План на день считается с теми же допущениями, что экран «Удержание» по умолчанию.
+SAVE_RATE, CALL_COST = 30, 3
 HELP = (
     "<b>Команды</b>\n"
+    "/today — кому звонить и писать сегодня, сколько можно сохранить\n"
     "/summary — сколько денег под угрозой и клиенты по уровням\n"
     "/top — 5 клиентов с наибольшей ожидаемой потерей\n"
     "/client 42 — карточка клиента: причины риска и что сделать\n"
@@ -38,6 +47,7 @@ HELP = (
 
 # Меню команд в Telegram (кнопка «/» рядом с полем ввода).
 COMMANDS = [
+    ("today", "Кому звонить сегодня"),
     ("summary", "Сколько денег под угрозой"),
     ("top", "5 клиентов с наибольшей потерей"),
     ("client", "Карточка клиента: /client 42"),
@@ -52,8 +62,10 @@ GUIDE = (
     "2. <b>Кому звонить первым</b> (/top) — клиенты с наибольшей потерей. У каждого причина и готовое действие.\n"
     "3. <b>Почему риск</b> (/client 42) — вклад каждого признака: «ждёт оплаты», «не хватает средств», "
     "«автопродление выключено»…\n"
-    "4. <b>Уведомления</b> — когда клиент переходит в высокий риск, я сразу пишу сюда.\n"
-    "5. <b>Панель</b> — то же и больше: «что будет, если клиент пополнит счёт», календарь продлений, "
+    "4. <b>План на день</b> (/today) — кому звонить и писать сегодня: что удалится раньше всего и окупится ли звонок. "
+    "Каждое утро присылаю его сам.\n"
+    "5. <b>Уведомления</b> — когда клиент переходит в высокий риск, я сразу пишу сюда.\n"
+    "6. <b>Панель</b> — то же и больше: «что будет, если клиент пополнит счёт», календарь продлений, "
     "настройка модели. Ссылка — в каждом уведомлении.\n\n"
     "<b>Уровни риска:</b> высокий — score от 60, средний — от 30, низкий — ниже. "
     "Score 0–100 — сумма баллов по признакам."
@@ -73,11 +85,14 @@ def _money(cents: float) -> str:
 
 
 class TelegramBot:
-    def __init__(self, token: str, link_code: str, radar: "AppState", public_url: str) -> None:
+    def __init__(self, token: str, link_code: str, radar: "AppState", public_url: str,
+                 digest_hour: int | None = None) -> None:
         self.api = f"https://api.telegram.org/bot{token}"
         self.link_code = link_code
         self.radar = radar
         self.public_url = public_url
+        self.digest_hour = digest_hour
+        self._digest_sent: str | None = None
         self._outbox: queue.Queue[tuple[int, str]] = queue.Queue(maxsize=500)
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -86,7 +101,7 @@ class TelegramBot:
     # --- жизненный цикл ------------------------------------------------------
 
     def start(self) -> None:
-        for target, name in ((self._poll, "tg-poll"), (self._send_loop, "tg-send")):
+        for target, name in ((self._poll, "tg-poll"), (self._send_loop, "tg-send"), (self._digest_loop, "tg-digest")):
             t = threading.Thread(target=target, name=name, daemon=True)
             t.start()
             self._threads.append(t)
@@ -113,6 +128,24 @@ class TelegramBot:
         if len(escalated) > MAX_ALERTS_PER_RECALC:
             lines.append(f"\nи ещё {len(escalated) - MAX_ALERTS_PER_RECALC} — в панели: {self.public_url}/app/customers")
         self._broadcast("\n".join(lines))
+
+    def _digest_loop(self) -> None:
+        """Раз в день в digest_hour по Москве — план на день всем подписчикам."""
+        while self.digest_hour is not None and not self._stop.wait(60):
+            try:
+                text = self.digest(datetime.now(MSK))
+                if text:
+                    self._broadcast(text)
+            except Exception:  # база или расчёт недоступны — попробуем через минуту
+                log.warning("Telegram: не удалось собрать утренний план", exc_info=True)
+
+    def digest(self, now: datetime) -> str | None:
+        """Утренний план, если пришёл час и сегодня ещё не отправляли."""
+        today = now.date().isoformat()
+        if self.digest_hour is None or now.hour != self.digest_hour or self._digest_sent == today:
+            return None
+        self._digest_sent = today
+        return "<b>Доброе утро! План на сегодня</b>\n" + self._today()
 
     def _broadcast(self, text: str) -> None:
         for chat_id in self._subscribers():
@@ -142,6 +175,37 @@ class TelegramBot:
             f"нет оценки {lv['no_score']} · ушли {lv['churned']}\n"
             f"Данные на {s.as_of:%d.%m.%Y %H:%M} UTC"
         )
+
+    def _today(self) -> str:
+        """Очередь удержания на сегодня: что удалится раньше всего, звонок или письмо, сколько сохраним."""
+        result = self.radar.current.result
+        with self.radar.pool.connection() as conn:
+            last = db.last_actions(conn)
+        items = [x for x in retention_queue(result, last, SAVE_RATE, CALL_COST) if x["status"] != "done"]
+        today = [x for x in items if x["bucket"] == "today"]
+        title = "сегодня"
+        if not today:
+            today, title = [x for x in items if x["bucket"] == "week"], "на неделе (на сегодня срочных нет)"
+        if not today:
+            return "Клиентов, с которыми нужно связаться в ближайшую неделю, нет."
+        saved = sum(x["expectedSaved"] for x in today)
+        calls = sum(1 for x in today if x["channel"] == "call")
+        lines = [f"<b>Связаться {title}: {len(today)}</b> · можно сохранить {_money(saved * 100)}",
+                 f"звонков {calls}, писем {len(today) - calls} (удержание {SAVE_RATE} %, звонок € {CALL_COST})"]
+        for x in today[:MAX_TODAY]:
+            when = {"overdue": "удаление задержано", "deletion": f"удалится {x['deadline']:%d.%m %H:%M} UTC",
+                    "renewal": f"продление {x['deadline']:%d.%m}" if x["daysLeft"] > 0 else "срок истёк, продление не прошло"}[x["deadlineKind"]]
+            channel = "звонок" if x["channel"] == "call" else "письмо"
+            lines += ["", f"<b>{html.escape(x['email'])}</b> · {when}",
+                      f"{channel} · сохраним {_money(x['expectedSaved'] * 100)} · {html.escape(x['causeTitle'] or '')}"]
+            if x["action"]:
+                lines.append(f"→ {html.escape(x['action'])}")
+            if x["lastAction"]:
+                lines.append(f"уже в работе: {x['lastAuthor']}")
+        if len(today) > MAX_TODAY:
+            lines.append(f"\nи ещё {len(today) - MAX_TODAY}")
+        lines.append(f"\nОчередь и отметки: {self.public_url}/app/retention")
+        return "\n".join(lines)
 
     def _top(self) -> str:
         result = self.radar.current.result
@@ -208,6 +272,8 @@ class TelegramBot:
         if command == "/stop":
             self._unsubscribe(chat_id)
             return "Уведомления отключены. Вернуться: /start <код доступа>."
+        if command == "/today":
+            return self._today()
         if command == "/summary":
             return self._summary()
         if command == "/top":
@@ -228,6 +294,7 @@ class TelegramBot:
         return (
             "Привет! Я бот <b>Радара оттока</b> — помогаю маркетологу хостинга не терять клиентов.\n\n"
             "• сообщаю, когда клиент переходит в высокий риск: кто, почему и что сделать;\n"
+            "• каждое утро присылаю план: кому звонить и писать сегодня;\n"
             "• по команде показываю сумму под угрозой и кому звонить первым.\n\n"
             + self._how_to_connect() + "\n\n" + EXAMPLE + "\n\n/guide — как пользоваться Радаром"
         )

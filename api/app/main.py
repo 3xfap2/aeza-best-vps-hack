@@ -88,7 +88,8 @@ async def lifespan(app: FastAPI):
     scheduler = asyncio.create_task(scheduled_recalc(radar))
     bot = None
     if config.telegram_token and config.telegram_link_code:
-        bot = TelegramBot(config.telegram_token, config.telegram_link_code, radar, config.public_url)
+        bot = TelegramBot(config.telegram_token, config.telegram_link_code, radar, config.public_url,
+                          config.telegram_digest_hour)
         bot.start()
     app.state.bot = bot
     try:

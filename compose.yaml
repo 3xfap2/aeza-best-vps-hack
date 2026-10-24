@@ -38,6 +38,7 @@ services:
       OIDC_CLIENT_ID: churn-radar
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_LINK_CODE: ${TELEGRAM_LINK_CODE:-}
+      TELEGRAM_DIGEST_HOUR: ${TELEGRAM_DIGEST_HOUR:-9}
     depends_on:
       db:
         condition: service_healthy
@@ -59,10 +60,32 @@ services:
     entrypoint: ["/bin/sh", "-c", "printf %s \"$$METRICS_TOKEN\" > /tmp/metrics_token && exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports:
       - "9090:9090"
     depends_on:
       - api
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-radar-grafana-demo}
+      # Только агрегаты (суммы и число клиентов), без персональных данных — дашборд открыт на просмотр
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: light
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/churn-radar.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
   dex:

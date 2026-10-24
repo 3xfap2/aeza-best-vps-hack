@@ -157,6 +157,17 @@ def test_telegram_bot_requires_link_code_and_alerts(client, auth):
     assert "Готово" in connected and "Под угрозой" in connected
     assert "Под угрозой" in bot.handle(1001, "u", "/summary")
     assert "score" in bot.handle(1001, "u", "/client 5")
+    today = bot.handle(1001, "u", "/today")
+    assert "Связаться" in today and "/app/retention" in today and "сохраним" in today
+    assert "после подключения" in bot.handle(2002, "u", "/today")
+
+    from datetime import datetime
+    from app.telegram import MSK
+    bot.digest_hour = 9
+    assert bot.digest(datetime(2026, 10, 24, 8, 59, tzinfo=MSK)) is None
+    assert "План на сегодня" in bot.digest(datetime(2026, 10, 24, 9, 1, tzinfo=MSK))
+    assert bot.digest(datetime(2026, 10, 24, 9, 30, tzinfo=MSK)) is None      # раз в день
+    assert bot.digest(datetime(2026, 10, 25, 9, 0, tzinfo=MSK)) is not None
 
     radar = client.app.state.radar
     before = radar.current.result

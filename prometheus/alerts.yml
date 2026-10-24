@@ -1,0 +1,26 @@
+groups:
+  - name: churn-radar
+    rules:
+      - alert: ChurnLossGrowing
+        expr: churn_radar_expected_loss_paid_eur > 1.2 * (churn_radar_expected_loss_paid_eur offset 1h)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Реально собираемая потеря выросла больше чем на 20 % за час"
+          description: "Сейчас € {{ $value | printf \"%.0f\" }}. Откройте «Удержание» — кому звонить сегодня."
+      - alert: ChurnRadarStale
+        expr: time() - churn_radar_last_calculation_timestamp_seconds > 3 * 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Радар не пересчитывался больше 3 часов"
+          description: "Проверьте сервис api и плановый пересчёт (recalcMinutes)."
+      - alert: ChurnRadarDown
+        expr: up{job="churn-radar"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus не может забрать /metrics Радара оттока"
