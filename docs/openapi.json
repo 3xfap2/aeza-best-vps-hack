@@ -1840,6 +1840,86 @@
         ]
       }
     },
+    "/api/v1/ai/config": {
+      "get": {
+        "tags": [
+          "ИИ-помощник"
+        ],
+        "summary": "Подключение ИИ (администратор): адрес, модель, ключ скрыт",
+        "operationId": "get_config_api_v1_ai_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIConfigOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ИИ-помощник"
+        ],
+        "summary": "Подключить OpenAI-совместимый ИИ из панели: пробный запрос, затем сохранение (администратор)",
+        "operationId": "put_config_api_v1_ai_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIConfigIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Пробный запрос не прошёл — ничего не сохранено"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ИИ-помощник"
+        ],
+        "summary": "Отключить ИИ из панели (останется подключение из переменных окружения, если есть)",
+        "operationId": "delete_config_api_v1_ai_config_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/ai/ask": {
       "post": {
         "tags": [
@@ -1969,11 +2049,131 @@
   },
   "components": {
     "schemas": {
+      "AIConfigIn": {
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "maxLength": 300,
+            "pattern": "^https?://\\S+$",
+            "title": "Baseurl",
+            "default": "https://api.openai.com/v1",
+            "examples": [
+              "https://api.openai.com/v1"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Model",
+            "examples": [
+              "gpt-4.1-mini"
+            ]
+          },
+          "apiKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apikey",
+            "description": "Пусто — оставить сохранённый ключ"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model"
+        ],
+        "title": "AIConfigIn"
+      },
+      "AIConfigOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "keyHint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keyhint",
+            "description": "Последние 4 символа ключа — сам ключ наружу не отдаётся"
+          },
+          "updatedBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedby"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "baseUrl",
+          "model",
+          "keyHint"
+        ],
+        "title": "AIConfigOut"
+      },
       "AIStatus": {
         "properties": {
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "panel — подключён в панели; env — переменными окружения; off — не подключён",
+            "default": "off"
           },
           "provider": {
             "anyOf": [

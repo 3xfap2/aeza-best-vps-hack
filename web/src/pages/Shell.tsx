@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api, ROLE_TITLE, type SnapshotInfo, type User } from '../api'
 import { LiveProvider, useLive, useLiveData } from '../live'
-import { applyTheme, currentTheme, THEMES, type Theme } from '../theme'
+import ThemeSwitch from '../ThemeSwitch'
 import { Icon, Wordmark } from '../ui'
 
 const NAV = [
@@ -21,18 +21,7 @@ const MORE = [...NAV.filter((n) => !TABS.includes(n)), { to: '/app/guide', end: 
 const UserContext = createContext<User | null>(null)
 const SourceContext = createContext<SnapshotInfo | null>(null)
 
-/** Переключатель оформления: наш дизайн или фирменные цвета Aéza. */
-function ThemeSwitch() {
-  const [theme, setTheme] = useState<Theme>(currentTheme)
-  const pick = (t: Theme) => { applyTheme(t); setTheme(t) }
-  return (
-    <div className="theme-switch" role="group" aria-label="Оформление">
-      {THEMES.map((t) => (
-        <button key={t.key} type="button" aria-pressed={theme === t.key} onClick={() => pick(t.key)}>{t.title}</button>
-      ))}
-    </div>
-  )
-}
+
 
 /** Какие данные загружены — перечитывается после каждого пересчёта. */
 function SourceProvider({ children }: { children: React.ReactNode }) {

@@ -505,3 +505,33 @@ def test_payment_deferral_panel_and_bot(client, auth):
     client.post("/api/v1/source/reset", headers=auth)                    # откат данных отменяет и перенос
     assert client.post("/api/v1/customers/5/defer", headers=auth, json={"days": 3}).status_code == 201
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_ai_connection_from_panel(client, auth, monkeypatch):
+    from app import ai
+    calls = []
+    monkeypatch.setattr(ai.AIClient, "ping", lambda self: calls.append(self.cfg) or None)
+    body = {"baseUrl": "https://llm.aeza.example/v1", "model": "aeza-gpt", "apiKey": "sk-secret-1234"}
+
+    client.post("/api/v1/users", headers=auth, json={"login": "mk-ai", "displayName": "m", "password": "pass-2026-long", "role": "marketer"})
+    mk = {"Authorization": "Bearer " + client.post("/api/v1/auth/login", json={"login": "mk-ai", "password": "pass-2026-long"}).json()["token"]}
+    assert client.put("/api/v1/ai/config", headers=mk, json=body).status_code == 403          # только администратор
+
+    r = client.put("/api/v1/ai/config", headers=auth, json=body)
+    assert r.status_code == 200 and r.json()["enabled"] and r.json()["source"] == "panel"
+    assert "llm.aeza.example" in r.json()["provider"] and calls[-1].base_url == "https://llm.aeza.example/v1"
+    cfg = client.get("/api/v1/ai/config", headers=auth).json()
+    assert cfg["keyHint"] == "1234" and "sk-secret" not in str(cfg)                              # ключ не отдаётся
+    # без ключа — оставить сохранённый, сменить только модель
+    r = client.put("/api/v1/ai/config", headers=auth, json={"baseUrl": body["baseUrl"], "model": "other"})
+    assert r.status_code == 200 and calls[-1].api_key == "sk-secret-1234" and calls[-1].model == "other"
+
+    def fail(self):
+        raise ai.AIError("ключ не подошёл")
+    monkeypatch.setattr(ai.AIClient, "ping", fail)
+    r = client.put("/api/v1/ai/config", headers=auth, json={**body, "apiKey": "sk-wrong-0000"})
+    assert r.status_code == 422 and "ничего не сохранено" in r.json()["detail"]
+    assert client.get("/api/v1/ai/config", headers=auth).json()["keyHint"] == "1234"         # старое осталось
+
+    assert client.delete("/api/v1/ai/config", headers=auth).status_code == 204
+    assert client.get("/api/v1/ai/status", headers=auth).json()["enabled"] is False

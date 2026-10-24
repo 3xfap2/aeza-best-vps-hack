@@ -91,7 +91,12 @@ async def lifespan(app: FastAPI):
     app.state.radar = radar
     app.state.login_limiter = LoginLimiter()
     ai_cfg = ai.config_from_env(dict(os.environ))
+    with pool.connection() as conn:
+        panel = db.get_config(conn, "ai")
+    if panel:   # подключение из панели главнее переменных окружения
+        ai_cfg = ai.config_from_panel(panel["value"], dict(os.environ))
     app.state.ai = ai.AIClient(ai_cfg) if ai_cfg else None
+    app.state.ai_source = "panel" if panel else "env" if ai_cfg else "off"
     if ai_cfg:
         log.info("ИИ-помощник: %s, модель %s", app.state.ai.title, ai_cfg.model)
     app.state.metrics_registry = metrics.build_registry(radar)

@@ -66,7 +66,13 @@ class AIClient:
 
     @property
     def title(self) -> str:
+        if self.cfg.provider == "openai" and self.cfg.base_url.rstrip("/") != OPENAI_URL:
+            return "OpenAI-совместимый · " + httpx.URL(self.cfg.base_url).host
         return {"yandex": "YandexGPT", "gigachat": "GigaChat", "openai": "OpenAI"}.get(self.cfg.provider, self.cfg.provider)
+
+    def ping(self) -> None:
+        """Пробный запрос: ключ, адрес и модель рабочие. AIError — с понятной причиной."""
+        self.complete("Отвечай одним словом.", "Напиши слово «готово».", max_tokens=20, temperature=0)
 
     def complete(self, system: str, user: str, max_tokens: int = 700, temperature: float = 0.2) -> str:
         try:
@@ -361,6 +367,12 @@ def digest(client: AIClient, facts: str) -> str:
     if unverified_numbers(text, facts):
         raise AIError("В утренней сводке числа, которых нет в данных")
     return text
+
+
+def config_from_panel(value: dict, env: dict) -> AIConfig:
+    """Подключение, сохранённое администратором в панели: любой OpenAI-совместимый сервис."""
+    return AIConfig(provider="openai", api_key=value["apiKey"], model=value["model"], base_url=value["baseUrl"],
+                    proxy=env.get("AI_PROXY") or None)
 
 
 def config_from_env(env: dict) -> AIConfig | None:

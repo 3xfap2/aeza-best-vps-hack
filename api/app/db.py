@@ -139,6 +139,23 @@ def snapshot_info(conn: Connection) -> dict | None:
     }
 
 
+# --- настройки приложения ----------------------------------------------------
+
+def get_config(conn: Connection, key: str) -> dict | None:
+    return conn.execute("SELECT value, updated_by, updated_at FROM app_config WHERE key = %s", (key,)).fetchone()
+
+
+def set_config(conn: Connection, key: str, value: dict, author: str) -> None:
+    conn.execute(
+        "INSERT INTO app_config (key, value, updated_by) VALUES (%s, %s, %s) "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()",
+        (key, Jsonb(value), author))
+
+
+def delete_config(conn: Connection, key: str) -> None:
+    conn.execute("DELETE FROM app_config WHERE key = %s", (key,))
+
+
 # --- журналы -----------------------------------------------------------------
 
 def add_transition(conn: Connection, service_id: int, account_id: int, from_status: str | None,
