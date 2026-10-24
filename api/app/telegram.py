@@ -26,7 +26,7 @@ import httpx
 from app import ai, db, fx
 from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES, CustomerResult, EngineResult
-from app.views import eur
+from app.money import fmt_cents
 
 if TYPE_CHECKING:
     from app.state import AppState
@@ -93,10 +93,6 @@ EXAMPLE = (
     "Ждёт оплаты, до удаления 20 ч\n"
     "→ Предложить пополнить счёт на € 90,76 сегодня"
 )
-
-
-def _money(cents: float) -> str:
-    return f"€ {eur(cents):,.2f}".replace(",", " ").replace(".", ",")
 
 
 class TelegramBot:
@@ -202,12 +198,12 @@ class TelegramBot:
         was = {c.account.id: c.expected_loss_paid for c in before.customers}
         grown = sorted(((c, c.expected_loss_paid - was.get(c.account.id, 0)) for c in after.customers),
                        key=lambda x: -x[1])[:3]
-        lines = [f"<b>Потеря растёт: {_money(base)} → {_money(now)}</b> (+{(now - base) / base * 100:.0f} %)" if base else
-                 f"<b>Потеря растёт: {_money(now)}</b>",
+        lines = [f"<b>Потеря растёт: {fmt_cents(base)} → {fmt_cents(now)}</b> (+{(now - base) / base * 100:.0f} %)" if base else
+                 f"<b>Потеря растёт: {fmt_cents(now)}</b>",
                  f"Причина пересчёта: {REASON_TITLES.get(reason, reason)}. Это реально собираемая сумма за {after.settings.horizonDays} дн."]
         for c, delta in grown:
             if delta > 0:
-                lines.append(f"• {html.escape(c.account.email)}: +{_money(delta)} — {html.escape(c.top_reason or '')}")
+                lines.append(f"• {html.escape(c.account.email)}: +{fmt_cents(delta)} — {html.escape(c.top_reason or '')}")
         lines.append(f"\nКому звонить: {self.public_url}/app/retention")
         return "\n".join(lines)
 
@@ -222,7 +218,7 @@ class TelegramBot:
 
     def _customer_short(self, c: CustomerResult, from_level: str | None = None) -> str:
         was = f" (было: {LEVEL_TITLES[from_level].lower()})" if from_level else ""
-        head = f"<b>{html.escape(c.account.email)}</b> · score {c.score} · {_money(c.expected_loss)}{was}"
+        head = f"<b>{html.escape(c.account.email)}</b> · score {c.score} · {fmt_cents(c.expected_loss)}{was}"
         parts = [head, html.escape(c.top_reason or c.note or "")]
         if c.actions:
             parts.append(f"→ {html.escape(c.actions[0])}")
@@ -235,8 +231,8 @@ class TelegramBot:
         rate = fx.cached_rate()
         rub = f" (≈ {s.expected_loss / 100 * rate:,.0f} ₽ по курсу ЦБ)".replace(",", " ") if rate else ""
         return (
-            f"<b>Под угрозой за {s.horizon_days} дн.: {_money(s.expected_loss)}</b>{rub}\n"
-            f"Худший случай: {_money(s.worst_case)}\n"
+            f"<b>Под угрозой за {s.horizon_days} дн.: {fmt_cents(s.expected_loss)}</b>{rub}\n"
+            f"Худший случай: {fmt_cents(s.worst_case)}\n"
             f"Клиенты: высокий {lv['high']} · средний {lv['medium']} · низкий {lv['low']} · "
             f"нет оценки {lv['no_score']} · ушли {lv['churned']}\n"
             f"Данные на {s.as_of:%d.%m.%Y %H:%M} UTC"
@@ -256,14 +252,14 @@ class TelegramBot:
             return "Клиентов, с которыми нужно связаться в ближайшую неделю, нет."
         saved = sum(x["expectedSaved"] for x in today)
         calls = sum(1 for x in today if x["channel"] == "call")
-        lines = [f"<b>Связаться {title}: {len(today)}</b> · можно сохранить {_money(saved * 100)}",
+        lines = [f"<b>Связаться {title}: {len(today)}</b> · можно сохранить {fmt_cents(saved * 100)}",
                  f"звонков {calls}, писем {len(today) - calls} (удержание {SAVE_RATE} %, звонок € {CALL_COST})"]
         for x in today[:MAX_TODAY]:
             when = {"overdue": "удаление задержано", "deletion": f"удалится {x['deadline']:%d.%m %H:%M} UTC",
                     "renewal": f"продление {x['deadline']:%d.%m}" if x["daysLeft"] > 0 else "срок истёк, продление не прошло"}[x["deadlineKind"]]
             channel = "звонок" if x["channel"] == "call" else "письмо"
             lines += ["", f"<b>{html.escape(x['email'])}</b> · {when}",
-                      f"{channel} · сохраним {_money(x['expectedSaved'] * 100)} · {html.escape(x['causeTitle'] or '')}"]
+                      f"{channel} · сохраним {fmt_cents(x['expectedSaved'] * 100)} · {html.escape(x['causeTitle'] or '')}"]
             if x["action"]:
                 lines.append(f"→ {html.escape(x['action'])}")
             if x["kind"] == "involuntary" and x["lastAction"] != "deferred":
@@ -294,7 +290,7 @@ class TelegramBot:
             return f"Не получилось: {html.escape(str(e.detail))}"
         email = self.radar.current.result.by_id[customer_id].account.email
         return (f"<b>Платёж перенесён: {html.escape(email)}</b>\n" + "\n".join(html.escape(s) for s in out.services) +
-                f"\nScore {out.scoreBefore} → {out.scoreAfter}, потеря {_money(out.lossBefore * 100)} → {_money(out.lossAfter * 100)}"
+                f"\nScore {out.scoreBefore} → {out.scoreAfter}, потеря {fmt_cents(out.lossBefore * 100)} → {fmt_cents(out.lossAfter * 100)}"
                 f"\nВ день новой оплаты клиент вернётся в «Сегодня». {self.public_url}/app/customers/{customer_id}")
 
     def _ask(self, question: str) -> str:
@@ -360,39 +356,41 @@ class TelegramBot:
 
     def handle(self, chat_id: int, username: str | None, text: str) -> str:
         command, _, arg = text.strip().partition(" ")
-        command = command.split("@")[0].lower()
+        command, arg = command.split("@")[0].lower(), arg.strip()
         subscribed = self._is_subscribed(chat_id)
+        # команды, которые работают и без подключения
         if command == "/start":
-            if arg.strip() and hmac.compare_digest(arg.strip(), self.link_code):
-                if not subscribed:
-                    self._subscribe(chat_id, username)
-                return ("<b>Готово, вы подключены.</b> Буду присылать клиентов, перешедших в высокий риск.\n\n"
-                        + self._summary() + "\n\n" + HELP)
-            if arg.strip():
-                return "Код не подошёл. Откройте бота кнопкой «Подключить» в панели — код подставится сам.\n\n" + self._welcome()
-            return HELP if subscribed else self._welcome()
+            return self._start(chat_id, username, arg, subscribed)
         if command == "/guide":
             return GUIDE if subscribed else GUIDE + "\n\n" + self._how_to_connect()
         if command == "/help":
             return HELP if subscribed else self._welcome()
         if not subscribed:
             return "Эта команда работает после подключения.\n\n" + self._how_to_connect()
-        if command == "/stop":
-            self._unsubscribe(chat_id)
-            return "Уведомления отключены. Вернуться: /start <код доступа>."
-        if command == "/today":
-            return self._today()
-        if command == "/ask":
-            return self._ask(arg)
-        if command == "/defer":
-            return self._defer(arg, username)
-        if command == "/summary":
-            return self._summary()
-        if command == "/top":
-            return self._top()
-        if command == "/client":
-            return self._client(arg) if arg.strip() else "Укажите ID или email: /client 42"
-        return HELP
+        commands = {
+            "/stop": lambda: self._disconnect(chat_id),
+            "/today": self._today,
+            "/ask": lambda: self._ask(arg),
+            "/defer": lambda: self._defer(arg, username),
+            "/summary": self._summary,
+            "/top": self._top,
+            "/client": lambda: self._client(arg) if arg else "Укажите ID или email: /client 42",
+        }
+        return commands.get(command, lambda: HELP)()
+
+    def _start(self, chat_id: int, username: str | None, code: str, subscribed: bool) -> str:
+        if code and hmac.compare_digest(code, self.link_code):
+            if not subscribed:
+                self._subscribe(chat_id, username)
+            return ("<b>Готово, вы подключены.</b> Буду присылать клиентов, перешедших в высокий риск.\n\n"
+                    + self._summary() + "\n\n" + HELP)
+        if code:
+            return "Код не подошёл. Откройте бота кнопкой «Подключить» в панели — код подставится сам.\n\n" + self._welcome()
+        return HELP if subscribed else self._welcome()
+
+    def _disconnect(self, chat_id: int) -> str:
+        self._unsubscribe(chat_id)
+        return "Уведомления отключены. Вернуться: /start <код доступа>."
 
     def _how_to_connect(self) -> str:
         return (

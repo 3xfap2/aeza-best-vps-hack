@@ -666,7 +666,8 @@ def test_quick_answers_without_ai(client, auth):
     summary = client.get("/api/v1/analytics/summary", headers=auth).json()
     loss = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "loss"}).json()
     assert loss["grounded"] and loss["provider"] == "Радар, без ИИ"
-    assert f"{summary['expectedLossPaid']:,.2f}".replace(",", " ").replace(".", ",") in loss["answer"]
+    from app.money import fmt_euros
+    assert fmt_euros(summary["expectedLossPaid"]) in loss["answer"]
     today = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "today"}).json()
     assert today["answer"].startswith("План на сегодня") and today["customers"]
     card = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "customer", "customerId": 5}).json()

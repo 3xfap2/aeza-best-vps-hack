@@ -53,12 +53,6 @@ def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, value))
 
 
-def eur(cents: int) -> str:
-    """12345 -> «€ 123,45» с неразрывным пробелом между разрядами."""
-    whole, frac = divmod(abs(cents), 100)
-    sign = "−" if cents < 0 else ""
-    return f"{sign}€ {whole:,}".replace(",", " ") + f",{frac:02d}"
-
 
 def days_word(n: int) -> str:
     n = abs(n)

@@ -1,4 +1,6 @@
-from .base import Feature, ServiceContext, Signal, eur
+from app.money import fmt_cents
+
+from .base import Feature, ServiceContext, Signal
 
 
 class NoAutoprolongNoFunds(Feature):
@@ -18,4 +20,4 @@ class NoAutoprolongNoFunds(Feature):
         funds = ctx.account.available_funds
         if funds >= s.price:
             return None
-        return Signal(1.0, f"Автопродление выключено, а на счёте {eur(funds)} при цене продления {eur(s.price)}")
+        return Signal(1.0, f"Автопродление выключено, а на счёте {fmt_cents(funds)} при цене продления {fmt_cents(s.price)}")

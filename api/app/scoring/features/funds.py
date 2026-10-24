@@ -1,4 +1,6 @@
-from .base import Feature, ServiceContext, Signal, clamp, eur
+from app.money import fmt_cents
+
+from .base import Feature, ServiceContext, Signal, clamp
 
 
 class InsufficientFunds(Feature):
@@ -21,5 +23,5 @@ class InsufficientFunds(Feature):
         strength = clamp((need - funds) / need)
         return Signal(
             strength,
-            f"На счёте {eur(funds)}, а на продления за {ctx.horizon_days} дн. нужно {eur(need)}",
+            f"На счёте {fmt_cents(funds)}, а на продления за {ctx.horizon_days} дн. нужно {fmt_cents(need)}",
         )

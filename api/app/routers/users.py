@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app import db
 from app.http import created
 from app.security import User, current_user, hash_password, require
-from app.views import eur
+from app.money import to_euros
 
 router = APIRouter(prefix="/api/v1/users", tags=["Команда"])
 
@@ -52,7 +52,7 @@ def _members(conn) -> list[MemberOut]:
     for u in db.list_users(conn):
         w = work.get(u["login"], {})
         out.append(MemberOut(**u, actions=w.get("actions", 0), customers=w.get("customers", 0),
-                             renewed=w.get("renewed", 0), saved=eur(w.get("saved", 0))))
+                             renewed=w.get("renewed", 0), saved=to_euros(w.get("saved", 0))))
     return out
 
 

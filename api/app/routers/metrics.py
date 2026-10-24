@@ -14,7 +14,7 @@ from prometheus_client.core import GaugeMetricFamily, HistogramMetricFamily
 
 from app import db
 from app.security import request_token, token_hash
-from app.views import eur
+from app.money import to_euros
 
 router = APIRouter(tags=["Метрики"])
 
@@ -37,29 +37,29 @@ class RadarCollector:
 
         loss = GaugeMetricFamily("churn_radar_expected_loss_eur",
                                  "Ожидаемая потеря выручки за горизонт, EUR", labels=["horizon_days"])
-        loss.add_metric([horizon], eur(s.expected_loss))
+        loss.add_metric([horizon], to_euros(s.expected_loss))
         yield loss
         paid = GaugeMetricFamily("churn_radar_expected_loss_paid_eur",
                                  "Ожидаемая потеря в пределах платёжеспособности клиентов, EUR", labels=["horizon_days"])
-        paid.add_metric([horizon], eur(s.expected_loss_paid))
+        paid.add_metric([horizon], to_euros(s.expected_loss_paid))
         yield paid
         worst = GaugeMetricFamily("churn_radar_worst_case_loss_eur",
                                   "Выручка клиентов высокого риска за горизонт, EUR", labels=["horizon_days"])
-        worst.add_metric([horizon], eur(s.worst_case))
+        worst.add_metric([horizon], to_euros(s.worst_case))
         yield worst
         ltv_m = GaugeMetricFamily("churn_radar_ltv_at_risk_eur", "LTV клиентов × вероятность непродления, EUR")
-        ltv_m.add_metric([], eur(s.ltv_at_risk))
+        ltv_m.add_metric([], to_euros(s.ltv_at_risk))
         yield ltv_m
         at_risk = GaugeMetricFamily("churn_radar_revenue_at_risk_eur",
                                     "Выручка клиентов высокого и среднего риска за горизонт, EUR", labels=["horizon_days"])
-        at_risk.add_metric([horizon], eur(s.revenue_at_risk))
+        at_risk.add_metric([horizon], to_euros(s.revenue_at_risk))
         yield at_risk
 
         by_cause = GaugeMetricFamily("churn_radar_expected_loss_by_cause_eur",
                                      "Ожидаемая потеря клиентов высокого и среднего риска по главной причине, EUR",
                                      labels=["cause", "kind"])
         for g in s.causes:
-            by_cause.add_metric([g["feature"], g["kind"]], eur(g["expected_loss"]))
+            by_cause.add_metric([g["feature"], g["kind"]], to_euros(g["expected_loss"]))
         yield by_cause
 
         actions = GaugeMetricFamily("churn_radar_retention_actions", "Отметки работы с клиентами по видам", labels=["kind"])
@@ -69,7 +69,7 @@ class RadarCollector:
             saved = db.saved_by_renewals(conn)
         yield actions
         yield GaugeMetricFamily("churn_radar_retention_saved_eur",
-                                "Сохранено удержанием: сумма под угрозой у клиентов с отметкой «продлил», EUR", value=eur(saved))
+                                "Сохранено удержанием: сумма под угрозой у клиентов с отметкой «продлил», EUR", value=to_euros(saved))
 
         yield GaugeMetricFamily("churn_radar_services_at_risk", "Услуги со score не ниже порога среднего риска",
                                 value=s.services_at_risk)

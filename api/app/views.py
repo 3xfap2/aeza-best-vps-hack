@@ -9,16 +9,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.money import to_euros
 from app.domain import Snapshot
 from app.scoring.engine import (
     LEVEL_TITLES, STATUS_TITLES, Contribution, CustomerResult, EngineResult, ServiceResult, TimelinePoint,
 )
 
 Level = Literal["high", "medium", "low", "no_score", "churned"]
-
-
-def eur(cents: float) -> float:
-    return round(cents / 100, 2)
 
 
 class UserOut(BaseModel):
@@ -192,15 +189,15 @@ def list_item(c: CustomerResult) -> CustomerListItem:
     return CustomerListItem(
         id=c.account.id,
         email=c.account.email,
-        balance=eur(c.account.balance),
-        totalReplenished=eur(c.account.totalReplenished),
+        balance=to_euros(c.account.balance),
+        totalReplenished=to_euros(c.account.totalReplenished),
         score=c.score,
         loyalty=None if c.score is None else 100 - c.score,
         level=c.level,
         levelTitle=LEVEL_TITLES[c.level],
         topReason=c.top_reason or c.note,
-        expectedLoss=eur(c.expected_loss),
-        expectedLossPaid=eur(c.expected_loss_paid),
+        expectedLoss=to_euros(c.expected_loss),
+        expectedLossPaid=to_euros(c.expected_loss_paid),
         qualityIssues=len(c.quality_issues),
     )
 
@@ -209,10 +206,10 @@ def service_out(r: ServiceResult) -> ServiceOut:
     s = r.service
     return ServiceOut(
         id=s.id, name=s.name, paymentTerm=s.paymentTerm, status=s.status, statusTitle=STATUS_TITLES[s.status],
-        autoProlong=s.autoProlong, price=eur(s.price), createdAt=s.createdAt, expiresAt=s.expiresAt,
+        autoProlong=s.autoProlong, price=to_euros(s.price), createdAt=s.createdAt, expiresAt=s.expiresAt,
         daysLeft=round(r.days_left, 2), score=round(r.score, 2) if r.score is not None else None,
-        probability=round(r.probability, 4), revenueHorizon=eur(r.revenue_horizon),
-        expectedLoss=eur(r.expected_loss), contributions=[contribution_out(c) for c in r.contributions],
+        probability=round(r.probability, 4), revenueHorizon=to_euros(r.revenue_horizon),
+        expectedLoss=to_euros(r.expected_loss), contributions=[contribution_out(c) for c in r.contributions],
         qualityIssues=r.quality_issues,
     )
 
@@ -225,19 +222,19 @@ def customer_detail(c: CustomerResult, result: EngineResult, snapshot: Snapshot,
     return CustomerDetail(
         **list_item(c).model_dump(),
         note=c.note,
-        revenueHorizon=eur(c.revenue_horizon),
-        ltvAtRisk=eur(c.ltv_at_risk),
+        revenueHorizon=to_euros(c.revenue_horizon),
+        ltvAtRisk=to_euros(c.ltv_at_risk),
         finances=Finances(
-            balance=eur(a.balance), bonusBalance=eur(a.bonusBalance), bonusState=a.bonusState,
-            withdrawBalance=eur(a.withdrawBalance), totalReplenished=eur(a.totalReplenished),
-            availableFunds=eur(a.available_funds), renewalNeed=eur(c.renewal_need), paidMonthly=eur(c.paid_monthly),
+            balance=to_euros(a.balance), bonusBalance=to_euros(a.bonusBalance), bonusState=a.bonusState,
+            withdrawBalance=to_euros(a.withdrawBalance), totalReplenished=to_euros(a.totalReplenished),
+            availableFunds=to_euros(a.available_funds), renewalNeed=to_euros(c.renewal_need), paidMonthly=to_euros(c.paid_monthly),
         ),
         contributions=[contribution_out(x) for x in c.contributions],
         actions=c.actions,
         issues=c.quality_issues,
         services=[service_out(r) for r in sorted(c.services, key=lambda r: (r.score is None, -(r.score or 0)))],
         transactions=[
-            TransactionOut(id=t.id, serviceId=t.serviceId, type=t.type, amount=eur(t.amount), status=t.status,
+            TransactionOut(id=t.id, serviceId=t.serviceId, type=t.type, amount=to_euros(t.amount), status=t.status,
                            createdAt=t.createdAt, performedAt=t.performedAt)
             for t in txs
         ],
@@ -254,18 +251,18 @@ def summary_out(result: EngineResult, version: int, computed_at: datetime, durat
         horizonDays=s.horizon_days,
         customersTotal=s.customers_total,
         levels=s.levels,
-        levelLoss={k: eur(v) for k, v in s.level_loss.items()},
-        expectedLoss=eur(s.expected_loss),
-        expectedLossPaid=eur(s.expected_loss_paid),
-        worstCase=eur(s.worst_case),
-        ltvAtRisk=eur(s.ltv_at_risk),
+        levelLoss={k: to_euros(v) for k, v in s.level_loss.items()},
+        expectedLoss=to_euros(s.expected_loss),
+        expectedLossPaid=to_euros(s.expected_loss_paid),
+        worstCase=to_euros(s.worst_case),
+        ltvAtRisk=to_euros(s.ltv_at_risk),
         ltvMonthlyChurn=result.settings.ltvMonthlyChurn,
-        revenueAtRisk=eur(s.revenue_at_risk),
-        balanceAtRisk=eur(s.balance_at_risk),
+        revenueAtRisk=to_euros(s.revenue_at_risk),
+        balanceAtRisk=to_euros(s.balance_at_risk),
         servicesAtRisk=s.services_at_risk,
         qualityIssues=s.quality_issues,
         causes=[CauseOut(feature=g["feature"], title=g["title"], kind=g["kind"], customers=g["customers"],
-                         expectedLoss=eur(g["expected_loss"]), expectedLossPaid=eur(g["expected_loss_paid"]))
+                         expectedLoss=to_euros(g["expected_loss"]), expectedLossPaid=to_euros(g["expected_loss_paid"]))
                 for g in s.causes],
         explanation=(
             f"Ожидаемая потеря — сколько выручки за {s.horizon_days} дн. бизнес, скорее всего, не получит: "

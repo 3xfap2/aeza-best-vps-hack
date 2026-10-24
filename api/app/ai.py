@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import httpx
 
 from app import db
+from app.money import fmt_cents, fmt_euros
 from app.domain import GRACE_PERIOD
 from app.insights import what_if
 from app.retention import queue as retention_queue
@@ -201,15 +202,6 @@ def unverified_numbers(text: str, facts: str) -> list[str]:
 
 # --- факты для модели ------------------------------------------------------------
 
-def _rub_fmt(euros: float) -> str:
-    """€ 8 655,98 — так же, как в панели; модель копирует формат из фактов."""
-    return "€ " + f"{euros:,.2f}".replace(",", " ").replace(".", ",")
-
-
-def _eur(cents: float) -> str:
-    return _rub_fmt(cents / 100)
-
-
 def scrub(text: str, emails: dict[str, int]) -> str:
     """Email → «клиент #id»; любой другой email — «[email]»."""
     for email, cid in emails.items():
@@ -225,20 +217,20 @@ def portfolio_facts(result: EngineResult, last: dict, first: dict, activity: lis
         f"Дата расчёта: {result.as_of:%d.%m.%Y %H:%M} UTC. Горизонт: {s.horizon_days} дней.",
         f"Клиентов: {s.customers_total}; высокий риск {s.levels['high']}, средний {s.levels['medium']}, низкий {s.levels['low']}, "
         f"нет оценки {s.levels['no_score']}, ушли {s.levels['churned']}.",
-        f"Ожидаемая потеря по прайсу: {_eur(s.expected_loss)}; реально собираемая (с учётом платёжеспособности): {_eur(s.expected_loss_paid)}; "
-        f"худший случай: {_eur(s.worst_case)}; LTV под угрозой: {_eur(s.ltv_at_risk)}.",
+        f"Ожидаемая потеря по прайсу: {fmt_cents(s.expected_loss)}; реально собираемая (с учётом платёжеспособности): {fmt_cents(s.expected_loss_paid)}; "
+        f"худший случай: {fmt_cents(s.worst_case)}; LTV под угрозой: {fmt_cents(s.ltv_at_risk)}.",
         "Причины (клиенты высокого и среднего риска по главной причине):",
     ]
     for g in s.causes:
         kind = "недобровольный — не прошла оплата" if g["kind"] == "involuntary" else "добровольный — решение клиента"
-        lines.append(f"- {g['title']} ({kind}): {g['customers']} кл., {_eur(g['expected_loss'])} по прайсу, {_eur(g['expected_loss_paid'])} реально")
+        lines.append(f"- {g['title']} ({kind}): {g['customers']} кл., {fmt_cents(g['expected_loss'])} по прайсу, {fmt_cents(g['expected_loss_paid'])} реально")
     planned = [x for x in items if x["planned"]]
     lines += [
         f"Очередь удержания: {len(items)} кл.; сегодня {sum(x['bucket'] == 'today' for x in items)}, на неделе {sum(x['bucket'] == 'week' for x in items)}, "
         f"позже {sum(x['bucket'] == 'later' for x in items)}. Допущения: удержание 30 %, звонок € 3, 10 звонков в день.",
-        f"План звонков на день: {len(planned)}, ожидаемо сохраним {_rub_fmt(sum(x['expectedSaved'] for x in planned))}. "
+        f"План звонков на день: {len(planned)}, ожидаемо сохраним {fmt_euros(sum(x['expectedSaved'] for x in planned))}. "
         f"Перезвонить по договорённости сегодня: {sum(x['followUpDue'] for x in items)}.",
-        f"Сохранено по отметкам «продлил»: {_eur(saved_fact)}.",
+        f"Сохранено по отметкам «продлил»: {fmt_cents(saved_fact)}.",
         "Первые 12 клиентов очереди (по сроку и выгоде звонка):",
     ]
     for x in items[:12]:
@@ -257,8 +249,8 @@ def _queue_line(x: dict) -> str:
             "renewal": f"продление {x['deadline']:%d.%m}"}[x["deadlineKind"]]
     work = f"; работа: {x['lastAction']}" if x["lastAction"] else ""
     return (f"- клиент #{x['customerId']}: {LEVEL_TITLES[x['level']].lower()} риск, score {x['score']}, {when}, причина «{x['causeTitle']}», "
-            f"{'звонок' if x['channel'] == 'call' else 'письмо'}, ожидаемо сохраним {_rub_fmt(x['expectedSaved'])}, "
-            f"потеря реально {_rub_fmt(x['expectedLossPaid'])} (по прайсу {_rub_fmt(x['expectedLoss'])}); что сделать: {x['action']}{work}")
+            f"{'звонок' if x['channel'] == 'call' else 'письмо'}, ожидаемо сохраним {fmt_euros(x['expectedSaved'])}, "
+            f"потеря реально {fmt_euros(x['expectedLossPaid'])} (по прайсу {fmt_euros(x['expectedLoss'])}); что сделать: {x['action']}{work}")
 
 
 def customer_facts(result: EngineResult, snapshot, customer_id: int, actions: list[dict]) -> str | None:
@@ -271,10 +263,10 @@ def customer_facts(result: EngineResult, snapshot, customer_id: int, actions: li
         lines.append(c.note or "")
         return "\n".join(lines)
     lines += [
-        f"Ожидаемая потеря за {result.settings.horizonDays} дн.: {_eur(c.expected_loss)} по прайсу, {_eur(c.expected_loss_paid)} реально; "
-        f"платит в среднем {_eur(c.paid_monthly)} в месяц.",
-        f"Баланс {_eur(a.balance)}, доступно для оплаты {_eur(a.available_funds)}, нужно на продления {_eur(c.renewal_need)}, "
-        f"пополнено всего {_eur(a.totalReplenished)}.",
+        f"Ожидаемая потеря за {result.settings.horizonDays} дн.: {fmt_cents(c.expected_loss)} по прайсу, {fmt_cents(c.expected_loss_paid)} реально; "
+        f"платит в среднем {fmt_cents(c.paid_monthly)} в месяц.",
+        f"Баланс {fmt_cents(a.balance)}, доступно для оплаты {fmt_cents(a.available_funds)}, нужно на продления {fmt_cents(c.renewal_need)}, "
+        f"пополнено всего {fmt_cents(a.totalReplenished)}.",
         "Почему риск (баллы = вес × сила):",
     ]
     lines += [f"- +{x.points:g} {x.title}: {x.reason} ({x.service_name})" for x in c.contributions[:6]]
@@ -282,14 +274,14 @@ def customer_facts(result: EngineResult, snapshot, customer_id: int, actions: li
     for r in c.services:
         s = r.service
         extra = f", удалится {s.expiresAt + GRACE_PERIOD:%d.%m}" if s.status == "prolong_wait" else ""
-        lines.append(f"- {s.name}: {STATUS_TITLES[s.status].lower()}, {TERMS.get(s.paymentTerm, s.paymentTerm)}, {_eur(s.price)} за период, "
+        lines.append(f"- {s.name}: {STATUS_TITLES[s.status].lower()}, {TERMS.get(s.paymentTerm, s.paymentTerm)}, {fmt_cents(s.price)} за период, "
                      f"срок до {s.expiresAt:%d.%m.%Y}, автопродление {'вкл' if s.autoProlong else 'выкл'}{extra}")
     if c.actions:
         lines.append("Рекомендации модели: " + "; ".join(c.actions))
     scenarios = what_if(result, snapshot, customer_id)
     if scenarios:
         lines.append("Что будет, если (пересчёт той же моделью):")
-        lines += [f"- {w['title']}: score {w['score']}, потеря {_rub_fmt(w['expectedLoss'])}, сохраним {_rub_fmt(w['saved'])}" for w in scenarios]
+        lines += [f"- {w['title']}: score {w['score']}, потеря {fmt_euros(w['expectedLoss'])}, сохраним {fmt_euros(w['saved'])}" for w in scenarios]
     if actions:
         lines.append("Работа с клиентом: " + "; ".join(f"{x['createdAt']:%d.%m} {x['kind']} ({x['author']})" for x in actions[:5]))
     return "\n".join(lines)

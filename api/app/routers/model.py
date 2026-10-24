@@ -13,7 +13,7 @@ from app.scoring.features import FEATURES
 from app.scoring.settings import ModelSettings, diff_settings, merge_patch
 from app.security import User, current_user, require
 from app.source import SnapshotIn
-from app.views import eur
+from app.money import to_euros
 
 router = APIRouter(prefix="/api/v1/model", tags=["Модель"])
 
@@ -236,12 +236,12 @@ def preview(
     changed = [
         LevelChange(id=a.account.id, email=a.account.email, fromLevel=b.level, toLevel=a.level,
                     fromScore=b.score, toScore=a.score)
-        for b, a in zip(before.customers, after.customers)
+        for b, a in zip(before.customers, after.customers, strict=True)
         if b.level != a.level
     ]
     return PreviewOut(
-        before=Totals(levels=before.summary.levels, expectedLoss=eur(before.summary.expected_loss)),
-        after=Totals(levels=after.summary.levels, expectedLoss=eur(after.summary.expected_loss)),
+        before=Totals(levels=before.summary.levels, expectedLoss=to_euros(before.summary.expected_loss)),
+        after=Totals(levels=after.summary.levels, expectedLoss=to_euros(after.summary.expected_loss)),
         changed=changed,
         changes=diff_settings(before.settings, new),
         backtestBefore=bt_before,
@@ -262,7 +262,7 @@ def get_backtest(request: Request, _: User = Depends(current_user)) -> BacktestO
     return BacktestOut(
         available=bool(b.rounds), demo=demo, horizonDays=b.horizon_days, customers=b.customers,
         churned=b.churned, caught=b.caught, falseAlarms=b.false_alarms,
-        predictedLoss=eur(b.predicted_loss), actualLoss=eur(b.actual_loss),
+        predictedLoss=to_euros(b.predicted_loss), actualLoss=to_euros(b.actual_loss),
         rounds=[BacktestRound(asOf=r.as_of, outcomeAt=r.outcome_at, customers=r.customers, churned=r.churned,
                               caught=r.caught) for r in b.rounds],
         levels=[BacktestLevel(level=lvl.level, customers=lvl.customers, churned=lvl.churned,

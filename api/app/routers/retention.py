@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from app import db
 from app.retention import BUCKETS, compare_strategies, effect, queue
 from app.security import current_user
-from app.views import eur
+from app.money import to_euros
 
 STRATEGY_CALLS = 10   # если ёмкость не задана — сравниваем на 10 звонках в день
 
@@ -137,7 +137,7 @@ def retention_queue(request: Request, saveRate: float = SaveRate, callCost: floa
             worked=sum(1 for x in items if x["status"] != "new"),
             renewed=sum(1 for r in last.values() if r["kind"] == "renewed"),
             churned=sum(1 for r in last.values() if r["kind"] == "churned"),
-            savedFact=eur(saved_fact),
+            savedFact=to_euros(saved_fact),
             followUpsDue=sum(1 for x in items if x["followUpDue"]),
             planned=len(planned), plannedSaved=round(sum(x["expectedSaved"] for x in planned), 2),
             reducedAfterContact=round(sum(x["reduced"] for x in after), 2),

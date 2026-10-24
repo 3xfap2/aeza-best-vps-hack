@@ -17,7 +17,7 @@ from psycopg.types.json import Jsonb
 
 from app import db
 from app.domain import GRACE_PERIOD, TERM_HOURS
-from app.scoring.features.base import eur
+from app.money import fmt_cents
 
 MONTHS = {"month": 1, "quarter_year": 3, "half_year": 6, "year": 12}
 
@@ -107,7 +107,7 @@ def topup(conn: Connection, account_id: int, amount_cents: int) -> str:
         'UPDATE accounts SET balance = balance + %s, "totalReplenished" = "totalReplenished" + %s WHERE id = %s',
         (amount_cents, amount_cents, account_id),
     )
-    return f"{account['email']}: пополнение {eur(amount_cents)}"
+    return f"{account['email']}: пополнение {fmt_cents(amount_cents)}"
 
 
 def set_autoprolong(conn: Connection, service_id: int, enabled: bool) -> str:
@@ -130,7 +130,7 @@ def pay_renewal(conn: Connection, service_id: int, at: datetime) -> str:
         raise SimulationError(f"{service['name']}: удалённую или заблокированную услугу продлить нельзя")
     account = _account(conn, service["ownerId"])
     if not _charge(conn, account, service["price"]):
-        raise SimulationError(f"{account['email']}: на счёте не хватает {eur(service['price'])} для продления")
+        raise SimulationError(f"{account['email']}: на счёте не хватает {fmt_cents(service['price'])} для продления")
     new_expiry = add_term(max(service["expiresAt"], at) if service["status"] == "prolong_wait" else service["expiresAt"],
                           service["paymentTerm"])
     conn.execute('UPDATE services SET "expiresAt" = %s WHERE id = %s', (new_expiry, service_id))
@@ -141,7 +141,7 @@ def pay_renewal(conn: Connection, service_id: int, at: datetime) -> str:
         "VALUES (%s, %s, 'performed', %s, %s, 'prolong', %s)",
         (_next_tx_id(conn), min(service["price"], 1000), at, at, service_id),
     )
-    return f"{service['name']}: оплачено продление {eur(service['price'])}, новый срок {new_expiry:%d.%m.%Y %H:%M}"
+    return f"{service['name']}: оплачено продление {fmt_cents(service['price'])}, новый срок {new_expiry:%d.%m.%Y %H:%M}"
 
 
 DEFER_MAX_DAYS = 14
@@ -196,7 +196,7 @@ def advance(conn: Connection, since: datetime, until: datetime) -> list[str]:
             if renewed:
                 s["expiresAt"] = expiry
                 conn.execute('UPDATE services SET "expiresAt" = %s WHERE id = %s', (expiry, s["id"]))
-                notes.append(f"{s['name']}: автопродление ×{renewed}, списано {eur(renewed * s['price'])}")
+                notes.append(f"{s['name']}: автопродление ×{renewed}, списано {fmt_cents(renewed * s['price'])}")
             if expiry <= until:
                 _set_status(conn, s, "prolong_wait", expiry, "simulator")
                 s["waitFrom"] = expiry

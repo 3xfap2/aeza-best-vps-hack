@@ -16,7 +16,9 @@ from datetime import datetime, timedelta, timezone
 from app.domain import GRACE_PERIOD, Account, Service, Snapshot, Transaction
 
 from .features import FEATURES, ServiceContext
-from .features.base import days_word, eur, humanize_days
+from app.money import fmt_cents
+
+from .features.base import days_word, humanize_days
 from .settings import ModelSettings
 
 LEVELS = ("high", "medium", "low", "no_score", "churned")
@@ -183,22 +185,8 @@ def pay_capacity(account: Account, services: list[Service], as_of: datetime, hor
 
 def evaluate(snapshot: Snapshot, settings: ModelSettings, now: datetime | None = None) -> EngineResult:
     as_of = resolve_as_of(settings, snapshot, now)
-    horizon = settings.horizonDays
-
-    services_by_owner: dict[int, list[Service]] = defaultdict(list)
-    for s in snapshot.services:
-        services_by_owner[s.ownerId].append(s)
-    tx_stats: dict[int, list[int]] = defaultdict(lambda: [0, 0])
-    for t in snapshot.transactions:
-        stats = tx_stats[t.serviceId]
-        stats[0] += 1
-        if t.status != "performed":
-            stats[1] += 1
-
-    customers = [
-        _evaluate_customer(a, services_by_owner.get(a.id, []), tx_stats, settings, as_of)
-        for a in snapshot.accounts
-    ]
+    by_owner, tx_stats = _group(snapshot.services, snapshot.transactions)
+    customers = [_evaluate_customer(a, by_owner.get(a.id, []), tx_stats, settings, as_of) for a in snapshot.accounts]
     summary = _summarize(customers, settings, as_of)
     return EngineResult(as_of, settings, customers, summary, {c.account.id: c for c in customers})
 
@@ -212,6 +200,15 @@ def reevaluate(previous: EngineResult, accounts: list[Account], services: list[S
     Сводка пересобирается из готовых оценок остальных клиентов.
     """
     settings, as_of = previous.settings, previous.as_of
+    by_owner, tx_stats = _group(services, transactions)
+    fresh = {a.id: _evaluate_customer(a, by_owner.get(a.id, []), tx_stats, settings, as_of) for a in accounts}
+    customers = [fresh.get(c.account.id, c) for c in previous.customers]
+    summary = _summarize(customers, settings, as_of)
+    return EngineResult(as_of, settings, customers, summary, {c.account.id: c for c in customers})
+
+
+def _group(services: list[Service], transactions: list[Transaction]) -> tuple[dict[int, list[Service]], dict[int, list[int]]]:
+    """Услуги по владельцу и по каждой услуге [всего транзакций, неоплаченных]."""
     by_owner: dict[int, list[Service]] = defaultdict(list)
     for s in services:
         by_owner[s.ownerId].append(s)
@@ -219,10 +216,7 @@ def reevaluate(previous: EngineResult, accounts: list[Account], services: list[S
     for t in transactions:
         tx_stats[t.serviceId][0] += 1
         tx_stats[t.serviceId][1] += t.status != "performed"
-    fresh = {a.id: _evaluate_customer(a, by_owner.get(a.id, []), tx_stats, settings, as_of) for a in accounts}
-    customers = [fresh.get(c.account.id, c) for c in previous.customers]
-    summary = _summarize(customers, settings, as_of)
-    return EngineResult(as_of, settings, customers, summary, {c.account.id: c for c in customers})
+    return by_owner, tx_stats
 
 
 def _days_left(service: Service, as_of: datetime) -> float:
@@ -333,7 +327,7 @@ def _actions(account: Account, live: list[ServiceResult], need: int, as_of: date
         deficit = need - account.available_funds
         due = max(as_of, min(r.service.expiresAt for r in live))
         when = "сегодня" if due.date() == as_of.date() else f"до {due:%d.%m}"
-        actions.append(f"Предложить пополнить счёт на {eur(deficit)} {when}")
+        actions.append(f"Предложить пополнить счёт на {fmt_cents(deficit)} {when}")
     for r in sorted(live, key=lambda r: r.days_left):
         feats = {c.feature for c in r.contributions}
         name = r.service.name
@@ -401,35 +395,50 @@ def _causes(at_risk: list[CustomerResult]) -> list[dict]:
 
 
 def timeline(result: EngineResult, snapshot: Snapshot, transitions: list[Transition]) -> list[TimelinePoint]:
-    """Отток по дням: факт (зафиксированный журналом и восстановленный по правилу) и прогноз."""
-    horizon = result.settings.horizonDays
-    as_of = result.as_of
+    """Отток по дням за горизонт назад и вперёд: факт (из журнала и восстановленный по правилу) и прогноз."""
+    horizon, as_of = result.settings.horizonDays, result.as_of
     start = (as_of - timedelta(days=horizon)).date()
-    points = {start + timedelta(days=i): TimelinePoint((start + timedelta(days=i)).isoformat()) for i in range(2 * horizon + 1)}
-    services = {s.id: s for s in snapshot.services}
+    days = [start + timedelta(days=i) for i in range(2 * horizon + 1)]
+    points = {d: TimelinePoint(d.isoformat()) for d in days}
+    recorded = _fact_from_journal(points, snapshot, transitions, as_of, horizon)
+    _fact_by_rule(points, snapshot, recorded, as_of, horizon)
+    _forecast(points, result, as_of, horizon)
+    for p in points.values():
+        p.forecast = round(p.forecast, 3)
+        p.forecast_eur = round(p.forecast_eur, 2)
+        p.fact_recorded_eur = round(p.fact_recorded_eur, 2)
+        p.fact_restored_eur = round(p.fact_restored_eur, 2)
+    return [points[d] for d in days]
 
-    recorded = set()
+
+def _fact_from_journal(points: dict, snapshot: Snapshot, transitions: list[Transition], as_of: datetime, horizon: int) -> set[int]:
+    """Удаления, которые Радар видел сам (журнал смен статусов). Возвращает id этих услуг."""
+    services = {s.id: s for s in snapshot.services}
+    recorded: set[int] = set()
     for t in transitions:
         if t.to_status != "deleted" or t.at > as_of:
             continue
         recorded.add(t.service_id)
-        p = points.get(t.at.date())
+        p, s = points.get(t.at.date()), services.get(t.service_id)
         if p:
             p.fact_recorded += 1
-            s = services.get(t.service_id)
             p.fact_recorded_eur += revenue_over_horizon(s, horizon) / 100 if s else 0
+    return recorded
 
+
+def _fact_by_rule(points: dict, snapshot: Snapshot, recorded: set[int], as_of: datetime, horizon: int) -> None:
+    """Удаления из снимка без записи в журнале: дата восстановлена по правилу «срок + 5 дней»."""
     for s in snapshot.services:
         if s.status != "deleted" or s.id in recorded:
             continue
-        restored = s.expiresAt + GRACE_PERIOD
-        if restored > as_of:
-            restored = as_of
-        p = points.get(restored.date())
+        p = points.get(min(s.expiresAt + GRACE_PERIOD, as_of).date())
         if p:
             p.fact_restored += 1
             p.fact_restored_eur += revenue_over_horizon(s, horizon) / 100
 
+
+def _forecast(points: dict, result: EngineResult, as_of: datetime, horizon: int) -> None:
+    """Ожидаемые непродления: в день, когда услуга перестанет оплачиваться (для «ждёт оплаты» — день удаления)."""
     end = as_of + timedelta(days=horizon)
     for c in result.customers:
         for r in c.services:
@@ -437,20 +446,10 @@ def timeline(result: EngineResult, snapshot: Snapshot, transitions: list[Transit
                 continue
             s = r.service
             event = s.expiresAt + GRACE_PERIOD if s.status == "prolong_wait" else s.expiresAt
-            if event > end:
-                continue
-            event = max(event, as_of)
-            p = points.get(event.date())
+            p = points.get(max(event, as_of).date()) if event <= end else None
             if p:
                 p.forecast += r.probability
                 p.forecast_eur += r.expected_loss / 100
-
-    for p in points.values():
-        p.forecast = round(p.forecast, 3)
-        p.forecast_eur = round(p.forecast_eur, 2)
-        p.fact_recorded_eur = round(p.fact_recorded_eur, 2)
-        p.fact_restored_eur = round(p.fact_restored_eur, 2)
-    return [points[d] for d in sorted(points)]
 
 
 __all__ = [

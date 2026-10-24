@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from app.domain import Account, Snapshot
 from app.scoring.engine import EngineResult, evaluate
-from app.scoring.features.base import eur
+from app.money import fmt_cents
 from app.scoring.settings import AsOf, ModelSettings
 from app.simulator import add_term
 
@@ -42,7 +42,7 @@ def what_if(result: EngineResult, snapshot: Snapshot, account_id: int) -> list[d
     if deficit > 0:
         snap = copy.deepcopy(base)
         snap.accounts[0] = replace(account, balance=account.balance + deficit)
-        scenarios.append(("topup", f"Пополнит счёт на {eur(deficit)}", snap))
+        scenarios.append(("topup", f"Пополнит счёт на {fmt_cents(deficit)}", snap))
 
     no_ap = [s for s in live if not s.autoProlong]
     if no_ap:
@@ -58,7 +58,7 @@ def what_if(result: EngineResult, snapshot: Snapshot, account_id: int) -> list[d
         snap.services = [replace(s, status="active", expiresAt=add_term(max(s.expiresAt, result.as_of), s.paymentTerm))
                          if s.status == "prolong_wait" else s for s in snap.services]
         snap.accounts[0] = replace(account, balance=account.balance + cost, totalReplenished=account.totalReplenished + cost)
-        scenarios.append(("pay", f"Оплатит ожидающие услуги на {eur(cost)}", snap))
+        scenarios.append(("pay", f"Оплатит ожидающие услуги на {fmt_cents(cost)}", snap))
 
     soon = result.as_of + timedelta(days=7)
     due = [s for s in live if s.status == "prolong_wait" or s.expiresAt <= soon]
@@ -132,8 +132,8 @@ def message(result: EngineResult, account_id: int) -> dict | None:
         "prolong_wait": ("Сервер ждёт оплаты", f"Срок оплаты услуги {name} истёк, сейчас она ждёт оплаты. "
                          f"Чтобы сервер и данные сохранились, продлите её в личном кабинете — это займёт минуту."),
         "insufficient_funds": ("Не хватит средств на продление", f"Для продления ваших услуг в ближайшие 30 дней нужно "
-                               f"{eur(c.renewal_need)}, на счёте сейчас {eur(c.account.available_funds)}. "
-                               f"Пополните, пожалуйста, баланс на {eur(deficit)}" + (f" до {due}" if due else "") + ", чтобы сервер не остановился."),
+                               f"{fmt_cents(c.renewal_need)}, на счёте сейчас {fmt_cents(c.account.available_funds)}. "
+                               f"Пополните, пожалуйста, баланс на {fmt_cents(deficit)}" + (f" до {due}" if due else "") + ", чтобы сервер не остановился."),
         "expiring_no_autoprolong": ("Скоро закончится срок услуги", f"Срок услуги {name} заканчивается {due}, а автопродление выключено. "
                                     f"Включите его в личном кабинете — и сервер продлится сам, без перерывов."),
         "no_autoprolong_no_funds": ("Сервер может остановиться", f"У услуги {name} выключено автопродление и на счёте недостаточно средств. "
