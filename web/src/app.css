@@ -23,12 +23,13 @@ body { margin: 0; background: var(--paper); }
 .theme-box { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 8px; margin: 4px 12px 2px; }
 .theme-float .theme-box, .theme-float { grid-template-columns: none; }
 .theme-switch__label { font-size: 12px; color: var(--ink-3); }
-.theme-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; border-radius: var(--radius-button);
+.theme-switch { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: var(--radius-button);
   background: var(--neutral-100); }
 .theme-float { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; align-items: center; gap: 10px;
   padding: 6px 6px 6px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-3);
   font-family: var(--font-sans); }
-.theme-float .theme-switch { min-width: 160px; }
+.theme-float .theme-switch { min-width: 240px; }
+.theme-box:has(.theme-switch > :nth-child(3)) { grid-template-columns: 1fr; gap: 6px; }
 .theme-switch button { font: inherit; font-size: 13px; min-height: 32px; border: 0; border-radius: calc(var(--radius-button) - 3px);
   background: none; color: var(--ink-2); cursor: pointer; }
 .theme-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 500; }
@@ -539,3 +540,87 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 /* меню панели: на невысоком экране прокручивается само, «Выйти» всегда достижимо */
 .ro-side { height: 100dvh; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .ro-side > * { flex-shrink: 0; }
+
+/* --- тема «Мягкая»: тёплая и дружелюбная. Округлый шрифт Nunito, белые «парящие» карточки с мягкой тенью,
+   оранжевые кнопки с объёмом, таблетки вместо прямоугольников. Формы маркеров риска сохранены —
+   уровни различаются не только цветом. Белый текст на кнопках — на тёмном оранжевом (контраст ≈ 4,5:1). --- */
+:root[data-theme="soft"] {
+  --paper: #FFF8F3;
+  --kraft-100: #FFF1E7;
+  --kraft-200: #FFE7D6;
+  --neutral-100: #F7EEE7;
+  --card: #FFFFFF;
+  --ink: #1F1A17;
+  --ink-2: #6B5F57;
+  --ink-3: #998B82;
+  --line: #F1E3D8;
+  --line-strong: #E5D3C6;
+  --line-draft: #EBD9CB;
+  --marker: #FF8A3D;
+  --marker-hover: #FF6A1A;
+  --marker-300: #FFB27A;
+  --marker-200: #FFD6BA;
+  --marker-100: #FFEDE0;
+  --action: #C94A0E;
+  --action-hover: #B8420B;
+  --action-deep: #A23A09;
+  --on-action: #FFFFFF;
+  --risk-high: #C8261B;
+  --risk-high-bg: #FFE6E3;
+  --risk-mid: #A15C00;
+  --risk-mid-bg: #FFF1CC;
+  --risk-low: #0A7A47;
+  --risk-low-bg: #DFF6E9;
+  --risk-none: #6B5F57;
+  --risk-none-bg: #F3EBE5;
+  --shadow-1: 0 2px 6px rgba(201, 74, 14, 0.06);
+  --shadow-2: 0 4px 10px rgba(201, 74, 14, 0.05), 0 16px 36px rgba(201, 74, 14, 0.08);
+  --shadow-3: 0 24px 56px rgba(110, 45, 10, 0.16);
+  --font-display: "Nunito", "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Nunito", "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hand: "Nunito", system-ui, sans-serif;
+  --radius-tag: 999px;
+  --radius-button: 16px;
+  --radius-card-sm: 22px;
+  --radius-card: 28px;
+}
+:root[data-theme="soft"] body { background: radial-gradient(1200px 600px at 100% 0%, #FFEBDD 0%, transparent 60%), var(--paper); }
+:root[data-theme="soft"] .ro { font-variant-numeric: tabular-nums; }
+:root[data-theme="soft"] .ro-app { background: transparent; }
+:root[data-theme="soft"] .ro h1, :root[data-theme="soft"] .ro-h1 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.015em; }
+:root[data-theme="soft"] .ro h2, :root[data-theme="soft"] .ro-cardhead h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.005em; }
+:root[data-theme="soft"] .ro-sum__amount { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; }
+/* карточки «парят»: белые, без рамки, с тёплой тенью; бумажная текстура не нужна */
+:root[data-theme="soft"] .ro-card { border-color: transparent; box-shadow: var(--shadow-2); }
+:root[data-theme="soft"] .ro-panel { box-shadow: var(--shadow-1); }
+:root[data-theme="soft"] .ro-panel::before, :root[data-theme="soft"] .ro-paper-texture::before { display: none; }
+/* кнопки — таблетки; главная — оранжевая с объёмом */
+:root[data-theme="soft"] .ro-btn { border-radius: 999px; background: linear-gradient(180deg, #E85F17 0%, #C94A0E 100%);
+  box-shadow: 0 6px 16px rgba(201, 74, 14, 0.28), inset 0 -2px 0 rgba(0, 0, 0, 0.12); }
+:root[data-theme="soft"] .ro-btn:hover { background: linear-gradient(180deg, #DB5612 0%, #B8420B 100%); transform: translateY(-1px); }
+:root[data-theme="soft"] .ro-btn:active { transform: scale(0.97); }
+:root[data-theme="soft"] .ro-btn--quiet, :root[data-theme="soft"] .ro-btn--ghost { background: var(--card); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(110, 45, 10, 0.06), inset 0 0 0 1.5px var(--line-strong); }
+:root[data-theme="soft"] .ro-btn--quiet:hover, :root[data-theme="soft"] .ro-btn--ghost:hover { background: var(--marker-100); }
+:root[data-theme="soft"] .chips button, :root[data-theme="soft"] .ro-radar__filters button, :root[data-theme="soft"] .theme-switch,
+:root[data-theme="soft"] .theme-switch button { border-radius: 999px; }
+:root[data-theme="soft"] .chips button[aria-pressed="true"], :root[data-theme="soft"] .ro-radar__filters button[aria-pressed="true"] {
+  background: var(--marker-100); color: var(--ink); border-color: var(--marker); box-shadow: inset 0 0 0 1px var(--marker); }
+/* бейджи риска — таблетки с маркером формы */
+:root[data-theme="soft"] .ro-risk { border-radius: 999px; padding-inline: 10px; font-weight: 700; }
+/* поля — мягкие и светлые, фокус — оранжевое свечение */
+:root[data-theme="soft"] .field input, :root[data-theme="soft"] .field select, :root[data-theme="soft"] .num-input,
+:root[data-theme="soft"] .ask__input, :root[data-theme="soft"] .message__text { border-radius: 16px; background: #FFFCFA; border-width: 1.5px; }
+:root[data-theme="soft"] .field input:focus-visible, :root[data-theme="soft"] .field select:focus-visible,
+:root[data-theme="soft"] .num-input:focus-visible { outline: none; border-color: var(--marker-hover); box-shadow: 0 0 0 4px rgba(255, 106, 26, 0.16); }
+/* меню: активный пункт — мягкая подсветка с полоской */
+:root[data-theme="soft"] .ro-side { background: rgba(255, 255, 255, 0.55); backdrop-filter: blur(8px); }
+:root[data-theme="soft"] .ro-side nav a { border-radius: 14px; }
+:root[data-theme="soft"] .ro-side nav a[aria-current="page"] { background: var(--marker-100); box-shadow: inset 3px 0 0 var(--marker-hover); color: var(--ink); font-weight: 700; }
+:root[data-theme="soft"] .ro-side nav a[aria-current="page"] svg { color: var(--marker-hover); }
+/* таблицы: шапка — моноширинным капсом на тёплом фоне, строки подсвечиваются персиковым */
+:root[data-theme="soft"] .ro-table th { background: #FFF6EF; }
+:root[data-theme="soft"] .ro-table tbody tr:hover { background: #FFF4EC; }
+:root[data-theme="soft"] .ro-source { border-radius: 999px; }
+:root[data-theme="soft"] .ro-sum .ro-sum__paid { background: var(--marker-100); border-left-color: var(--marker-hover); border-radius: 0 16px 16px 0; }
+:root[data-theme="soft"] .work-tag { border-radius: 999px; }
