@@ -176,6 +176,26 @@ def test_telegram_bot_requires_link_code_and_alerts(client, auth):
     chat_id, text = bot._outbox.get_nowait()
     assert chat_id == 1001 and "В высокий риск перешли" in text
     client.patch("/api/v1/model/settings", headers=auth, json={"thresholds": {"high": 60}})
+
+    # резкий рост реально собираемой потери: одно сообщение на один рост
+    from datetime import datetime, timedelta, timezone
+    from app.domain import Account, Service, Snapshot
+    from app.scoring.engine import evaluate
+    from app.scoring.settings import default_settings
+    t0 = datetime(2026, 10, 19, 15, tzinfo=timezone.utc)
+
+    def result(balance):
+        acc = Account(1, "user-1@example.test", balance, 0, 600_000, 0, "locked")
+        svc = Service(1, "service-1", 1, "month", False, t0 - timedelta(days=27), t0 + timedelta(days=3), "active", 20_000)
+        return evaluate(Snapshot([acc], [svc], [], reference_at=t0), default_settings())
+    before, after = result(1_000_000), result(0)
+    assert after.summary.expected_loss_paid > before.summary.expected_loss_paid * 1.2 + 5000
+    bot._loss_base = None
+    text = bot.loss_growth(before, after, "event")
+    assert "Потеря растёт" in text and "событие биллинга" in text and "/app/retention" in text and "user-1@example.test" in text
+    assert bot.loss_growth(after, after, "schedule") is None              # тот же уровень — без повтора
+    bot.on_recalculated(before, after, "reset")                          # смена набора — новая точка отсчёта
+    assert bot._loss_base == after.summary.expected_loss_paid
     assert "отключены" in bot.handle(1001, "u", "/stop")
 
 

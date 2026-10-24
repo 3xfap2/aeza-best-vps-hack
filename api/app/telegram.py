@@ -1,7 +1,8 @@
 """Telegram-бот маркетолога.
 
 Подписка: /start <TELEGRAM_LINK_CODE>. Без кода бот ничего не показывает — в нём данные клиентов.
-Уведомления: после каждого пересчёта — о клиентах, которые перешли в высокий риск;
+Уведомления: после каждого пересчёта — о клиентах, которые перешли в высокий риск,
+и о резком росте реально собираемой потери (не меньше чем на 20 % и € 50, одно сообщение на один рост);
 каждое утро (TELEGRAM_DIGEST_HOUR по Москве) — план на день из очереди удержания.
 Команды: /today, /summary, /top, /client <id или email>, /stop.
 Работает в фоновом потоке через long polling; сообщения отправляются из очереди,
@@ -32,6 +33,12 @@ if TYPE_CHECKING:
 log = logging.getLogger("radar.telegram")
 
 MAX_ALERTS_PER_RECALC = 5
+LOSS_GROWTH = 0.2          # рост реально собираемой потери, о котором стоит написать
+LOSS_GROWTH_MIN = 5000     # и не меньше € 50 — мелкие колебания не беспокоят
+# После смены набора данных целиком (демо-набор, возврат к снимку) рост не сигнал: просто новая точка отсчёта.
+NEW_BASELINE = ("startup", "reset", "preset:case", "preset:extended")
+REASON_TITLES = {"event": "событие биллинга", "settings": "изменили настройки модели", "simulate": "прошло время (перемотка)",
+                 "schedule": "плановый пересчёт: сроки приблизились", "snapshot": "загружен новый снимок данных"}
 MAX_TODAY = 8
 MSK = timezone(timedelta(hours=3))
 # План на день считается с теми же допущениями, что экран «Удержание» по умолчанию.
@@ -96,6 +103,7 @@ class TelegramBot:
         self.public_url = public_url
         self.digest_hour = digest_hour
         self.ai = ai_client
+        self._loss_base: float | None = None   # уровень, от которого считаем рост (последнее уведомление или минимум)
         self._digest_sent: str | None = None
         self._outbox: queue.Queue[tuple[int, str]] = queue.Queue(maxsize=500)
         self._stop = threading.Event()
@@ -118,8 +126,12 @@ class TelegramBot:
     # --- уведомления ---------------------------------------------------------
 
     def on_recalculated(self, before: EngineResult | None, after: EngineResult, reason: str) -> None:
-        if before is None or reason == "startup":
+        if before is None or reason in NEW_BASELINE:
+            self._loss_base = after.summary.expected_loss_paid
             return
+        growth = self.loss_growth(before, after, reason)
+        if growth:
+            self._broadcast(growth)
         old = {c.account.id: c.level for c in before.customers}
         escalated = [c for c in after.customers if c.level == "high" and old.get(c.account.id) != "high"]
         if not escalated:
@@ -161,6 +173,29 @@ class TelegramBot:
         except ai.AIError:
             log.info("Утренний план без ИИ-сводки", exc_info=True)
             return ""
+
+    def loss_growth(self, before: EngineResult, after: EngineResult, reason: str) -> str | None:
+        """Сообщение о резком росте реально собираемой потери; база сдвигается, чтобы один рост — одно сообщение."""
+        base = self._loss_base if self._loss_base is not None else before.summary.expected_loss_paid
+        now = after.summary.expected_loss_paid
+        if now <= base:
+            self._loss_base = now        # потеря снизилась — следующий рост считаем от нового минимума
+            return None
+        if now - base < max(base * LOSS_GROWTH, LOSS_GROWTH_MIN):
+            self._loss_base = base
+            return None
+        self._loss_base = now
+        was = {c.account.id: c.expected_loss_paid for c in before.customers}
+        grown = sorted(((c, c.expected_loss_paid - was.get(c.account.id, 0)) for c in after.customers),
+                       key=lambda x: -x[1])[:3]
+        lines = [f"<b>Потеря растёт: {_money(base)} → {_money(now)}</b> (+{(now - base) / base * 100:.0f} %)" if base else
+                 f"<b>Потеря растёт: {_money(now)}</b>",
+                 f"Причина пересчёта: {REASON_TITLES.get(reason, reason)}. Это реально собираемая сумма за {after.settings.horizonDays} дн."]
+        for c, delta in grown:
+            if delta > 0:
+                lines.append(f"• {html.escape(c.account.email)}: +{_money(delta)} — {html.escape(c.top_reason or '')}")
+        lines.append(f"\nКому звонить: {self.public_url}/app/retention")
+        return "\n".join(lines)
 
     def _broadcast(self, text: str) -> None:
         for chat_id in self._subscribers():
