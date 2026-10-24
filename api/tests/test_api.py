@@ -656,3 +656,22 @@ def test_event_inbox_batches_and_partial_recalc(client, auth):
     metrics = client.get("/metrics", headers={"Authorization": f"Bearer {METRICS_TOKEN}"}).text
     assert 'churn_radar_inbox_events{state="rejected"} 2.0' in metrics
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_quick_answers_without_ai(client, auth):
+    """Быстрые ответы Радара: работают без подключённой модели, числа — из того же расчёта, что панель."""
+    client.post("/api/v1/source/preset/extended", headers=auth)
+    summary = client.get("/api/v1/analytics/summary", headers=auth).json()
+    loss = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "loss"}).json()
+    assert loss["grounded"] and loss["provider"] == "Радар, без ИИ"
+    assert f"{summary['expectedLossPaid']:,.2f}".replace(",", " ").replace(".", ",") in loss["answer"]
+    today = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "today"}).json()
+    assert today["answer"].startswith("План на сегодня") and today["customers"]
+    card = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "customer", "customerId": 5}).json()
+    assert "Клиент #5" in card["answer"] and card["customers"][0]["id"] == 5
+    acc = client.post("/api/v1/ai/quick", headers=auth, json={"intent": "accuracy"}).json()
+    assert "заранее отметила" in acc["answer"]
+    assert client.post("/api/v1/ai/quick", headers=auth, json={"intent": "changes"}).status_code == 200
+    assert client.post("/api/v1/ai/quick", headers=auth, json={"intent": "customer"}).status_code == 422
+    assert client.post("/api/v1/ai/quick", headers=auth, json={"intent": "whatever"}).status_code == 422
+    client.post("/api/v1/source/preset/case", headers=auth)

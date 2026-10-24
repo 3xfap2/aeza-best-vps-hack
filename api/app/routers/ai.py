@@ -5,10 +5,12 @@ import threading
 
 import os
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app import ai, db
+from app import ai, db, quick
 from app.security import User, current_user, require
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ИИ-помощник"], dependencies=[Depends(current_user)])
@@ -128,6 +130,29 @@ def delete_config(request: Request, user: User = Depends(require("admin"))) -> R
     env = ai.config_from_env(dict(os.environ))
     _set_client(request, ai.AIClient(env) if env else None, "env")
     return Response(status_code=204)
+
+
+class QuickIn(BaseModel):
+    intent: Literal["loss", "today", "customer", "accuracy", "changes"] = Field(
+        description="loss — сколько под угрозой и почему; today — кому звонить сегодня; customer — почему клиент в риске "
+                    "и что делать (нужен customerId); accuracy — сверка модели с исходами; changes — что изменилось")
+    customerId: int | None = Field(None, ge=1)
+
+
+@router.post("/quick", response_model=AskOut,
+             summary="Быстрый ответ Радара без ИИ: частые вопросы — мгновенно, прямо из расчёта",
+             description="Работает и без подключённой модели. Числа берутся из того же расчёта, что панель, поэтому grounded всегда true.")
+def quick_answer(body: QuickIn, request: Request) -> AskOut:
+    radar = request.app.state.radar
+    if body.intent == "customer":
+        if body.customerId is None:
+            raise HTTPException(422, "Для intent=customer нужен customerId")
+        text, ids = quick.customer(radar, body.customerId)
+    else:
+        text, ids = getattr(quick, body.intent)(radar)
+    by_id = {a.id: a.email for a in radar.current.snapshot.accounts}
+    return AskOut(answer=text, grounded=True, unverified=[], provider="Радар, без ИИ",
+                  customers=[Mention(id=i, email=by_id[i]) for i in dict.fromkeys(ids) if i in by_id])
 
 
 @router.post("/ask", response_model=AskOut, summary="«Спросить Радар»: ответ по данным Радара с проверкой чисел",

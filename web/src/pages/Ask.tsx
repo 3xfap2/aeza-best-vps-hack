@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import AIConfigCard from '../AIConnect'
+import { linkify } from '../Assistant'
 import { ApiError, api, can, type AIStatus, type AskAnswer } from '../api'
 import { Icon } from '../ui'
 import { StatusLine, useUser } from './Shell'
@@ -13,17 +14,6 @@ const EXAMPLES = [
 ]
 
 interface Turn { question: string; answer?: AskAnswer; error?: string }
-
-/** «#62» в ответе → ссылка на карточку; email подставляет Радар, модель его не видела. */
-function linkify(text: string, customers: AskAnswer['customers']): ReactNode[] {
-  const byId = new Map(customers.map((c) => [String(c.id), c.email]))
-  return text.split(/(#\d+)/).map((part, i) => {
-    const id = part.startsWith('#') ? part.slice(1) : null
-    return id && byId.has(id)
-      ? <Link key={i} className="ask__link" to={`/app/customers/${id}`} title={byId.get(id)}>{part}</Link>
-      : <Fragment key={i}>{part}</Fragment>
-  })
-}
 
 export default function Ask() {
   const [status, setStatus] = useState<AIStatus | null>(null)

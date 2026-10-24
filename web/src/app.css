@@ -465,3 +465,77 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 .fb-list__head .ro-btn { margin-left: auto; }
 .fb-list p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ro .fb-list__empty { padding: 0 24px 20px; }
+
+/* Помощник «Спросить Радар»: плавающая кнопка и окно — мягкие формы, пузыри, подсказки-таблетки */
+.asst-fab { position: fixed; right: 24px; bottom: 24px; z-index: 60; width: 60px; height: 60px; border: 0; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; cursor: pointer;
+  background: radial-gradient(circle at 30% 25%, var(--marker) 0%, var(--marker-hover) 55%, #E0620B 100%);
+  box-shadow: 0 10px 24px rgb(224 98 11 / 0.35), inset 0 -3px 0 rgb(0 0 0 / 0.12);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.asst-fab svg { width: 28px; height: 28px; }
+.asst-fab:hover { transform: translateY(-2px) rotate(-6deg); box-shadow: 0 14px 28px rgb(224 98 11 / 0.42), inset 0 -3px 0 rgb(0 0 0 / 0.12); }
+.asst-fab:active { transform: scale(0.94); }
+.asst-fab:focus-visible { outline: 3px solid var(--action); outline-offset: 3px; }
+.asst-fab__dot { position: absolute; top: 4px; right: 4px; width: 13px; height: 13px; border-radius: 50%; background: #22C55E; border: 2.5px solid var(--paper); }
+.asst { position: fixed; right: 24px; bottom: 96px; z-index: 60; width: min(420px, calc(100vw - 32px)); height: min(640px, calc(100vh - 128px));
+  display: grid; grid-template-rows: auto 1fr auto auto; background: var(--card); border: 1px solid var(--line); border-radius: 24px;
+  box-shadow: 0 24px 60px rgb(61 53 47 / 0.18); overflow: hidden; transform-origin: bottom right;
+  animation: asst-in var(--dur-base) var(--ease-out); }
+@keyframes asst-in { from { opacity: 0; transform: translateY(12px) scale(0.96); } }
+.asst__head { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.ro .asst__head h2 { font: 600 17px/1.2 var(--font-sans); margin: 0; }
+.asst__avatar { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: #fff; font: 700 19px var(--font-sans);
+  background: radial-gradient(circle at 30% 25%, var(--marker), var(--marker-hover) 60%, #E0620B); transform: rotate(-4deg);
+  box-shadow: 0 6px 14px rgb(224 98 11 / 0.3); }
+.ro .asst__status { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.asst__led { width: 8px; height: 8px; border-radius: 50%; background: var(--marker); flex: none; }
+.asst__led.is-on { background: #22C55E; }
+.asst__close { width: 36px; height: 36px; border: 0; border-radius: 12px; background: transparent; color: var(--ink-2); font-size: 24px; cursor: pointer; }
+.asst__close:hover { background: var(--neutral-100); color: var(--ink); }
+.asst__log { overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 10px; background: var(--paper); overscroll-behavior: contain; }
+.asst__bubble { max-width: 88%; padding: 11px 14px; border-radius: 18px; font-size: 14.5px; line-height: 1.5; display: grid; gap: 8px;
+  animation: asst-pop var(--dur-base) var(--ease-out); }
+@keyframes asst-pop { from { opacity: 0; transform: translateY(6px); } }
+.asst__bubble--bot { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+.asst__bubble--me { align-self: flex-end; background: var(--action); color: var(--on-action); border-bottom-right-radius: 6px; }
+.asst__bubble--warn { background: var(--risk-mid-bg); border-color: transparent; }
+.asst__text { white-space: pre-line; overflow-wrap: anywhere; }
+.asst__link { color: var(--action); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.asst__tag { justify-self: start; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: var(--risk-low-bg); color: var(--risk-low); }
+.asst__tag.is-warn { background: var(--risk-high-bg); color: var(--risk-high); }
+.asst__copy { justify-self: start; border: 1px solid var(--line-strong); background: var(--card); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.asst__typing { display: flex; gap: 5px; padding: 14px 16px; }
+.asst__typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); animation: asst-dot 1s infinite var(--ease-out); }
+.asst__typing i:nth-child(2) { animation-delay: 0.15s; }
+.asst__typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes asst-dot { 50% { transform: translateY(-4px); background: var(--marker-hover); } }
+.asst__chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 4px; background: var(--paper); }
+.asst__chips button { border: 1px solid var(--line-strong); background: var(--card); color: var(--ink); border-radius: 999px; padding: 7px 13px;
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: border-color var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
+.asst__chips button:hover:not(:disabled) { border-color: var(--marker-hover); transform: translateY(-1px); }
+.asst__chips button:disabled { opacity: 0.5; cursor: default; }
+.asst__form { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px 16px 16px; background: var(--paper); }
+.asst__form input { font: inherit; font-size: 16px; min-height: 46px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--line-strong);
+  background: var(--card); color: var(--ink); min-width: 0; }
+.asst__form input:focus-visible { outline: none; border-color: var(--marker-hover); box-shadow: 0 0 0 3px rgb(247 144 9 / 0.18); }
+.asst__form button { width: 46px; height: 46px; border-radius: 50%; border: 0; color: #fff; cursor: pointer; display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 25%, var(--marker), var(--marker-hover) 60%, #E0620B); }
+.asst__form button:disabled { opacity: 0.45; cursor: default; }
+.asst__form svg { width: 20px; height: 20px; }
+@media (max-width: 860px) {
+  .asst-fab { bottom: 84px; right: 16px; width: 54px; height: 54px; }
+  .asst { right: 8px; left: 8px; width: auto; bottom: 146px; height: min(560px, calc(100vh - 170px)); }
+  .ro-app:has(.pv-dock) .asst-fab { bottom: 148px; }
+}
+@media (prefers-reduced-motion: reduce) { .asst, .asst__bubble, .asst__typing i { animation: none; } .asst-fab { transition: none; } }
+/* в оформлении Aéza — фирменный голубой и плоские формы брендбука */
+:root[data-theme="aeza"] .asst-fab, :root[data-theme="aeza"] .asst__avatar, :root[data-theme="aeza"] .asst__form button {
+  background: #000; box-shadow: none; transform: none; }
+:root[data-theme="aeza"] .asst-fab svg, :root[data-theme="aeza"] .asst__avatar, :root[data-theme="aeza"] .asst__form button { color: #4CC6F1; }
+:root[data-theme="aeza"] .asst { box-shadow: none; border-color: #000; border-radius: 16px; }
+:root[data-theme="aeza"] .asst__bubble--me { background: #000; }
+:root[data-theme="aeza"] .asst__chips button:hover:not(:disabled), :root[data-theme="aeza"] .asst__form input:focus-visible { border-color: #4CC6F1; box-shadow: none; }
+
+/* меню панели: на невысоком экране прокручивается само, «Выйти» всегда достижимо */
+.ro-side { height: 100dvh; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.ro-side > * { flex-shrink: 0; }

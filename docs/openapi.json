@@ -2293,6 +2293,53 @@
         ]
       }
     },
+    "/api/v1/ai/quick": {
+      "post": {
+        "tags": [
+          "ИИ-помощник"
+        ],
+        "summary": "Быстрый ответ Радара без ИИ: частые вопросы — мгновенно, прямо из расчёта",
+        "description": "Работает и без подключённой модели. Числа берутся из того же расчёта, что панель, поэтому grounded всегда true.",
+        "operationId": "quick_answer_api_v1_ai_quick_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/ai/ask": {
       "post": {
         "tags": [
@@ -5303,6 +5350,39 @@
           "improvedAfterContact"
         ],
         "title": "QueueSummary"
+      },
+      "QuickIn": {
+        "properties": {
+          "intent": {
+            "type": "string",
+            "enum": [
+              "loss",
+              "today",
+              "customer",
+              "accuracy",
+              "changes"
+            ],
+            "title": "Intent",
+            "description": "loss — сколько под угрозой и почему; today — кому звонить сегодня; customer — почему клиент в риске и что делать (нужен customerId); accuracy — сверка модели с исходами; changes — что изменилось"
+          },
+          "customerId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customerid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent"
+        ],
+        "title": "QuickIn"
       },
       "RenewalOut": {
         "properties": {

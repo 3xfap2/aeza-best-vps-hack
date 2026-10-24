@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api, ROLE_TITLE, type SnapshotInfo, type User } from '../api'
 import { LiveProvider, useLive, useLiveData } from '../live'
 import CurrencySwitch from '../CurrencySwitch'
+import Assistant from '../Assistant'
 import FeedbackButton from '../Feedback'
 import { currentFx, isRub } from '../currency'
 import ThemeSwitch from '../ThemeSwitch'
@@ -90,6 +91,7 @@ export default function Shell() {
             <Icon name="more" /><span>Ещё</span>
           </button>
         </nav>
+        <Assistant />
         {more && (
           <div className="more" id="more-menu">
             {MORE.map((n) => <NavLink key={n.to} to={n.to}><Icon name={n.icon} />{n.label}</NavLink>)}
