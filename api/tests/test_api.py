@@ -561,3 +561,32 @@ def test_login_with_aeza_account(client, auth, monkeypatch):
         raise aeza_auth.AezaAuthError("Ключ API Aéza не подошёл")
     monkeypatch.setattr(aeza_auth, "fetch_profile", bad)
     assert client.post("/api/v1/auth/aeza", json={"apiKey": "wrong-key-1"}).status_code == 401
+
+
+def test_demo_event_stream(client, auth):
+    import random
+    from app.demo_stream import pick_event
+    client.post("/api/v1/source/preset/extended", headers=auth)
+    radar = client.app.state.radar
+    rng = random.Random(7)
+    kinds = {pick_event(radar.current.result, rng)["type"] for _ in range(200)}
+    assert {"topup", "autoprolong", "signal"} <= kinds                        # и «спасают», и «портят»
+
+    stream = client.app.state.demo_stream
+    before = radar.current.version
+    for _ in range(5):                                                       # тот же путь, что POST /source/events
+        stream.tick()
+    assert radar.current.version >= before + 5 and stream.sent == 5
+    log = client.get("/api/v1/source/activity?limit=5", headers=auth).json()
+    assert all(a["author"] == "демо-поток" for a in log)
+
+    client.post("/api/v1/users", headers=auth, json={"login": "v-demo", "displayName": "v", "password": "pass-2026-long", "role": "viewer"})
+    viewer = {"Authorization": "Bearer " + client.post("/api/v1/auth/login", json={"login": "v-demo", "password": "pass-2026-long"}).json()["token"]}
+    assert client.put("/api/v1/source/demo-stream", headers=viewer, json={"running": True}).status_code == 403
+    r = client.put("/api/v1/source/demo-stream", headers=auth, json={"running": True, "intervalSec": 3, "minutes": 1})
+    assert r.status_code == 200 and r.json()["running"] and r.json()["stopsAt"]
+    r = client.put("/api/v1/source/demo-stream", headers=auth, json={"running": False})
+    assert r.json()["running"] is False
+    assert client.get("/api/v1/source/snapshot", headers=auth).json()["changesSinceLoad"] >= 5
+    client.post("/api/v1/source/reset", headers=auth)
+    client.post("/api/v1/source/preset/case", headers=auth)

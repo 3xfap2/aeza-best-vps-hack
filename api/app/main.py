@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.config import load_config
-from app import ai
+from app import ai, demo_stream
 from app.routers.source import snapshot_origin
 from app.routers import ai as ai_router
 from app.routers import analytics, auth, customers, fx, integrations, metrics, model, oidc, retention, source, stream, users
@@ -97,6 +97,9 @@ async def lifespan(app: FastAPI):
         ai_cfg = ai.config_from_panel(panel["value"], dict(os.environ))
     app.state.ai = ai.AIClient(ai_cfg) if ai_cfg else None
     app.state.ai_source = "panel" if panel else "env" if ai_cfg else "off"
+    app.state.demo_stream = demo_stream.DemoStream(radar, source.demo_sender(app.state))
+    if os.environ.get("DEMO_STREAM", "").lower() in ("on", "1", "true"):   # стенд «живёт» сам
+        app.state.demo_stream.start(int(os.environ.get("DEMO_STREAM_INTERVAL", "10")), 0)
     if ai_cfg:
         log.info("ИИ-помощник: %s, модель %s", app.state.ai.title, ai_cfg.model)
     app.state.metrics_registry = metrics.build_registry(radar)
@@ -111,6 +114,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         scheduler.cancel()
+        app.state.demo_stream.stop()
         if bot:
             bot.stop()
         pool.close()

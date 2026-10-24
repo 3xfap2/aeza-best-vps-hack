@@ -105,6 +105,7 @@ export default function DataPage() {
           </ul>
         </section>
 
+        <DemoStreamCard admin={admin} />
         <AIConfigCard admin={admin} />
 
         <section className="ro-card data__log" aria-labelledby="log-t">
@@ -122,6 +123,53 @@ export default function DataPage() {
       </div>
       {toast.node}
     </>
+  )
+}
+
+interface DemoStream { running: boolean; intervalSec: number; eventsSent: number; lastEvent: string | null; stopsAt: string | null }
+
+/** Живой поток событий (демо): Радар сам присылает события биллинга — стенд меняется без нажатий. */
+function DemoStreamCard({ admin }: { admin: boolean }) {
+  const s = useLiveData(() => api<DemoStream>('/api/v1/source/demo-stream'))
+  const [interval, setIntervalSec] = useState(8)
+  const [minutes, setMinutes] = useState(30)
+  const [busy, setBusy] = useState(false)
+  const [state, setState] = useState<DemoStream | null>(null)
+  const cur = state && (!s.data || state.eventsSent >= s.data.eventsSent) ? state : s.data
+  async function toggle(running: boolean) {
+    setBusy(true)
+    try { setState(await api<DemoStream>('/api/v1/source/demo-stream', { method: 'PUT', json: { running, intervalSec: interval, minutes } })) }
+    finally { setBusy(false) }
+  }
+  const until = cur?.stopsAt ? new Date(cur.stopsAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : null
+  return (
+    <section className="ro-card" aria-labelledby="demo-t">
+      <div className="ro-cardhead"><h2 id="demo-t">Живой поток событий</h2>
+        <span className={`work-tag${cur?.running ? ' work-tag--renewed' : ''}`}>{cur?.running ? 'идёт' : 'выключен'}</span></div>
+      <p className="ro-small">Демо: Радар сам присылает правдоподобные события биллинга — пополнения, оплаты, автопродление,
+        сигналы мониторинга и поддержки — тем же путём, что настоящий биллинг (<code>POST /api/v1/source/events</code>).
+        Суммы и уровни меняются на глазах, бот присылает уведомления. В журнале — автор «демо-поток».</p>
+      {cur?.running && (
+        <p className="ro-small" role="status">Отправлено событий: <b>{cur.eventsSent}</b>{until ? ` · остановится в ${until}` : ' · без ограничения'}
+          {cur.lastEvent && <><br />Последнее: {cur.lastEvent}</>}</p>
+      )}
+      {admin ? (
+        <div className="ev form">
+          <label className="field"><span>Событие раз в</span>
+            <select value={interval} onChange={(e) => setIntervalSec(Number(e.target.value))} disabled={cur?.running}>
+              {[5, 8, 15, 30].map((v) => <option key={v} value={v}>{v} секунд</option>)}</select></label>
+          <label className="field"><span>Остановить через</span>
+            <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} disabled={cur?.running}>
+              {[[15, '15 минут'], [30, '30 минут'], [60, 'час'], [0, 'не останавливать']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
+          <div className="btns">
+            {cur?.running
+              ? <button className="ro-btn ro-btn--sm ro-btn--quiet" type="button" disabled={busy} onClick={() => toggle(false)}>Остановить</button>
+              : <button className="ro-btn ro-btn--sm" type="button" disabled={busy} onClick={() => toggle(true)}>Запустить поток</button>}
+          </div>
+        </div>
+      ) : <p className="ro-small">Запускает администратор.</p>}
+      <p className="ro-small">Вернуть данные как было — «Перемотка времени» → «Вернуть к дате снимка».</p>
+    </section>
   )
 }
 

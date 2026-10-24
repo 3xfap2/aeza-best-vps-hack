@@ -1572,6 +1572,77 @@
         ]
       }
     },
+    "/api/v1/source/demo-stream": {
+      "get": {
+        "tags": [
+          "Данные источника"
+        ],
+        "summary": "Живой поток событий (демо): идёт ли и сколько отправлено",
+        "operationId": "demo_stream_status_api_v1_source_demo_stream_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoStreamOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Данные источника"
+        ],
+        "summary": "Включить или выключить живой поток событий (демо, администратор)",
+        "description": "Радар сам присылает правдоподобные события биллинга тем же путём, что POST /source/events: пополнения, оплаты, автопродление, сигналы мониторинга и поддержки. В журнале — автор «демо-поток».",
+        "operationId": "demo_stream_set_api_v1_source_demo_stream_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoStreamIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoStreamOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/source/simulate": {
       "post": {
         "tags": [
@@ -3249,6 +3320,83 @@
           "action"
         ],
         "title": "DeferOut"
+      },
+      "DemoStreamIn": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "intervalSec": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 3.0,
+            "title": "Intervalsec",
+            "description": "Раз в сколько секунд событие",
+            "default": 8
+          },
+          "minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Minutes",
+            "description": "Через сколько минут остановиться; 0 — без ограничения",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "required": [
+          "running"
+        ],
+        "title": "DemoStreamIn"
+      },
+      "DemoStreamOut": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "intervalSec": {
+            "type": "integer",
+            "title": "Intervalsec"
+          },
+          "eventsSent": {
+            "type": "integer",
+            "title": "Eventssent"
+          },
+          "lastEvent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastevent"
+          },
+          "stopsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopsat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "running",
+          "intervalSec",
+          "eventsSent",
+          "lastEvent",
+          "stopsAt"
+        ],
+        "title": "DemoStreamOut"
       },
       "EffectItem": {
         "properties": {

@@ -84,12 +84,19 @@ SIGNAL_TARGETS = {"supportTickets30d": "account", "loadDrop": "service", "downgr
 def set_signal(conn: Connection, target_id: int, name: str, value: float | bool) -> str:
     """Сигнал из другой системы: поддержка, мониторинг, смена тарифа."""
     table = "accounts" if SIGNAL_TARGETS.get(name) == "account" else "services"
-    row = conn.execute(f"SELECT id FROM {table} WHERE id = %s FOR UPDATE", (target_id,)).fetchone()
+    row = conn.execute(f"SELECT * FROM {table} WHERE id = %s FOR UPDATE", (target_id,)).fetchone()
     if not row:
         raise SimulationError(f"{'Аккаунт' if table == 'accounts' else 'Услуга'} {target_id} не найден")
     conn.execute(f"UPDATE {table} SET signals = signals || jsonb_build_object(%s::text, %s::jsonb) WHERE id = %s",
                  (name, Jsonb(value), target_id))
-    return f"{'аккаунт' if table == 'accounts' else 'услуга'} #{target_id}: сигнал {name} = {value}"
+    who = row["email"] if table == "accounts" else row["name"]
+    if name == "loadDrop":
+        return f"{who}: мониторинг — нагрузка упала на {float(value):.0%}".replace("%", " %")
+    if name == "supportTickets30d":
+        return f"{who}: поддержка — обращений за 30 дней: {int(value)}"
+    if name == "downgraded":
+        return f"{who}: тариф понижен" if value else f"{who}: тариф не понижался"
+    return f"{who}: сигнал {name} = {value}"
 
 
 def topup(conn: Connection, account_id: int, amount_cents: int) -> str:

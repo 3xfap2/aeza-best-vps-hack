@@ -164,6 +164,7 @@ class WithdrawableBalance(Feature):
 | GET | `/api/v1/model/settings/history` | журнал изменений настроек |
 | POST | `/api/v1/source/events` | событие биллинга |
 | POST | `/api/v1/source/simulate` | перемотка времени (правила жизненного цикла услуг) |
+| GET, PUT | `/api/v1/source/demo-stream` | живой поток событий (демо): Радар сам присылает события биллинга раз в N секунд тем же путём, что `/source/events` (администратор); `DEMO_STREAM=on` — включить при запуске |
 | POST | `/api/v1/source/reset` | вернуть данные к последнему снимку |
 | POST | `/api/v1/source/preset/{case\|extended}` | загрузить готовый набор |
 | GET | `/api/v1/customers/{id}/what-if` | «что будет, если»: пополнит счёт, включит автопродление, оплатит, включит сервер — score и сохранённые € |

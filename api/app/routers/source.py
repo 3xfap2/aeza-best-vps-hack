@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Literal, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from app import db, simulator
+from app import db, demo_stream, simulator
 from app.scoring.settings import AsOf, diff_settings
 from app.security import User, current_user, require
 from app.source import SnapshotIn
@@ -166,18 +166,74 @@ def load_preset(name: Literal["case", "extended"], request: Request, user: User 
              summary="Событие из системы-источника (пополнение, оплата, автопродление, смена статуса)",
              responses={404: {"description": "Аккаунт или услуга не найдены"}, 409: {"description": "Событие невозможно"}})
 def post_event(request: Request, event: SourceEvent = Body(...), user: User = Depends(require("admin"))) -> EventResult:
-    radar = request.app.state.radar
+    try:
+        summary, version = apply_event(request.app.state, event, user.login, "event")
+    except simulator.SimulationError as e:
+        code = 404 if "не найден" in str(e) else 409
+        raise HTTPException(code, str(e)) from e
+    return EventResult(summary=summary, version=version)
+
+
+def apply_event(state, event: Any, author: str, reason: str) -> tuple[str, int]:
+    """Событие биллинга: запись в источник, журнал, пересчёт. Общий путь для API и демо-потока."""
+    radar = state.radar
     with radar.write_lock:
         at = radar.current.result.as_of
-        try:
-            with request.app.state.pool.connection() as conn:
-                summary = _apply_event(conn, event, at)
-                db.log_activity(conn, "event", summary, user.login, event.model_dump())
-        except simulator.SimulationError as e:
-            code = 404 if "не найден" in str(e) else 409
-            raise HTTPException(code, str(e)) from e
-        cur = radar.recalculate("event")
-    return EventResult(summary=summary, version=cur.version)
+        with state.pool.connection() as conn:
+            summary = _apply_event(conn, event, at)
+            db.log_activity(conn, "event", summary, author, event.model_dump())
+        cur = radar.recalculate(reason)
+    return summary, cur.version
+
+
+_event_adapter = TypeAdapter(SourceEvent)
+
+
+def demo_sender(state):
+    """Для демо-потока: событие-словарь → тот же путь, что POST /source/events."""
+    return lambda event: apply_event(state, _event_adapter.validate_python(event), demo_stream.AUTHOR, "demo")[0]
+
+
+class DemoStreamIn(BaseModel):
+    running: bool
+    intervalSec: int = Field(8, ge=3, le=120, description="Раз в сколько секунд событие")
+    minutes: int = Field(30, ge=0, le=1440, description="Через сколько минут остановиться; 0 — без ограничения")
+
+
+class DemoStreamOut(BaseModel):
+    running: bool
+    intervalSec: int
+    eventsSent: int
+    lastEvent: str | None
+    stopsAt: datetime | None
+
+
+def _stream_out(stream: "demo_stream.DemoStream") -> DemoStreamOut:
+    stops = datetime.fromtimestamp(stream.stops_at, timezone.utc) if stream.running and stream.stops_at else None
+    return DemoStreamOut(running=stream.running, intervalSec=stream.interval, eventsSent=stream.sent,
+                         lastEvent=stream.last, stopsAt=stops)
+
+
+@router.get("/demo-stream", response_model=DemoStreamOut, summary="Живой поток событий (демо): идёт ли и сколько отправлено")
+def demo_stream_status(request: Request, _: User = Depends(current_user)) -> DemoStreamOut:
+    return _stream_out(request.app.state.demo_stream)
+
+
+@router.put("/demo-stream", response_model=DemoStreamOut,
+            summary="Включить или выключить живой поток событий (демо, администратор)",
+            description="Радар сам присылает правдоподобные события биллинга тем же путём, что POST /source/events: "
+                        "пополнения, оплаты, автопродление, сигналы мониторинга и поддержки. В журнале — автор «демо-поток».")
+def demo_stream_set(body: DemoStreamIn, request: Request, user: User = Depends(require("admin"))) -> DemoStreamOut:
+    stream = request.app.state.demo_stream
+    with request.app.state.pool.connection() as conn:
+        if body.running:
+            stream.start(body.intervalSec, body.minutes)
+            db.log_activity(conn, "settings", f"Демо-поток событий включён: раз в {body.intervalSec} с"
+                            + (f", на {body.minutes} мин" if body.minutes else ", без ограничения"), user.login)
+        elif stream.running:
+            stream.stop()
+            db.log_activity(conn, "settings", f"Демо-поток событий выключен, отправлено: {stream.sent}", user.login)
+    return _stream_out(stream)
 
 
 def _apply_event(conn, event: Any, at: datetime) -> str:

@@ -39,7 +39,8 @@ LOSS_GROWTH_MIN = 5000     # и не меньше € 50 — мелкие кол
 # После смены набора данных целиком (демо-набор, возврат к снимку) рост не сигнал: просто новая точка отсчёта.
 NEW_BASELINE = ("startup", "reset", "preset:case", "preset:extended")
 REASON_TITLES = {"event": "событие биллинга", "settings": "изменили настройки модели", "simulate": "прошло время (перемотка)",
-                 "schedule": "плановый пересчёт: сроки приблизились", "snapshot": "загружен новый снимок данных"}
+                 "schedule": "плановый пересчёт: сроки приблизились", "snapshot": "загружен новый снимок данных",
+                 "demo": "событие демо-потока"}
 MAX_TODAY = 8
 MSK = timezone(timedelta(hours=3))
 # План на день считается с теми же допущениями, что экран «Удержание» по умолчанию.
@@ -107,6 +108,7 @@ class TelegramBot:
         self.digest_hour = digest_hour
         self.ai = ai_client
         self._loss_base: float | None = None   # уровень, от которого считаем рост (последнее уведомление или минимум)
+        self._last_demo_alert = 0.0
         self._digest_sent: str | None = None
         self._outbox: queue.Queue[tuple[int, str]] = queue.Queue(maxsize=500)
         self._stop = threading.Event()
@@ -132,9 +134,15 @@ class TelegramBot:
         if before is None or reason in NEW_BASELINE:
             self._loss_base = after.summary.expected_loss_paid
             return
+        # демо-поток шлёт событие раз в несколько секунд — уведомляем не чаще раза в 5 минут
+        if reason == "demo" and time.time() - self._last_demo_alert < 300:
+            self.loss_growth(before, after, reason)   # только сдвинуть базу роста
+            return
         growth = self.loss_growth(before, after, reason)
         if growth:
             self._broadcast(growth)
+            if reason == "demo":
+                self._last_demo_alert = time.time()
         old = {c.account.id: c.level for c in before.customers}
         escalated = [c for c in after.customers if c.level == "high" and old.get(c.account.id) != "high"]
         if not escalated:
@@ -147,6 +155,8 @@ class TelegramBot:
         if len(escalated) > MAX_ALERTS_PER_RECALC:
             lines.append(f"\nи ещё {len(escalated) - MAX_ALERTS_PER_RECALC} — в панели: {self.public_url}/app/customers")
         self._broadcast("\n".join(lines))
+        if reason == "demo":
+            self._last_demo_alert = time.time()
 
     def _digest_loop(self) -> None:
         """Раз в день в digest_hour по Москве — план на день всем подписчикам."""
