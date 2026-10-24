@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app import db
+from app.http import created
 from app.security import User, current_user, hash_password, require
 from app.views import eur
 
@@ -64,12 +65,13 @@ def list_members(request: Request) -> list[MemberOut]:
 
 @router.post("", response_model=MemberOut, status_code=201, summary="Добавить сотрудника (только администратор)",
              responses={409: {"description": "Такой логин уже есть"}})
-def add_member(body: MemberIn, request: Request, user: User = Depends(require("admin"))) -> MemberOut:
+def add_member(body: MemberIn, request: Request, response: Response, user: User = Depends(require("admin"))) -> MemberOut:
     with request.app.state.pool.connection() as conn:
         row = db.create_user(conn, body.login, hash_password(body.password), body.displayName, body.role)
         if row is None:
             raise HTTPException(409, f"Логин «{body.login}» уже занят")
         db.log_activity(conn, "team", f"Добавлен сотрудник {body.login} ({body.role})", user.login)
+        created(response, f"/api/v1/users/{row['id']}")
         return next(m for m in _members(conn) if m.id == row["id"])
 
 

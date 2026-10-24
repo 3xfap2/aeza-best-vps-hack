@@ -755,3 +755,31 @@ def test_webhook_sink_signs_body(monkeypatch):
     expected = "sha256=" + hmac.new(b"s3cret", sent["body"], hashlib.sha256).hexdigest()
     assert sent["headers"]["X-Radar-Signature"] == expected and sent["headers"]["X-Radar-Event"] == "feedback.created"
     assert integrations.build_sinks({}) == [] and len(integrations.build_sinks({"INTEGRATION_WEBHOOK_URL": "https://x.example"})) == 1
+
+
+def test_rest_conventions(client, auth):
+    """problem+json, ETag/304, If-Match/412, 201 + Location, Link для страниц."""
+    r = client.get("/api/v1/customers/999999", headers=auth)
+    assert r.status_code == 404 and r.headers["content-type"].startswith("application/problem+json")
+    assert {"type", "title", "status", "detail", "instance"} <= r.json().keys() and r.json()["status"] == 404
+    r = client.get("/api/v1/customers?pageSize=0", headers=auth)
+    assert r.status_code == 422 and r.json()["errors"][0]["loc"] == ["query", "pageSize"] and "pageSize" in r.json()["detail"]
+
+    r = client.get("/api/v1/analytics/summary", headers=auth)
+    tag = r.headers["ETag"]
+    again = client.get("/api/v1/analytics/summary", headers={**auth, "If-None-Match": tag})
+    assert again.status_code == 304 and again.content == b"" and again.headers["ETag"] == tag
+
+    s = client.get("/api/v1/model/settings", headers=auth)
+    etag = s.headers["ETag"]
+    stale = client.patch("/api/v1/model/settings", headers={**auth, "If-Match": '"settings-0"'}, json={"horizonDays": 30})
+    assert stale.status_code == 412 and stale.headers["content-type"].startswith("application/problem+json")
+    ok = client.patch("/api/v1/model/settings", headers={**auth, "If-Match": etag}, json={"horizonDays": 30})
+    assert ok.status_code == 200 and ok.headers["ETag"]
+
+    r = client.post("/api/v1/feedback", headers=auth, json={"kind": "other", "text": "Проверка Location"})
+    assert r.status_code == 201 and r.headers["Location"] == f"/api/v1/feedback/{r.json()['id']}"
+
+    r = client.get("/api/v1/customers?pageSize=3&page=2", headers=auth)
+    link = r.headers["Link"]
+    assert 'rel="first"' in link and 'rel="prev"' in link and 'rel="next"' in link and 'page=3' in link

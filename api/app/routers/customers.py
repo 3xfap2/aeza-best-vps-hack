@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import ai, db, simulator
+from app.http import page_links
 from app.insights import message, what_if
 from app.security import User, current_user, require
 from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
@@ -80,6 +81,7 @@ def export_csv(
 @router.get("", response_model=CustomerPage, summary="Список клиентов с оценками риска; фильтрация и сортировка рейтинга")
 def list_customers(
     request: Request,
+    response: Response,
     sort: SortField = Query("score", description="Поле сортировки"),
     order: Literal["asc", "desc"] = Query("desc", description="Направление"),
     level: list[Level] | None = Query(None, description="Фильтр по уровням, можно несколько"),
@@ -96,6 +98,9 @@ def list_customers(
     items = [list_item(c) for c in ordered[start:start + pageSize]]
     for item in items:
         item.lastAction = last.get(item.id, {}).get("kind")
+    pages = page_links(request, page, pageSize, len(ordered))
+    if pages:
+        response.headers["Link"] = pages
     return CustomerPage(
         items=items,
         total=len(ordered), page=page, pageSize=pageSize, sort=sort, order=order,

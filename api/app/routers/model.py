@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, ValidationError
 
 from app import backtest, db, sensitivity
+from app.http import check_if_match
 from app.scoring.engine import evaluate
 from app.scoring.features import FEATURES
 from app.scoring.settings import ModelSettings, diff_settings, merge_patch
@@ -176,16 +177,25 @@ def _apply_patch(current: ModelSettings, patch: dict[str, Any]) -> ModelSettings
 
 
 @router.get("/settings", response_model=SettingsOut, summary="Действующие настройки и коэффициенты модели")
-def get_settings(request: Request, _: User = Depends(current_user)) -> SettingsOut:
+def get_settings(request: Request, response: Response, _: User = Depends(current_user)) -> SettingsOut:
     cur = request.app.state.radar.current
+    response.headers["ETag"] = settings_etag(cur.settings_version)
     return _settings_out(cur.result.settings, cur.settings_version, cur.result.as_of)
+
+
+def settings_etag(version: int) -> str:
+    return f'"settings-{version}"'
 
 
 @router.patch("/settings", response_model=SettingsOut,
               summary="Изменение настроек модели с автоматическим пересчётом результатов",
-              description="Тело — JSON Merge Patch (RFC 7386): передавайте только то, что меняется.")
+              description="Тело — JSON Merge Patch (RFC 7386): передавайте только то, что меняется. "
+                          "Защита от чужой правки: заголовок If-Match с ETag из GET /settings (не совпал — 412) "
+                          "или параметр expectedVersion (не совпал — 409).",
+              responses={409: {"description": "expectedVersion устарел"}, 412: {"description": "If-Match устарел"}})
 def patch_settings(
     request: Request,
+    response: Response,
     patch: dict[str, Any] = Body(..., examples=[PATCH_EXAMPLE]),
     expectedVersion: int | None = Query(None, description="Версия, с которой начата правка; если настройки уже изменили — 409"),
     user: User = Depends(require("marketer")),
@@ -193,6 +203,7 @@ def patch_settings(
     radar = request.app.state.radar
     with radar.write_lock:
         current, version = radar.settings()
+        check_if_match(request, settings_etag(version))
         if expectedVersion is not None and expectedVersion != version:
             raise HTTPException(409, f"Настройки уже изменили (версия {version}, у вас {expectedVersion}). Обновите страницу и повторите.")
         new = _apply_patch(current, patch)
@@ -202,6 +213,7 @@ def patch_settings(
                 db.save_settings(conn, new, changes, user.login)
                 db.log_activity(conn, "settings", "; ".join(changes), user.login)
         cur = radar.recalculate("settings") if changes else radar.current
+    response.headers["ETag"] = settings_etag(cur.settings_version)
     return _settings_out(cur.result.settings, cur.settings_version, cur.result.as_of)
 
 

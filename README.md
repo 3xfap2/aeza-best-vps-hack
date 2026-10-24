@@ -174,6 +174,20 @@ class WithdrawableBalance(Feature):
 
 Все эндпоинты с данными требуют входа: cookie сессии (панель) или `Authorization: Bearer <token>` (клиенты API). Полная спецификация — `docs/openapi.json` и Swagger на `/api/v1/docs`.
 
+**Соглашения** (RFC 9110, 9457, 8288; код — [api/app/http.py](api/app/http.py)):
+
+| Что | Как |
+|---|---|
+| Версия | в пути: `/api/v1/…`; поля JSON — camelCase, деньги в ответах — евро, во входном снимке — евроценты, как в источнике |
+| Ошибки | `application/problem+json`: `type`, `title`, `status`, `detail` (по-русски, для человека), `instance`; ошибки проверки — плюс `errors: [{loc, msg, type}]` |
+| Чтение без лишнего трафика | у каждого GET есть `ETag`; повтор с `If-None-Match` — `304` без тела |
+| Чужая правка настроек | `ETag` у `GET /model/settings` → `If-Match` в `PATCH` (не совпал — `412`); для простых клиентов — `?expectedVersion=` (`409`) |
+| Создание | `201 Created` и `Location` с адресом нового ресурса |
+| Страницы | `page` и `pageSize` (до 200), в теле `total` и `version` расчёта, в заголовке `Link` — `first`, `prev`, `next`, `last` |
+| Частичное изменение | `PATCH` — JSON Merge Patch (RFC 7386): только изменённые поля |
+| Повторная доставка | события пачками через `POST /api/v1/ingest/events` с `eventId`: повтор отбрасывается |
+| Доступ | роль проверяет сервер: `401` — не вошли, `403` — не хватает прав |
+
 | Метод | Путь | Назначение |
 |---|---|---|
 | POST | `/api/v1/auth/login` | вход по логину и паролю |

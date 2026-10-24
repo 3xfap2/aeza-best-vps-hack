@@ -16,7 +16,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 
-from app import db
+from app import db, http
 from app.config import load_config
 from app import ai, demo_stream
 from app.inbox import Inbox
@@ -140,6 +140,8 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+http.install(app)   # ошибки problem+json, ETag/304 — см. app/http.py
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
           users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):

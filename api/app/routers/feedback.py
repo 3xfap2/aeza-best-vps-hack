@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import db
+from app.http import created
 from app.security import User, current_user, require
 
 router = APIRouter(prefix="/api/v1/feedback", tags=["Отзывы о Радаре"])
@@ -37,11 +38,12 @@ class FeedbackStatus(BaseModel):
 
 @router.post("", status_code=201, response_model=FeedbackItem,
              summary="Отправить отзыв о Радаре: идея, проблема или другое (любая роль)")
-def send(body: FeedbackIn, request: Request, user: User = Depends(current_user)) -> FeedbackItem:
+def send(body: FeedbackIn, request: Request, response: Response, user: User = Depends(current_user)) -> FeedbackItem:
     text = body.text.strip()
     with request.app.state.pool.connection() as conn:
         item = db.add_feedback(conn, user.login, user.display_name, body.kind, text, body.page)
     request.app.state.radar.integrations.publish("feedback.created", {**item, "kindTitle": KIND_TITLES[body.kind]})
+    created(response, f"/api/v1/feedback/{item['id']}")
     return FeedbackItem(**item)
 
 

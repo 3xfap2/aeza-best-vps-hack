@@ -1189,7 +1189,7 @@
           "Модель"
         ],
         "summary": "Изменение настроек модели с автоматическим пересчётом результатов",
-        "description": "Тело — JSON Merge Patch (RFC 7386): передавайте только то, что меняется.",
+        "description": "Тело — JSON Merge Patch (RFC 7386): передавайте только то, что меняется. Защита от чужой правки: заголовок If-Match с ETag из GET /settings (не совпал — 412) или параметр expectedVersion (не совпал — 409).",
         "operationId": "patch_settings_api_v1_model_settings_patch",
         "parameters": [
           {
@@ -1246,6 +1246,12 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "expectedVersion устарел"
+          },
+          "412": {
+            "description": "If-Match устарел"
           },
           "422": {
             "description": "Validation Error",
