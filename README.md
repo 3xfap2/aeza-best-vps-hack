@@ -27,7 +27,6 @@ docker compose up -d --build
 | Prometheus | http://localhost:9090/targets | цель `churn-radar` в состоянии UP; правила алертов — /alerts |
 | Grafana | http://localhost:3000 | дашборд «Радар оттока» открыт на просмотр; админ — `admin` / `radar-grafana-demo` |
 | Вход через SSO (Dex) | кнопка «Войти через SSO» на странице входа | `marketing@radar.example` (маркетолог) или `viewer@radar.example` (наблюдатель), пароль `radar-sso-2026` |
-| Grafana | http://localhost:3000 | дашборд открыт на просмотр |
 
 Без файла `.env` используются демо-значения выше. Чтобы задать свои пароли и токены, скопируйте `.env.example` в `.env` и поменяйте значения.
 
