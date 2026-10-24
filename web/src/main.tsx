@@ -6,6 +6,9 @@ import './design/ottok.js'
 import './design/ottok.css'
 import './app.css'
 import App from './App'
+import { applyTheme, currentTheme } from './theme'
+
+applyTheme(currentTheme())   // до первой отрисовки — без мигания цветов
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

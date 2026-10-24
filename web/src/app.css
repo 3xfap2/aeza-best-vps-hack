@@ -20,6 +20,46 @@ body { margin: 0; background: var(--paper); }
 .side__foot > a[aria-current="page"], .more > a[aria-current="page"] { background: var(--kraft-100); color: var(--ink); }
 .side__user, .more__user { display: grid; gap: 2px; padding: 10px 12px 6px; font-size: 14px; overflow-wrap: anywhere; }
 .tabbar, .more { display: none; }
+.theme-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 6px 12px 2px; padding: 3px; border-radius: var(--radius-button);
+  background: var(--neutral-100); }
+.theme-switch button { font: inherit; font-size: 13px; min-height: 32px; border: 0; border-radius: calc(var(--radius-button) - 3px);
+  background: none; color: var(--ink-2); cursor: pointer; }
+.theme-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 500; }
+
+/* --- тема Aéza: фирменные цвета aeza.net (бирюзовый #16B9CF, светлый фон, Inter) --- */
+:root[data-theme="aeza"] {
+  --paper: #F4F4F4;
+  --kraft-100: #E8F8FA;
+  --kraft-200: #D3F1F5;
+  --neutral-100: #ECECEC;
+  --card: #FFFFFF;
+  --ink: #1F1F1F;
+  --ink-2: #585858;
+  --ink-3: #7E7E7E;
+  --line: #E3E3E3;
+  --line-strong: #C9C9C9;
+  --line-draft: #CFE3E6;
+  --marker: #16B9CF;
+  --marker-hover: #12A3B7;
+  --marker-300: #5FCFDE;
+  --marker-200: #85D7E2;
+  --marker-100: #DDFBFF;
+  /* кнопки и ссылки — бирюзовый темнее фирменного: белый текст на #16B9CF не читается (контраст 2,3:1) */
+  --action: #0A7F8F;
+  --action-hover: #086C79;
+  --action-deep: #055660;
+  --on-action: #FFFFFF;
+  --risk-none: #585858;
+  --risk-none-bg: #ECECEC;
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-2: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --shadow-3: 0 2px 4px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.08);
+  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-button: 12px;
+  --radius-card: 16px;
+}
+:root[data-theme="aeza"] .ro h1, :root[data-theme="aeza"] .ro-cardhead h2 { letter-spacing: -0.02em; font-weight: 600; }
 .ro-side nav a:focus-visible, .side__foot > a:focus-visible, .side__foot > button:focus-visible { outline-offset: 0; border-radius: var(--radius-button); }
 .ro-live-dot.is-off { background: var(--ink-3); animation: none; }
 .ro-status { flex-wrap: wrap; row-gap: 4px; }

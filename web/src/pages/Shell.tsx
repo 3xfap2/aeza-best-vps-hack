@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api, ROLE_TITLE, type SnapshotInfo, type User } from '../api'
 import { LiveProvider, useLive, useLiveData } from '../live'
+import { applyTheme, currentTheme, THEMES, type Theme } from '../theme'
 import { Icon, Wordmark } from '../ui'
 
 const NAV = [
@@ -19,6 +20,19 @@ const MORE = [...NAV.filter((n) => !TABS.includes(n)), { to: '/app/guide', end: 
 
 const UserContext = createContext<User | null>(null)
 const SourceContext = createContext<SnapshotInfo | null>(null)
+
+/** Переключатель оформления: наш дизайн или фирменные цвета Aéza. */
+function ThemeSwitch() {
+  const [theme, setTheme] = useState<Theme>(currentTheme)
+  const pick = (t: Theme) => { applyTheme(t); setTheme(t) }
+  return (
+    <div className="theme-switch" role="group" aria-label="Оформление">
+      {THEMES.map((t) => (
+        <button key={t.key} type="button" aria-pressed={theme === t.key} onClick={() => pick(t.key)}>{t.title}</button>
+      ))}
+    </div>
+  )
+}
 
 /** Какие данные загружены — перечитывается после каждого пересчёта. */
 function SourceProvider({ children }: { children: React.ReactNode }) {
@@ -58,6 +72,7 @@ export default function Shell() {
           <div className="ro-side__foot side__foot">
             <NavLink to="/app/guide"><Icon name="book" />Как пользоваться</NavLink>
             <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
+            <ThemeSwitch />
             <div className="side__user">
               <b>{user.displayName}</b>
               <span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}{user.viaSso ? ' · вход через SSO' : ''}</span>
@@ -83,6 +98,7 @@ export default function Shell() {
           <div className="more" id="more-menu">
             {MORE.map((n) => <NavLink key={n.to} to={n.to}><Icon name={n.icon} />{n.label}</NavLink>)}
             <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
+            <ThemeSwitch />
             <div className="more__user"><b>{user.displayName}</b><span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}</span></div>
             <button type="button" onClick={logout}><Icon name="out" />Выйти</button>
           </div>
