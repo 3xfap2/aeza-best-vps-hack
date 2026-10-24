@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timezone
@@ -17,6 +18,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.config import load_config
+from app import ai
+from app.routers import ai as ai_router
 from app.routers import analytics, auth, customers, integrations, metrics, model, oidc, retention, source, stream, users
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
@@ -84,12 +87,16 @@ async def lifespan(app: FastAPI):
     app.state.pool = pool
     app.state.radar = radar
     app.state.login_limiter = LoginLimiter()
+    ai_cfg = ai.config_from_env(dict(os.environ))
+    app.state.ai = ai.AIClient(ai_cfg) if ai_cfg else None
+    if ai_cfg:
+        log.info("ИИ-помощник: %s, модель %s", app.state.ai.title, ai_cfg.model)
     app.state.metrics_registry = metrics.build_registry(radar)
     scheduler = asyncio.create_task(scheduled_recalc(radar))
     bot = None
     if config.telegram_token and config.telegram_link_code:
         bot = TelegramBot(config.telegram_token, config.telegram_link_code, radar, config.public_url,
-                          config.telegram_digest_hour)
+                          config.telegram_digest_hour, app.state.ai)
         bot.start()
     app.state.bot = bot
     try:
@@ -112,7 +119,7 @@ app = FastAPI(
 )
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
-          users.router, stream.router, integrations.router, metrics.router):
+          users.router, ai_router.router, stream.router, integrations.router, metrics.router):
     app.include_router(r)
 
 

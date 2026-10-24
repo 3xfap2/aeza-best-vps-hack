@@ -43,7 +43,9 @@ export interface CustomerDetail extends CustomerItem {
   history: { score: number | null; level: Level; asOf: string; reason: string; recordedAt: string }[]
 }
 export interface RetentionAction { id: number; kind: string; reason: string | null; note: string | null; author: string; createdAt: string; followUp: string | null }
-export interface Message { subject: string; text: string; cause: string; email: string; generatedBy: string }
+export interface Message { subject: string; text: string; cause: string; email: string; generatedBy: 'template' | 'ai'; note?: string | null }
+export interface AIStatus { enabled: boolean; provider: string | null; model: string | null; privacy: string }
+export interface AskAnswer { answer: string; grounded: boolean; unverified: string[]; customers: { id: number; email: string }[]; provider: string }
 export const ACTION_TITLE: Record<string, string> = {
   called: 'Позвонили', no_answer: 'Не дозвонились', messaged: 'Написали', offer: 'Сделали предложение',
   renewed: 'Продлил', churned: 'Ушёл',

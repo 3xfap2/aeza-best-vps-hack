@@ -697,6 +697,18 @@
               "type": "integer",
               "title": "Customer Id"
             }
+          },
+          {
+            "name": "useAi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Персональный черновик ИИ; при сбое или непроверенных числах — шаблон",
+              "default": false,
+              "title": "Useai"
+            },
+            "description": "Персональный черновик ИИ; при сбое или непроверенных числах — шаблон"
           }
         ],
         "responses": {
@@ -1738,6 +1750,88 @@
         ]
       }
     },
+    "/api/v1/ai/status": {
+      "get": {
+        "tags": [
+          "ИИ-помощник"
+        ],
+        "summary": "Подключён ли ИИ-помощник и какой моделью",
+        "operationId": "status_api_v1_ai_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/ask": {
+      "post": {
+        "tags": [
+          "ИИ-помощник"
+        ],
+        "summary": "«Спросить Радар»: ответ по данным Радара с проверкой чисел",
+        "description": "Модель получает факты из текущего расчёта (без email) и только объясняет их. Числа ответа сверяются с фактами; непроверенные возвращаются в unverified.",
+        "operationId": "ask_api_v1_ai_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Модель занята"
+          },
+          "502": {
+            "description": "Модель недоступна"
+          },
+          "503": {
+            "description": "ИИ не подключён"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/stream": {
       "get": {
         "tags": [
@@ -1811,6 +1905,49 @@
   },
   "components": {
     "schemas": {
+      "AIStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "YandexGPT или GigaChat — данные обрабатываются в РФ"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "privacy": {
+            "type": "string",
+            "title": "Privacy",
+            "default": "В модель уходят суммы, сроки и причины; email клиентов заменяются на «клиент #ID» и наружу не передаются."
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "provider",
+          "model"
+        ],
+        "title": "AIStatus"
+      },
       "AccountIn": {
         "properties": {
           "id": {
@@ -2074,6 +2211,66 @@
         "additionalProperties": false,
         "type": "object",
         "title": "AsOf"
+      },
+      "AskIn": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Question",
+            "examples": [
+              "Кому звонить первым и что сказать?"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "AskIn"
+      },
+      "AskOut": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "grounded": {
+            "type": "boolean",
+            "title": "Grounded",
+            "description": "Все числа ответа найдены в данных Радара"
+          },
+          "unverified": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unverified",
+            "description": "Числа, которых нет в данных: ответ показывается с предупреждением"
+          },
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/Mention"
+            },
+            "type": "array",
+            "title": "Customers",
+            "description": "Клиенты из ответа — ссылки на карточки (email подставляет Радар, а не модель)"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "grounded",
+          "unverified",
+          "customers",
+          "provider"
+        ],
+        "title": "AskOut"
       },
       "AutoprolongEvent": {
         "properties": {
@@ -3161,6 +3358,24 @@
         "type": "object",
         "title": "MemberPatch"
       },
+      "Mention": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "Mention"
+      },
       "MessageOut": {
         "properties": {
           "subject": {
@@ -3181,9 +3396,24 @@
           },
           "generatedBy": {
             "type": "string",
-            "const": "template",
+            "enum": [
+              "template",
+              "ai"
+            ],
             "title": "Generatedby",
-            "description": "Черновик по шаблону причины; отправляет маркетолог"
+            "description": "template — шаблон причины; ai — персональный черновик ИИ (все числа сверены с данными); отправляет маркетолог"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Почему показан шаблон, хотя просили ИИ"
           }
         },
         "type": "object",

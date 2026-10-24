@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ACTION_TITLE, api, ApiError, can, CHURN_REASONS, LEVEL_TITLE, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
+import { ACTION_TITLE, api, ApiError, can, CHURN_REASONS, LEVEL_TITLE, type AIStatus, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
 import { useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, shortDate, Skeleton } from '../ui'
 import { StatusLine, useUser } from './Shell'
@@ -284,9 +284,19 @@ function MessageCard({ customerId }: { customerId: number }) {
   const [msg, setMsg] = useState<Message | null>(null)
   const [text, setText] = useState('')
   const [copied, setCopied] = useState(false)
+  const [aiOn, setAiOn] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
   useEffect(() => {
     api<Message | null>(`/api/v1/customers/${customerId}/message`).then((m) => { setMsg(m); setText(m?.text ?? '') }).catch(() => setMsg(null))
+    api<AIStatus>('/api/v1/ai/status').then((s) => setAiOn(s.enabled)).catch(() => setAiOn(false))
   }, [customerId])
+  async function withAi() {
+    setAiBusy(true)
+    try {
+      const m = await api<Message | null>(`/api/v1/customers/${customerId}/message?useAi=true`)
+      if (m) { setMsg(m); setText(m.text) }
+    } finally { setAiBusy(false) }
+  }
   if (!msg) return null
   async function copy() {
     try { await navigator.clipboard.writeText(`${msg!.subject}\n\n${text}`); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* нет доступа к буферу */ }
@@ -294,10 +304,13 @@ function MessageCard({ customerId }: { customerId: number }) {
   return (
     <section className="ro-card message" aria-labelledby="msg-t">
       <div className="ro-cardhead"><h2 id="msg-t">Сообщение клиенту</h2><span className="ro-small">черновик по главной причине риска — поправьте и отправьте</span></div>
-      <p className="ro-small">Тема: <b>{msg.subject}</b> · кому: <span className="ro-mono">{msg.email}</span></p>
+      <p className="ro-small">Тема: <b>{msg.subject}</b> · кому: <span className="ro-mono">{msg.email}</span>
+        {msg.generatedBy === 'ai' && <> · <span className="work-tag work-tag--renewed">ИИ · числа сверены с данными</span></>}</p>
+      {msg.note && <p className="ro-small">{msg.note}</p>}
       <textarea className="message__text" rows={7} value={text} onChange={(e) => setText(e.target.value)} aria-label="Текст сообщения" />
       <div className="btns">
         <button type="button" className="ro-btn ro-btn--sm" onClick={copy}>{copied ? 'Скопировано' : 'Скопировать'}</button>
+        {aiOn && <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={aiBusy} onClick={withAi}>{aiBusy ? 'Пишу…' : 'Написать с ИИ'}</button>}
         <a className="ro-btn ro-btn--sm ro-btn--quiet" href={`mailto:${msg.email}?subject=${encodeURIComponent(msg.subject)}&body=${encodeURIComponent(text)}`}>Открыть в почте</a>
       </div>
     </section>

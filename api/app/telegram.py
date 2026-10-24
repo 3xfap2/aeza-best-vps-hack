@@ -13,6 +13,7 @@ import hmac
 import html
 import logging
 import queue
+import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -20,7 +21,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from app import db
+from app import ai, db
 from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES, CustomerResult, EngineResult
 from app.views import eur
@@ -38,6 +39,7 @@ SAVE_RATE, CALL_COST = 30, 3
 HELP = (
     "<b>Команды</b>\n"
     "/today — кому звонить и писать сегодня, сколько можно сохранить\n"
+    "/ask вопрос — спросить Радар простыми словами (если подключён ИИ)\n"
     "/summary — сколько денег под угрозой и клиенты по уровням\n"
     "/top — 5 клиентов с наибольшей ожидаемой потерей\n"
     "/client 42 — карточка клиента: причины риска и что сделать\n"
@@ -48,6 +50,7 @@ HELP = (
 # Меню команд в Telegram (кнопка «/» рядом с полем ввода).
 COMMANDS = [
     ("today", "Кому звонить сегодня"),
+    ("ask", "Спросить Радар: /ask почему выросла потеря?"),
     ("summary", "Сколько денег под угрозой"),
     ("top", "5 клиентов с наибольшей потерей"),
     ("client", "Карточка клиента: /client 42"),
@@ -86,12 +89,13 @@ def _money(cents: float) -> str:
 
 class TelegramBot:
     def __init__(self, token: str, link_code: str, radar: "AppState", public_url: str,
-                 digest_hour: int | None = None) -> None:
+                 digest_hour: int | None = None, ai_client: "ai.AIClient | None" = None) -> None:
         self.api = f"https://api.telegram.org/bot{token}"
         self.link_code = link_code
         self.radar = radar
         self.public_url = public_url
         self.digest_hour = digest_hour
+        self.ai = ai_client
         self._digest_sent: str | None = None
         self._outbox: queue.Queue[tuple[int, str]] = queue.Queue(maxsize=500)
         self._stop = threading.Event()
@@ -145,7 +149,18 @@ class TelegramBot:
         if self.digest_hour is None or now.hour != self.digest_hour or self._digest_sent == today:
             return None
         self._digest_sent = today
-        return "<b>Доброе утро! План на сегодня</b>\n" + self._today()
+        return "<b>Доброе утро! План на сегодня</b>\n" + self._ai_digest() + self._today()
+
+    def _ai_digest(self) -> str:
+        """Две строки «что важно сегодня» от ИИ; при сбое или непроверенных числах — без них."""
+        if self.ai is None:
+            return ""
+        try:
+            facts, _ = ai.gather(self.radar)
+            return f"<i>{html.escape(ai.digest(self.ai, facts))}</i>\n\n"
+        except ai.AIError:
+            log.info("Утренний план без ИИ-сводки", exc_info=True)
+            return ""
 
     def _broadcast(self, text: str) -> None:
         for chat_id in self._subscribers():
@@ -208,6 +223,24 @@ class TelegramBot:
             lines.append(f"\nи ещё {len(today) - MAX_TODAY}")
         lines.append(f"\nОчередь и отметки: {self.public_url}/app/retention")
         return "\n".join(lines)
+
+    def _ask(self, question: str) -> str:
+        if self.ai is None:
+            return "ИИ-помощник не подключён. Спросите в панели или используйте /today и /client."
+        if len(question.strip()) < 3:
+            return "Напишите вопрос после команды, например: /ask кому звонить первым и что сказать?"
+        try:
+            facts, emails = ai.gather(self.radar, question)
+            out = ai.ask(self.ai, ai.scrub(question[:500], emails), facts)
+        except ai.AIError:
+            return "ИИ сейчас недоступен — попробуйте позже или откройте панель."
+        text = html.escape(out["answer"])
+        ids = list(dict.fromkeys(re.findall(r"#(\d+)", out["answer"])))[:3]
+        if ids:
+            text += "\n\n" + "\n".join(f"#{i}: {self.public_url}/app/customers/{i}" for i in ids)
+        if not out["grounded"]:
+            text += f"\n\n⚠ Не нашёл в данных: {html.escape(', '.join(out['unverified']))} — перепроверьте в панели."
+        return f"{text}\n\n<i>{self.ai.title} · отвечает по данным Радара, email клиентов модели не передаются</i>"
 
     def _top(self) -> str:
         result = self.radar.current.result
@@ -276,6 +309,8 @@ class TelegramBot:
             return "Уведомления отключены. Вернуться: /start <код доступа>."
         if command == "/today":
             return self._today()
+        if command == "/ask":
+            return self._ask(arg)
         if command == "/summary":
             return self._summary()
         if command == "/top":

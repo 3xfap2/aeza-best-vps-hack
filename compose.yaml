@@ -39,6 +39,12 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_LINK_CODE: ${TELEGRAM_LINK_CODE:-}
       TELEGRAM_DIGEST_HOUR: ${TELEGRAM_DIGEST_HOUR:-9}
+      AI_PROVIDER: ${AI_PROVIDER:-off}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_FOLDER_ID: ${AI_FOLDER_ID:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_SCOPE: ${AI_SCOPE:-}
+      AI_CA_BUNDLE: ${AI_CA_BUNDLE:-}
     depends_on:
       db:
         condition: service_healthy

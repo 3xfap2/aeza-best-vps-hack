@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from app import db
+from app import ai, db
 from app.insights import message, what_if
 from app.security import User, current_user, require
 from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
@@ -187,14 +187,29 @@ class MessageOut(BaseModel):
     text: str
     cause: str
     email: str
-    generatedBy: Literal["template"] = Field(description="Черновик по шаблону причины; отправляет маркетолог")
+    generatedBy: Literal["template", "ai"] = Field(description="template — шаблон причины; ai — персональный черновик ИИ "
+                                                           "(все числа сверены с данными); отправляет маркетолог")
+    note: str | None = Field(None, description="Почему показан шаблон, хотя просили ИИ")
 
 
 @router.get("/{customer_id}/message", response_model=MessageOut | None,
             summary="Черновик сообщения клиенту по главной причине риска")
-def customer_message(customer_id: int, request: Request) -> MessageOut | None:
+def customer_message(customer_id: int, request: Request,
+                     useAi: bool = Query(False, description="Персональный черновик ИИ; при сбое или непроверенных числах — шаблон")) -> MessageOut | None:
     cur = request.app.state.radar.current
     if customer_id not in cur.result.by_id:
         raise HTTPException(404, f"Клиент #{customer_id} не найден")
     m = message(cur.result, customer_id)
-    return MessageOut(**m) if m else None
+    if not m or not useAi:
+        return MessageOut(**m) if m else None
+    client = getattr(request.app.state, "ai", None)
+    if client is None:
+        return MessageOut(**m, note="ИИ не подключён — показан шаблон")
+    emails = {a.email.lower(): a.id for a in cur.snapshot.accounts}
+    with request.app.state.pool.connection() as conn:
+        facts = ai.customer_facts(cur.result, cur.snapshot, customer_id, db.actions_for(conn, customer_id, 5))
+    try:
+        draft = ai.message(client, ai.scrub(facts or "", emails), cur.result.by_id[customer_id].contributions[0].title)
+    except ai.AIError as e:
+        return MessageOut(**m, note=f"Показан шаблон: {e}")
+    return MessageOut(**{**m, **draft, "generatedBy": "ai"})

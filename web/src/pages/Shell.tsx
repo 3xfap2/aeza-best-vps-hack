@@ -8,13 +8,14 @@ const NAV = [
   { to: '/app', end: true, icon: 'grid', label: 'Обзор' },
   { to: '/app/customers', end: false, icon: 'users', label: 'Клиенты' },
   { to: '/app/retention', end: false, icon: 'phone', label: 'Удержание' },
+  { to: '/app/ask', end: false, icon: 'chat', label: 'Спросить Радар' },
   { to: '/app/model', end: false, icon: 'sliders', label: 'Модель' },
   { to: '/app/data', end: false, icon: 'plug', label: 'Данные' },
   { to: '/app/team', end: false, icon: 'team', label: 'Команда' },
 ]
 // на телефоне внизу — четыре главных раздела, остальное в «Ещё»
-const TABS = NAV.slice(0, 4)
-const MORE = [...NAV.slice(4), { to: '/app/guide', end: false, icon: 'book', label: 'Как пользоваться' }]
+const TABS = NAV.filter((n) => ['/app', '/app/customers', '/app/retention', '/app/model'].includes(n.to))
+const MORE = [...NAV.filter((n) => !TABS.includes(n)), { to: '/app/guide', end: false, icon: 'book', label: 'Как пользоваться' }]
 
 const UserContext = createContext<User | null>(null)
 /** Текущий пользователь панели (роль решает, какие кнопки доступны). */

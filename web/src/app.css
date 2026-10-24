@@ -258,6 +258,23 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 .queue__plan { margin-left: 6px; background: var(--ink); color: var(--paper); }
 .queue__due { margin-bottom: 6px; background: var(--action); color: #fff; }
 .camp__nums { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* --- спросить Радар --- */
+.ask { grid-column: 1 / -1; padding: 28px 32px; display: grid; gap: 16px; }
+.ask .ask__title { font-family: var(--font-display); font-weight: 500; font-size: 24px; }
+.ask__form { display: flex; gap: 10px; }
+.ask__input { flex: 1; font: inherit; font-size: 16px; min-height: 48px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-button); background: var(--card); color: var(--ink); min-width: 0; }
+.ask__input:focus-visible { outline: 2px solid var(--action); outline-offset: 1px; }
+.ask .chips button { text-align: left; }
+.ask .ask__how { max-width: 60em; }
+.ask .ask__off { display: grid; gap: 8px; }
+.ask__off code { font-family: var(--font-mono); }
+.ask__turn { grid-column: 1 / -1; padding: 22px 26px; display: grid; gap: 12px; justify-items: start; }
+.ask__turn .ask__q { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; }
+.ask__turn .ask__q .ico { margin-top: 2px; color: var(--ink-3); }
+.ask__a { white-space: pre-wrap; line-height: 1.55; font-size: 15px; max-width: 70em; }
+.ask__link { color: var(--action); font-weight: 500; text-underline-offset: 3px; }
+@media (max-width: 860px) { .ask { padding: 22px 18px; } .ask__form { flex-direction: column; } }
 .camp__fact .ro-small { font-size: 12px; }
 .queue__table tr.is-done td { opacity: .55; }
 .queue__empty { padding: 0 24px 24px; }

@@ -390,3 +390,35 @@ def test_retention_queue_and_paid_loss(client, auth):
     assert "@example.test" in client.get("/api/v1/retention/queue.csv?includeEmail=true", headers=auth).text
     metrics = client.get("/metrics", headers={"Authorization": f"Bearer {METRICS_TOKEN}"}).text
     assert "churn_radar_expected_loss_paid_eur" in metrics and "churn_radar_retention_saved_eur" in metrics
+
+
+def test_ai_assistant_with_fake_model(client, auth):
+    from tests.test_ai import Fake
+    assert client.get("/api/v1/ai/status", headers=auth).json()["enabled"] is False
+    assert client.post("/api/v1/ai/ask", headers=auth, json={"question": "кому звонить?"}).status_code == 503
+    msg = client.get("/api/v1/customers/5/message?useAi=true", headers=auth).json()
+    assert msg["generatedBy"] == "template" and "не подключён" in msg["note"]
+
+    def answer(user):
+        assert "Карточки клиентов из вопроса" in user and "клиент #5" in user
+        return "Начните с клиента #5: удаление задержано. Потеря по прайсу € 999 999."
+    client.app.state.ai = Fake(answer)
+    try:
+        assert client.get("/api/v1/ai/status", headers=auth).json()["enabled"] is True
+        r = client.post("/api/v1/ai/ask", headers=auth, json={"question": "что с user-0005@example.test?"}).json()
+        assert r["grounded"] is False and "999 999" in r["unverified"]
+        assert r["customers"] == [{"id": 5, "email": "user-0005@example.test"}]
+
+        client.app.state.ai = Fake("Тема: Сервер ждёт оплаты\n\nПродлите услугу, чтобы данные сохранились.")
+        msg = client.get("/api/v1/customers/5/message?useAi=true", headers=auth).json()
+        assert msg["generatedBy"] == "ai" and msg["subject"] == "Сервер ждёт оплаты" and msg["email"] == "user-0005@example.test"
+        client.app.state.ai = Fake("Тема: Подарок\n\nДарим € 777.")
+        assert client.get("/api/v1/customers/5/message?useAi=true", headers=auth).json()["generatedBy"] == "template"
+
+        from app.telegram import TelegramBot
+        client.app.state.ai = Fake("Начните с клиента #5.")
+        bot = TelegramBot("0:test", "link-code-123", client.app.state.radar, "http://localhost:8080", None, client.app.state.ai)
+        bot.handle(3003, "u", "/start link-code-123")
+        assert "#5: http://localhost:8080/app/customers/5" in bot.handle(3003, "u", "/ask с кого начать?")
+    finally:
+        client.app.state.ai = None
