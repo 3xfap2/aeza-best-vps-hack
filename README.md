@@ -187,6 +187,7 @@ class WithdrawableBalance(Feature):
 | Создание | `201 Created` и `Location` с адресом нового ресурса |
 | Страницы | `page` и `pageSize` (до 200), в теле `total` и `version` расчёта, в заголовке `Link` — `first`, `prev`, `next`, `last` |
 | Частичное изменение | `PATCH` — JSON Merge Patch (RFC 7386): только изменённые поля |
+| Безопасный повтор | любой `POST` с заголовком `Idempotency-Key`: повтор с тем же ключом получает сохранённый ответ (`Idempotent-Replayed: true`) и второй раз не выполняется; тот же ключ с другим телом — `422`, первый ещё выполняется — `409`; ключ живёт сутки ([api/app/idempotency.py](api/app/idempotency.py)) |
 | Повторная доставка | события пачками через `POST /api/v1/ingest/events` с `eventId`: повтор отбрасывается |
 | Доступ | роль проверяет сервер: `401` — не вошли, `403` — не хватает прав |
 

@@ -15,7 +15,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import ai, db, demo_stream, http
+from app import ai, db, demo_stream, http, idempotency
 from app.config import load_config
 from app.inbox import Inbox
 from app.integrations import Outbox, build_sinks
@@ -155,6 +155,7 @@ app = FastAPI(
 )
 
 http.install(app)   # ошибки problem+json, ETag/304 — см. app/http.py
+idempotency.install(app)   # Idempotency-Key для POST — см. app/idempotency.py
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
           users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):

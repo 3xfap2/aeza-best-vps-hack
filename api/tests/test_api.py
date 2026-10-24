@@ -795,3 +795,20 @@ def test_rest_conventions(client, auth):
     r = client.get("/api/v1/customers?pageSize=3&page=2", headers=auth)
     link = r.headers["Link"]
     assert 'rel="first"' in link and 'rel="prev"' in link and 'rel="next"' in link and 'page=3' in link
+
+
+def test_idempotency_key(client, auth):
+    """Повтор POST с тем же Idempotency-Key не выполняется второй раз; другой запрос с тем же ключом — 422."""
+    client.post("/api/v1/source/preset/case", headers=auth)
+    before = client.get("/api/v1/customers/3", headers=auth).json()["balance"]
+    hdr = {**auth, "Idempotency-Key": "topup-3-0001"}
+    first = client.post("/api/v1/source/events", headers=hdr, json={"type": "topup", "accountId": 3, "amount": 10})
+    again = client.post("/api/v1/source/events", headers=hdr, json={"type": "topup", "accountId": 3, "amount": 10})
+    assert first.status_code == again.status_code == 200 and again.json() == first.json()
+    assert again.headers.get("Idempotent-Replayed") == "true" and "Idempotent-Replayed" not in first.headers
+    assert round(client.get("/api/v1/customers/3", headers=auth).json()["balance"] - before, 2) == 10
+    other = client.post("/api/v1/source/events", headers=hdr, json={"type": "topup", "accountId": 3, "amount": 99})
+    assert other.status_code == 422 and other.headers["content-type"].startswith("application/problem+json")
+    plain = client.post("/api/v1/source/events", headers=auth, json={"type": "topup", "accountId": 3, "amount": 1})
+    assert plain.status_code == 200 and "Idempotent-Replayed" not in plain.headers
+    client.post("/api/v1/source/preset/case", headers=auth)
