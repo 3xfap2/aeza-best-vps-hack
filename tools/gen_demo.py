@@ -162,12 +162,31 @@ class Gen:
             self.service(acc, terms[0] if terms[0] != "hour" else "month", "active", False,
                          self.days(1, 25), unpaid_share=1.0)
 
+    def add_signals(self, first_generated: int) -> None:
+        """Сигналы из других систем у части сгенерированных клиентов (у клиентов кейса их нет)."""
+        r = self.rng
+        for acc in self.accounts[first_generated:]:
+            if r.random() < 0.08:
+                acc["signals"] = {"supportTickets30d": r.randint(1, 5)}
+        for svc in self.services:
+            if svc["ownerId"] <= first_generated or svc["status"] in ("deleted", "blocked"):
+                continue
+            sig = {}
+            if (svc["status"] == "suspended" and r.random() < 0.4) or r.random() < 0.03:
+                sig["loadDrop"] = round(r.uniform(0.5, 0.95), 2)
+            if r.random() < 0.03:
+                sig["downgraded"] = True
+            if sig:
+                svc["signals"] = sig
+
     def build(self, count: int) -> dict:
+        first_generated = len(self.accounts)
         count -= len(self.accounts)
         personas = [p for p, _ in PERSONAS]
         weights = [w for _, w in PERSONAS]
         for _ in range(count):
             self.customer(self.rng.choices(personas, weights=weights)[0])
+        self.add_signals(first_generated)
         return {"referenceAt": iso(self.ref), "accounts": self.accounts,
                 "services": self.services, "transactions": self.transactions}
 

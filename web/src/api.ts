@@ -7,7 +7,7 @@ export interface User { id: number; login: string; displayName: string; viaSso: 
 export interface CustomerItem {
   id: number; email: string; balance: number; totalReplenished: number
   score: number | null; loyalty: number | null; level: Level; levelTitle: string; topReason: string | null
-  expectedLoss: number; qualityIssues: number
+  expectedLoss: number; qualityIssues: number; lastAction?: string | null
 }
 export interface CustomerPage {
   items: CustomerItem[]; total: number; page: number; pageSize: number
@@ -33,6 +33,13 @@ export interface CustomerDetail extends CustomerItem {
   asOf: string; horizonDays: number; version: number
   history: { score: number | null; level: Level; asOf: string; reason: string; recordedAt: string }[]
 }
+export interface RetentionAction { id: number; kind: string; reason: string | null; note: string | null; author: string; createdAt: string }
+export interface Message { subject: string; text: string; cause: string; email: string; generatedBy: string }
+export const ACTION_TITLE: Record<string, string> = {
+  called: 'Позвонили', no_answer: 'Не дозвонились', messaged: 'Написали', offer: 'Сделали предложение',
+  renewed: 'Продлил', churned: 'Ушёл',
+}
+export const CHURN_REASONS = ['Дорого', 'Ушёл к конкуренту', 'Проект закрыт', 'Технические проблемы', 'Не пользуется', 'Другое']
 export interface WhatIf { key: string; title: string; score: number | null; level: Level; expectedLoss: number; saved: number }
 export interface Renewal {
   date: string; customerId: number; email: string; serviceId: number; service: string; paymentTerm: string
@@ -46,6 +53,7 @@ export interface Summary {
   ltvAtRisk: number; ltvMonthlyChurn: number
   servicesAtRisk: number; qualityIssues: number; explanation: string
   causes: { feature: string; title: string; kind: 'involuntary' | 'voluntary'; customers: number; expectedLoss: number }[]
+  retention: { actions: Record<string, number>; reasons: Record<string, number>; worked: number; atRisk: number; renewed: number; churned: number }
   version: number; computedAt: string; durationMs: number
 }
 export interface TimelinePoint {
@@ -123,6 +131,8 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
 export const CAUSE_TITLE: Record<string, string> = {
   prolong_wait: 'Ждёт оплаты', insufficient_funds: 'Не хватает средств', unpaid_transactions: 'Неоплаченные счета',
   expiring_no_autoprolong: 'Истекает без автопродления', suspended: 'Сервер выключен',
+  no_autoprolong_no_funds: 'Нет автопродления и денег', partial_churn: 'Уже отказывался от услуг',
+  support_tickets: 'Часто пишет в поддержку', usage_drop: 'Сервером не пользуются', plan_downgrade: 'Понизил тариф',
 }
 
 export const LEVEL_TITLE: Record<Level, string> = {

@@ -46,7 +46,16 @@ class PaymentEvent(BaseModel):
     serviceId: int
 
 
-SourceEvent = Annotated[Union[TopupEvent, AutoprolongEvent, StatusEvent, PaymentEvent], Field(discriminator="type")]
+class SignalEvent(BaseModel):
+    type: Literal["signal"]
+    name: Literal["supportTickets30d", "loadDrop", "downgraded"] = Field(
+        description="supportTickets30d — для аккаунта (targetId = id аккаунта); loadDrop, downgraded — для услуги")
+    targetId: int
+    value: float | bool
+
+
+SourceEvent = Annotated[Union[TopupEvent, AutoprolongEvent, StatusEvent, PaymentEvent, SignalEvent],
+                        Field(discriminator="type")]
 
 
 class EventResult(BaseModel):
@@ -150,6 +159,8 @@ def _apply_event(conn, event: Any, at: datetime) -> str:
         return simulator.set_autoprolong(conn, event.serviceId, event.enabled)
     if isinstance(event, StatusEvent):
         return simulator.set_status(conn, event.serviceId, event.status, at)
+    if isinstance(event, SignalEvent):
+        return simulator.set_signal(conn, event.targetId, event.name, event.value)
     return simulator.pay_renewal(conn, event.serviceId, at)
 
 

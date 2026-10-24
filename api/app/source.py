@@ -32,6 +32,10 @@ class AccountIn(BaseModel):
     totalReplenished: int = Field(0, ge=0)
     bonusBalance: int = Field(0, ge=0)
     bonusState: Literal["locked", "unlocked"] = "locked"
+    signals: dict[str, float | bool] = Field(
+        default_factory=dict,
+        description="Необязательно: сигналы из других систем, например supportTickets30d — обращений в поддержку за 30 дней",
+    )
 
 
 class ServiceIn(BaseModel):
@@ -45,6 +49,10 @@ class ServiceIn(BaseModel):
     expiresAt: datetime
     status: Literal["active", "blocked", "deleted", "suspended", "prolong_wait"]
     price: int = Field(ge=0, description="Евроценты за период paymentTerm")
+    signals: dict[str, float | bool] = Field(
+        default_factory=dict,
+        description="Необязательно: loadDrop — падение нагрузки сервера 0–1; downgraded — перешёл на тариф дешевле",
+    )
 
     @field_validator("name")
     @classmethod

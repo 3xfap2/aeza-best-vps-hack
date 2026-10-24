@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { api, CAUSE_TITLE, LEVEL_TITLE, type CustomerPage, type Level } from '../api'
+import { ACTION_TITLE, api, CAUSE_TITLE, LEVEL_TITLE, type CustomerPage, type Level } from '../api'
 import { useLiveData } from '../live'
 import { Empty, ErrorBox, eur, RiskBadge, ScoreBar, Skeleton, useChanged } from '../ui'
 import { StatusLine } from './Shell'
@@ -66,7 +66,10 @@ export default function Customers() {
     <>
       <div className="ro-top">
         <div><h1>Клиенты</h1><StatusLine asOf={data?.asOf} /></div>
-        <div className="ro-top__actions"><a className="ro-btn ro-btn--quiet ro-btn--sm" href={exportUrl}>Экспорт CSV</a></div>
+        <div className="ro-top__actions">
+          <a className="ro-btn ro-btn--quiet ro-btn--sm" href={exportUrl} title="Без персональных данных: только ID">CSV (ID)</a>
+          <a className="ro-btn ro-btn--quiet ro-btn--sm" href={exportUrl + '&includeEmail=true'} title="С email — персональные данные">CSV с email</a>
+        </div>
       </div>
 
       <div className="filters ro-card">
@@ -112,6 +115,7 @@ export default function Customers() {
                   ))}
                   <th scope="col">Уровень</th>
                   <th scope="col">Главная причина</th>
+                  <th scope="col">Работа</th>
                   <th scope="col" className="r" aria-sort={sort === 'expectedLoss' ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}>
                     <button type="button" className={`sort${sort === 'expectedLoss' ? ' is-active' : ''}`} onClick={() => sortBy('expectedLoss')}>
                       Потеря, €<span aria-hidden="true">{sort === 'expectedLoss' ? (order === 'asc' ? ' ↑' : ' ↓') : ' ↕'}</span>
@@ -130,6 +134,7 @@ export default function Customers() {
                     <td className="r"><ScoreBar score={c.score} /></td>
                     <td><RiskBadge level={c.level} title={c.levelTitle} /></td>
                     <td className="why">{c.topReason}</td>
+                    <td>{c.lastAction ? <span className={'work-tag work-tag--' + c.lastAction}>{ACTION_TITLE[c.lastAction] ?? c.lastAction}</span> : <span className="ro-small">—</span>}</td>
                     <td className="r mono">{c.score == null ? '—' : eur(c.expectedLoss)}</td>
                   </tr>
                 ))}

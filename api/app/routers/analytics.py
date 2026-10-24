@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
+from app import db
 from app.insights import renewals
 from app.scoring.engine import timeline
 from app.security import current_user
@@ -15,7 +16,15 @@ router = APIRouter(prefix="/api/v1/analytics", tags=["Аналитика"], depe
             summary="Сводные показатели риска и денежная оценка потенциальных потерь")
 def summary(request: Request) -> SummaryOut:
     cur = request.app.state.radar.current
-    return summary_out(cur.result, cur.version, cur.computed_at, cur.duration_ms)
+    out = summary_out(cur.result, cur.version, cur.computed_at, cur.duration_ms)
+    with request.app.state.pool.connection() as conn:
+        last = db.last_actions(conn)
+        out.retention = {"actions": db.action_counts(conn), "reasons": db.churn_reasons(conn),
+                         "worked": sum(1 for c in cur.result.customers if c.level in ("high", "medium") and c.account.id in last),
+                         "atRisk": sum(1 for c in cur.result.customers if c.level in ("high", "medium")),
+                         "renewed": sum(1 for r in last.values() if r["kind"] == "renewed"),
+                         "churned": sum(1 for r in last.values() if r["kind"] == "churned")}
+    return out
 
 
 @router.get("/churn-timeline", response_model=TimelineOut,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api, LEVEL_TITLE, type CustomerDetail, type WhatIf } from '../api'
+import { ACTION_TITLE, api, ApiError, CHURN_REASONS, LEVEL_TITLE, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
 import { useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, Skeleton } from '../ui'
 import { StatusLine } from './Shell'
@@ -128,6 +128,9 @@ export default function Customer() {
 
         {c.history.length > 1 && <HistoryCard history={c.history} />}
 
+        <WorkCard customerId={c.id} />
+        {c.score != null && <MessageCard customerId={c.id} />}
+
         {c.issues.length > 0 && (
           <section className="ro-card issues" aria-labelledby="iss-t" role="note">
             <div className="ro-cardhead"><h2 id="iss-t">Расхождение статуса и дат</h2></div>
@@ -215,6 +218,73 @@ function HistoryCard({ history }: { history: CustomerDetail['history'] }) {
             score {h.score ?? '—'} · {LEVEL_TITLE[h.level].toLowerCase()}</li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+function WorkCard({ customerId }: { customerId: number }) {
+  const [items, setItems] = useState<RetentionAction[] | null>(null)
+  const [note, setNote] = useState('')
+  const [reason, setReason] = useState(CHURN_REASONS[0])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const load = () => api<RetentionAction[]>(`/api/v1/customers/${customerId}/actions`).then(setItems).catch(() => setItems([]))
+  useEffect(() => { load() }, [customerId]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function mark(kind: string) {
+    setBusy(true); setError(null)
+    try {
+      await api(`/api/v1/customers/${customerId}/actions`, { method: 'POST', json: { kind, note: note || null, reason: kind === 'churned' ? reason : null } })
+      setNote(''); await load()
+    } catch (e) { setError(e instanceof ApiError ? e.message : 'Не удалось сохранить') } finally { setBusy(false) }
+  }
+  return (
+    <section className="ro-card work" aria-labelledby="work-t">
+      <div className="ro-cardhead"><h2 id="work-t">Работа с клиентом</h2><span className="ro-small">отметьте, что сделали и чем закончилось</span></div>
+      <label className="field"><span>Комментарий (необязательно)</span>
+        <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="например, обещал оплатить в пятницу" /></label>
+      <div className="btns">
+        {['called', 'no_answer', 'messaged', 'offer', 'renewed'].map((k) => (
+          <button key={k} type="button" className={'ro-btn ro-btn--sm' + (k === 'renewed' ? '' : ' ro-btn--quiet')} disabled={busy} onClick={() => mark(k)}>{ACTION_TITLE[k]}</button>
+        ))}
+      </div>
+      <div className="work__churn">
+        <label className="field"><span>Если ушёл — причина</span>
+          <select value={reason} onChange={(e) => setReason(e.target.value)}>{CHURN_REASONS.map((r) => <option key={r}>{r}</option>)}</select></label>
+        <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={busy} onClick={() => mark('churned')}>Ушёл</button>
+      </div>
+      {error && <p className="form__error" role="alert">{error}</p>}
+      {items && items.length > 0 && (
+        <ul className="log">
+          {items.map((a) => (
+            <li key={a.id}><span className="ro-small ro-mono">{dateTime(a.createdAt)} · {a.author}</span>
+              <span><b>{ACTION_TITLE[a.kind] ?? a.kind}</b>{a.reason ? ` — ${a.reason}` : ''}{a.note ? `: ${a.note}` : ''}</span></li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function MessageCard({ customerId }: { customerId: number }) {
+  const [msg, setMsg] = useState<Message | null>(null)
+  const [text, setText] = useState('')
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    api<Message | null>(`/api/v1/customers/${customerId}/message`).then((m) => { setMsg(m); setText(m?.text ?? '') }).catch(() => setMsg(null))
+  }, [customerId])
+  if (!msg) return null
+  async function copy() {
+    try { await navigator.clipboard.writeText(`${msg!.subject}\n\n${text}`); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* нет доступа к буферу */ }
+  }
+  return (
+    <section className="ro-card message" aria-labelledby="msg-t">
+      <div className="ro-cardhead"><h2 id="msg-t">Сообщение клиенту</h2><span className="ro-small">черновик по главной причине риска — поправьте и отправьте</span></div>
+      <p className="ro-small">Тема: <b>{msg.subject}</b> · кому: <span className="ro-mono">{msg.email}</span></p>
+      <textarea className="message__text" rows={7} value={text} onChange={(e) => setText(e.target.value)} aria-label="Текст сообщения" />
+      <div className="btns">
+        <button type="button" className="ro-btn ro-btn--sm" onClick={copy}>{copied ? 'Скопировано' : 'Скопировать'}</button>
+        <a className="ro-btn ro-btn--sm ro-btn--quiet" href={`mailto:${msg.email}?subject=${encodeURIComponent(msg.subject)}&body=${encodeURIComponent(text)}`}>Открыть в почте</a>
+      </div>
     </section>
   )
 }

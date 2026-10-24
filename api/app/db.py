@@ -19,8 +19,8 @@ from app.source import SnapshotIn
 
 MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
 
-ACCOUNT_COLS = ("id", "email", "balance", "withdrawBalance", "totalReplenished", "bonusBalance", "bonusState")
-SERVICE_COLS = ("id", "name", "ownerId", "paymentTerm", "autoProlong", "createdAt", "expiresAt", "status", "price")
+ACCOUNT_COLS = ("id", "email", "balance", "withdrawBalance", "totalReplenished", "bonusBalance", "bonusState", "signals")
+SERVICE_COLS = ("id", "name", "ownerId", "paymentTerm", "autoProlong", "createdAt", "expiresAt", "status", "price", "signals")
 TX_COLS = ("id", "amount", "status", "performedAt", "createdAt", "type", "serviceId")
 
 
@@ -106,7 +106,7 @@ def _insert(conn: Connection, table: str, cols: tuple[str, ...], rows: list[dict
     with conn.cursor() as cur:
         cur.executemany(
             f"INSERT INTO {table} ({_cols(cols)}) VALUES ({placeholders})",
-            [tuple(r[c] for c in cols) for r in rows],
+            [tuple(Jsonb(r[c]) if isinstance(r[c], dict) else r[c] for c in cols) for r in rows],
         )
 
 
@@ -262,3 +262,33 @@ def score_history(conn: Connection, account_id: int, limit: int) -> list[dict]:
         (account_id, limit),
     ))
     return rows[::-1]
+
+
+# --- работа с клиентом ---------------------------------------------------------
+
+def add_action(conn: Connection, account_id: int, kind: str, reason: str | None, note: str | None, author: str) -> dict:
+    return conn.execute(
+        "INSERT INTO retention_actions (account_id, kind, reason, note, author) VALUES (%s, %s, %s, %s, %s) "
+        "RETURNING id, kind, reason, note, author, created_at AS \"createdAt\"",
+        (account_id, kind, reason, note, author),
+    ).fetchone()
+
+
+def actions_for(conn: Connection, account_id: int, limit: int = 50) -> list[dict]:
+    return list(conn.execute(
+        "SELECT id, kind, reason, note, author, created_at AS \"createdAt\" FROM retention_actions "
+        "WHERE account_id = %s ORDER BY id DESC LIMIT %s", (account_id, limit)))
+
+
+def last_actions(conn: Connection) -> dict[int, dict]:
+    return {r["account_id"]: r for r in conn.execute(
+        "SELECT DISTINCT ON (account_id) account_id, kind, created_at FROM retention_actions ORDER BY account_id, id DESC")}
+
+
+def action_counts(conn: Connection) -> dict[str, int]:
+    return {r["kind"]: r["n"] for r in conn.execute("SELECT kind, count(*) AS n FROM retention_actions GROUP BY kind")}
+
+
+def churn_reasons(conn: Connection) -> dict[str, int]:
+    return {r["reason"]: r["n"] for r in conn.execute(
+        "SELECT reason, count(*) AS n FROM retention_actions WHERE kind = 'churned' AND reason IS NOT NULL GROUP BY reason")}

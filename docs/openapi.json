@@ -253,6 +253,18 @@
               ],
               "title": "Cause"
             }
+          },
+          {
+            "name": "includeEmail",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Добавить email (персональные данные) — по умолчанию выгрузка только с ID",
+              "default": false,
+              "title": "Includeemail"
+            },
+            "description": "Добавить email (персональные данные) — по умолчанию выгрузка только с ID"
           }
         ],
         "responses": {
@@ -541,6 +553,167 @@
                     "$ref": "#/components/schemas/WhatIfOut"
                   },
                   "title": "Response Customer What If Api V1 Customers  Customer Id  What If Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customers/{customer_id}/actions": {
+      "get": {
+        "tags": [
+          "Клиенты"
+        ],
+        "summary": "Журнал работы с клиентом",
+        "operationId": "list_actions_api_v1_customers__customer_id__actions_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActionOut"
+                  },
+                  "title": "Response List Actions Api V1 Customers  Customer Id  Actions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Клиенты"
+        ],
+        "summary": "Отметить работу с клиентом: позвонили, написали, предложение, продлил, ушёл (с причиной)",
+        "operationId": "add_action_api_v1_customers__customer_id__actions_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customers/{customer_id}/message": {
+      "get": {
+        "tags": [
+          "Клиенты"
+        ],
+        "summary": "Черновик сообщения клиенту по главной причине риска",
+        "operationId": "customer_message_api_v1_customers__customer_id__message_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MessageOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Customer Message Api V1 Customers  Customer Id  Message Get"
                 }
               }
             }
@@ -1036,6 +1209,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/PaymentEvent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SignalEvent"
                   }
                 ],
                 "title": "Event"
@@ -1322,6 +1498,21 @@
             ],
             "title": "Bonusstate",
             "default": "locked"
+          },
+          "signals": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Signals",
+            "description": "Необязательно: сигналы из других систем, например supportTickets30d — обращений в поддержку за 30 дней"
           }
         },
         "type": "object",
@@ -1331,6 +1522,111 @@
           "balance"
         ],
         "title": "AccountIn"
+      },
+      "ActionIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "called",
+              "no_answer",
+              "messaged",
+              "offer",
+              "renewed",
+              "churned"
+            ],
+            "title": "Kind"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "Дорого",
+                  "Ушёл к конкуренту",
+                  "Проект закрыт",
+                  "Технические проблемы",
+                  "Не пользуется",
+                  "Другое"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ActionIn"
+      },
+      "ActionOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reason",
+          "note",
+          "author",
+          "createdAt"
+        ],
+        "title": "ActionOut"
       },
       "ActivityItem": {
         "properties": {
@@ -1587,7 +1883,19 @@
           "qualityIssues": {
             "type": "integer",
             "title": "Qualityissues",
-            "description": "Сколько противоречий найдено в данных клиента"
+            "description": "Сколько расхождений статуса и дат у клиента"
+          },
+          "lastAction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastaction",
+            "description": "Последняя отметка работы с клиентом: called, messaged, renewed…"
           },
           "note": {
             "anyOf": [
@@ -1775,7 +2083,19 @@
           "qualityIssues": {
             "type": "integer",
             "title": "Qualityissues",
-            "description": "Сколько противоречий найдено в данных клиента"
+            "description": "Сколько расхождений статуса и дат у клиента"
+          },
+          "lastAction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastaction",
+            "description": "Последняя отметка работы с клиентом: called, messaged, renewed…"
           }
         },
         "type": "object",
@@ -2198,6 +2518,41 @@
         ],
         "title": "LoginOut"
       },
+      "MessageOut": {
+        "properties": {
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "cause": {
+            "type": "string",
+            "title": "Cause"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "generatedBy": {
+            "type": "string",
+            "const": "template",
+            "title": "Generatedby",
+            "description": "Черновик по шаблону причины; отправляет маркетолог"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject",
+          "text",
+          "cause",
+          "email",
+          "generatedBy"
+        ],
+        "title": "MessageOut"
+      },
       "ModelSettings": {
         "properties": {
           "features": {
@@ -2228,6 +2583,14 @@
             "minimum": 0.5,
             "title": "Ltvmonthlychurn",
             "description": "Базовый месячный отток для LTV, %: LTV = месячная выручка / отток",
+            "default": 5
+          },
+          "recalcMinutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Recalcminutes",
+            "description": "Периодичность прогноза: плановый пересчёт раз в N минут (кроме пересчётов на каждое изменение)",
             "default": 5
           },
           "asOf": {
@@ -2467,6 +2830,21 @@
             "minimum": 0.0,
             "title": "Price",
             "description": "Евроценты за период paymentTerm"
+          },
+          "signals": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Signals",
+            "description": "Необязательно: loadDrop — падение нагрузки сервера 0–1; downgraded — перешёл на тариф дешевле"
           }
         },
         "type": "object",
@@ -2617,6 +2995,48 @@
           "resolvedAsOf"
         ],
         "title": "SettingsOut"
+      },
+      "SignalEvent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "signal",
+            "title": "Type"
+          },
+          "name": {
+            "type": "string",
+            "enum": [
+              "supportTickets30d",
+              "loadDrop",
+              "downgraded"
+            ],
+            "title": "Name",
+            "description": "supportTickets30d — для аккаунта (targetId = id аккаунта); loadDrop, downgraded — для услуги"
+          },
+          "targetId": {
+            "type": "integer",
+            "title": "Targetid"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "targetId",
+          "value"
+        ],
+        "title": "SignalEvent"
       },
       "SimulateIn": {
         "properties": {
@@ -2895,6 +3315,12 @@
             "type": "array",
             "title": "Causes",
             "description": "Клиенты высокого и среднего риска по главной причине"
+          },
+          "retention": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Retention",
+            "description": "Работа с клиентами: отметки по видам и причины ухода"
           },
           "explanation": {
             "type": "string",

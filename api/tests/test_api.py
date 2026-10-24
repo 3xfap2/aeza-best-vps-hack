@@ -267,3 +267,36 @@ def test_what_if_and_renewals(client, auth):
     detail = client.get("/api/v1/customers/62", headers=auth).json()
     assert detail["history"] and detail["history"][-1]["score"] == detail["score"]
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_retention_actions_message_and_privacy(client, auth):
+    assert client.post("/api/v1/customers/5/actions", headers=auth, json={"kind": "churned"}).status_code == 422
+    r = client.post("/api/v1/customers/5/actions", headers=auth, json={"kind": "called", "note": "обещал оплатить"})
+    assert r.status_code == 201 and r.json()["author"] == "admin"
+    client.post("/api/v1/customers/9/actions", headers=auth, json={"kind": "churned", "reason": "Дорого"})
+    assert client.get("/api/v1/customers/5/actions", headers=auth).json()[0]["note"] == "обещал оплатить"
+    items = {i["id"]: i for i in client.get("/api/v1/customers?pageSize=200", headers=auth).json()["items"]}
+    assert items[5]["lastAction"] == "called"
+    ret = client.get("/api/v1/analytics/summary", headers=auth).json()["retention"]
+    assert ret["actions"]["called"] >= 1 and ret["reasons"]["Дорого"] >= 1 and ret["churned"] >= 1
+    msg = client.get("/api/v1/customers/5/message", headers=auth).json()
+    assert msg["subject"] and "Здравствуйте" in msg["text"] and msg["generatedBy"] == "template"
+    plain = client.get("/api/v1/customers/export.csv", headers=auth).text
+    assert "@example.test" not in plain and "работа" in plain.splitlines()[0]
+    assert "@example.test" in client.get("/api/v1/customers/export.csv?includeEmail=true", headers=auth).text
+    assert 'churn_radar_retention_actions{kind="called"}' in client.get("/metrics", headers=auth).text
+
+
+def test_external_signals(client, auth):
+    before = client.get("/api/v1/customers/1", headers=auth).json()["score"]
+    r = client.post("/api/v1/source/events", headers=auth,
+                    json={"type": "signal", "name": "loadDrop", "targetId": 21, "value": 0.9})
+    assert r.status_code == 200
+    d = client.get("/api/v1/customers/1", headers=auth).json()
+    assert any(c["feature"] == "usage_drop" for c in d["contributions"]) and d["score"] >= before
+    client.post("/api/v1/source/events", headers=auth, json={"type": "signal", "name": "supportTickets30d", "targetId": 1, "value": 3})
+    d = client.get("/api/v1/customers/1", headers=auth).json()
+    assert any(c["feature"] == "support_tickets" for c in d["contributions"])
+    assert client.post("/api/v1/source/events", headers=auth,
+                       json={"type": "signal", "name": "loadDrop", "targetId": 99999, "value": 0.5}).status_code == 404
+    client.post("/api/v1/source/preset/case", headers=auth)

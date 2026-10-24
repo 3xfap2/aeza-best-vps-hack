@@ -58,6 +58,12 @@ class RadarCollector:
             by_cause.add_metric([g["feature"], g["kind"]], eur(g["expected_loss"]))
         yield by_cause
 
+        actions = GaugeMetricFamily("churn_radar_retention_actions", "Отметки работы с клиентами по видам", labels=["kind"])
+        with self.radar.pool.connection() as conn:
+            for kind, n in db.action_counts(conn).items():
+                actions.add_metric([kind], n)
+        yield actions
+
         yield GaugeMetricFamily("churn_radar_services_at_risk", "Услуги со score не ниже порога среднего риска",
                                 value=s.services_at_risk)
         yield GaugeMetricFamily("churn_radar_data_quality_issues", "Найденные противоречия в данных",

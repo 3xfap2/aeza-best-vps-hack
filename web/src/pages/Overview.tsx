@@ -274,7 +274,7 @@ function CausesCard({ summary }: { summary: Summary }) {
                       <div className={`causes__bar causes__bar--${k}`}><i style={{ width: `${g.expectedLoss / max * 100}%` }} /></div>
                       <div className="causes__links">
                         <Link className="ro-link" to={`/app/customers?cause=${g.feature}&sort=expectedLoss`}>Список</Link>
-                        <a className="ro-link" href={`/api/v1/customers/export.csv?cause=${g.feature}&sort=expectedLoss`}>CSV для обзвона</a>
+                        <a className="ro-link" href={`/api/v1/customers/export.csv?cause=${g.feature}&sort=expectedLoss&includeEmail=true`}>CSV для обзвона</a>
                       </div>
                     </li>
                   ))}
@@ -288,6 +288,15 @@ function CausesCard({ summary }: { summary: Summary }) {
             <input id="roi" className="ro-range" type="range" min={0} max={100} step={5} value={rate}
               style={{ ['--p' as string]: `${rate}%` }} onChange={(e) => setRate(Number(e.target.value))} />
             <p className="ro-text">сохраним <b className="ro-mono">{eur(atRisk * rate / 100)}</b> выручки за {summary.horizonDays} дней</p>
+            {summary.retention && (
+              <div className="causes__ret">
+                <span className="ro-label">Работа с клиентами</span>
+                <p className="ro-small">Отработано <b>{summary.retention.worked}</b> из {summary.retention.atRisk} под риском · продлили <b>{summary.retention.renewed}</b> · ушли <b>{summary.retention.churned}</b></p>
+                {Object.keys(summary.retention.reasons).length > 0 && (
+                  <p className="ro-small">Причины ухода: {Object.entries(summary.retention.reasons).map(([r, n]) => `${r} — ${n}`).join(', ')}</p>
+                )}
+              </div>
+            )}
             <p className="ro-small">Ориентир рынка: напоминания об оплате возвращают 20–50 % неуспешных платежей. Расчёт: ожидаемая потеря клиентов под риском × доля удержанных.</p>
           </div>
         </div>

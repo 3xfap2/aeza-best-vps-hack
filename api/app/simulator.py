@@ -13,6 +13,7 @@ import calendar
 from datetime import datetime, timedelta
 
 from psycopg import Connection
+from psycopg.types.json import Jsonb
 
 from app import db
 from app.domain import GRACE_PERIOD, TERM_HOURS
@@ -75,6 +76,20 @@ def _set_status(conn: Connection, service: dict, status: str, at: datetime, sour
 
 def _next_tx_id(conn: Connection) -> int:
     return conn.execute("SELECT COALESCE(max(id), 0) + 1 AS id FROM transactions").fetchone()["id"]
+
+
+SIGNAL_TARGETS = {"supportTickets30d": "account", "loadDrop": "service", "downgraded": "service"}
+
+
+def set_signal(conn: Connection, target_id: int, name: str, value: float | bool) -> str:
+    """Сигнал из другой системы: поддержка, мониторинг, смена тарифа."""
+    table = "accounts" if SIGNAL_TARGETS.get(name) == "account" else "services"
+    row = conn.execute(f"SELECT id FROM {table} WHERE id = %s FOR UPDATE", (target_id,)).fetchone()
+    if not row:
+        raise SimulationError(f"{'Аккаунт' if table == 'accounts' else 'Услуга'} {target_id} не найден")
+    conn.execute(f"UPDATE {table} SET signals = signals || jsonb_build_object(%s::text, %s::jsonb) WHERE id = %s",
+                 (name, Jsonb(value), target_id))
+    return f"{'аккаунт' if table == 'accounts' else 'услуга'} #{target_id}: сигнал {name} = {value}"
 
 
 def topup(conn: Connection, account_id: int, amount_cents: int) -> str:

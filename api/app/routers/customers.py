@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import db
-from app.insights import what_if
-from app.security import current_user
+from app.insights import message, what_if
+from app.security import User, current_user
 from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
 
 router = APIRouter(prefix="/api/v1/customers", tags=["Клиенты"], dependencies=[Depends(current_user)])
@@ -55,15 +56,21 @@ def export_csv(
     q: str | None = Query(None, max_length=100),
     hasIssues: bool | None = Query(None),
     cause: str | None = Query(None, max_length=64),
+    includeEmail: bool = Query(False, description="Добавить email (персональные данные) — по умолчанию выгрузка только с ID"),
 ) -> Response:
     cur, rows = _filtered(request, sort, order, level, q, hasIssues, cause)
+    with request.app.state.pool.connection() as conn:
+        last = db.last_actions(conn)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
-    w.writerow(["id", "email", "баланс_eur", "пополнено_eur", "score", "уровень", "потеря_30д_eur", "причина", "что_сделать"])
+    w.writerow(["id"] + (["email"] if includeEmail else []) +
+               ["баланс_eur", "пополнено_eur", "score", "уровень", "потеря_30д_eur", "причина", "что_сделать", "работа"])
     for c in rows:
         item = list_item(c)
-        w.writerow([item.id, item.email, item.balance, item.totalReplenished, item.score if item.score is not None else "",
-                    item.levelTitle, item.expectedLoss, item.topReason or "", (c.actions or [""])[0]])
+        w.writerow([item.id] + ([item.email] if includeEmail else []) +
+                   [item.balance, item.totalReplenished, item.score if item.score is not None else "",
+                    item.levelTitle, item.expectedLoss, item.topReason or "", (c.actions or [""])[0],
+                    last.get(item.id, {}).get("kind", "")])
     name = f"radar-clients-{cur.result.as_of:%Y%m%d}.csv"
     # BOM — чтобы Excel открыл кириллицу без выбора кодировки
     return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8",
@@ -84,8 +91,13 @@ def list_customers(
 ) -> CustomerPage:
     cur, ordered = _filtered(request, sort, order, level, q, hasIssues, cause)
     start = (page - 1) * pageSize
+    with request.app.state.pool.connection() as conn:
+        last = db.last_actions(conn)
+    items = [list_item(c) for c in ordered[start:start + pageSize]]
+    for item in items:
+        item.lastAction = last.get(item.id, {}).get("kind")
     return CustomerPage(
-        items=[list_item(c) for c in ordered[start:start + pageSize]],
+        items=items,
         total=len(ordered), page=page, pageSize=pageSize, sort=sort, order=order,
         asOf=cur.result.as_of, version=cur.version,
     )
@@ -123,3 +135,59 @@ def customer_what_if(customer_id: int, request: Request) -> list[WhatIfOut]:
     if customer_id not in cur.result.by_id:
         raise HTTPException(404, f"Клиент #{customer_id} не найден")
     return [WhatIfOut(**x) for x in what_if(cur.result, cur.snapshot, customer_id)]
+
+
+ActionKind = Literal["called", "no_answer", "messaged", "offer", "renewed", "churned"]
+CHURN_REASONS = ("Дорого", "Ушёл к конкуренту", "Проект закрыт", "Технические проблемы", "Не пользуется", "Другое")
+
+
+class ActionIn(BaseModel):
+    kind: ActionKind
+    reason: Literal[CHURN_REASONS] | None = None  # type: ignore[valid-type]
+    note: str | None = Field(None, max_length=500)
+
+
+class ActionOut(BaseModel):
+    id: int
+    kind: str
+    reason: str | None
+    note: str | None
+    author: str
+    createdAt: datetime
+
+
+@router.get("/{customer_id}/actions", response_model=list[ActionOut], summary="Журнал работы с клиентом")
+def list_actions(customer_id: int, request: Request) -> list[ActionOut]:
+    with request.app.state.pool.connection() as conn:
+        return [ActionOut(**r) for r in db.actions_for(conn, customer_id)]
+
+
+@router.post("/{customer_id}/actions", response_model=ActionOut, status_code=201,
+             summary="Отметить работу с клиентом: позвонили, написали, предложение, продлил, ушёл (с причиной)")
+def add_action(customer_id: int, body: ActionIn, request: Request, user: User = Depends(current_user)) -> ActionOut:
+    if customer_id not in request.app.state.radar.current.result.by_id:
+        raise HTTPException(404, f"Клиент #{customer_id} не найден")
+    if body.kind == "churned" and not body.reason:
+        raise HTTPException(422, "Для «ушёл» укажите причину")
+    with request.app.state.pool.connection() as conn:
+        row = db.add_action(conn, customer_id, body.kind, body.reason if body.kind == "churned" else None, body.note, user.login)
+    request.app.state.radar.broker.publish("action", {"customerId": customer_id, "kind": body.kind})
+    return ActionOut(**row)
+
+
+class MessageOut(BaseModel):
+    subject: str
+    text: str
+    cause: str
+    email: str
+    generatedBy: Literal["template"] = Field(description="Черновик по шаблону причины; отправляет маркетолог")
+
+
+@router.get("/{customer_id}/message", response_model=MessageOut | None,
+            summary="Черновик сообщения клиенту по главной причине риска")
+def customer_message(customer_id: int, request: Request) -> MessageOut | None:
+    cur = request.app.state.radar.current
+    if customer_id not in cur.result.by_id:
+        raise HTTPException(404, f"Клиент #{customer_id} не найден")
+    m = message(cur.result, customer_id)
+    return MessageOut(**m) if m else None

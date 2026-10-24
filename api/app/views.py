@@ -50,7 +50,8 @@ class CustomerListItem(BaseModel):
     levelTitle: str
     topReason: str | None
     expectedLoss: float = Field(description="Ожидаемая потеря за горизонт, €")
-    qualityIssues: int = Field(description="Сколько противоречий найдено в данных клиента")
+    qualityIssues: int = Field(description="Сколько расхождений статуса и дат у клиента")
+    lastAction: str | None = Field(None, description="Последняя отметка работы с клиентом: called, messaged, renewed…")
 
 
 class CustomerPage(BaseModel):
@@ -142,6 +143,7 @@ class SummaryOut(BaseModel):
     servicesAtRisk: int
     qualityIssues: int
     causes: list[CauseOut] = Field(description="Клиенты высокого и среднего риска по главной причине")
+    retention: dict = Field(default_factory=dict, description="Работа с клиентами: отметки по видам и причины ухода")
     explanation: str
     version: int
     computedAt: datetime

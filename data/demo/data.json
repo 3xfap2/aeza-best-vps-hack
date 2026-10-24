@@ -440,7 +440,10 @@
    "withdrawBalance": 17774,
    "totalReplenished": 99797,
    "bonusBalance": 0,
-   "bonusState": "unlocked"
+   "bonusState": "unlocked",
+   "signals": {
+    "supportTickets30d": 3
+   }
   },
   {
    "id": 50,
@@ -476,7 +479,10 @@
    "withdrawBalance": 0,
    "totalReplenished": 111789,
    "bonusBalance": 2445,
-   "bonusState": "locked"
+   "bonusState": "locked",
+   "signals": {
+    "supportTickets30d": 2
+   }
   },
   {
    "id": 54,
@@ -1124,7 +1130,10 @@
    "withdrawBalance": 0,
    "totalReplenished": 221688,
    "bonusBalance": 0,
-   "bonusState": "unlocked"
+   "bonusState": "unlocked",
+   "signals": {
+    "supportTickets30d": 4
+   }
   },
   {
    "id": 126,
@@ -1250,7 +1259,10 @@
    "withdrawBalance": 0,
    "totalReplenished": 317913,
    "bonusBalance": 0,
-   "bonusState": "locked"
+   "bonusState": "locked",
+   "signals": {
+    "supportTickets30d": 2
+   }
   },
   {
    "id": 140,
@@ -1259,7 +1271,10 @@
    "withdrawBalance": 0,
    "totalReplenished": 86236,
    "bonusBalance": 2253,
-   "bonusState": "locked"
+   "bonusState": "locked",
+   "signals": {
+    "supportTickets30d": 3
+   }
   },
   {
    "id": 141,
@@ -1295,7 +1310,10 @@
    "withdrawBalance": 2343,
    "totalReplenished": 99205,
    "bonusBalance": 0,
-   "bonusState": "unlocked"
+   "bonusState": "unlocked",
+   "signals": {
+    "supportTickets30d": 3
+   }
   },
   {
    "id": 145,
@@ -1475,7 +1493,10 @@
    "withdrawBalance": 63,
    "totalReplenished": 54606,
    "bonusBalance": 860,
-   "bonusState": "locked"
+   "bonusState": "locked",
+   "signals": {
+    "supportTickets30d": 3
+   }
   },
   {
    "id": 165,
@@ -2142,7 +2163,10 @@
    "createdAt": "2026-06-22T00:50:12.187Z",
    "expiresAt": "2026-11-22T00:50:12.187Z",
    "status": "suspended",
-   "price": 4083
+   "price": 4083,
+   "signals": {
+    "loadDrop": 0.53
+   }
   },
   {
    "id": 32,
@@ -2186,7 +2210,10 @@
    "createdAt": "2024-11-08T19:58:52.965Z",
    "expiresAt": "2026-11-08T19:58:52.965Z",
    "status": "suspended",
-   "price": 26336
+   "price": 26336,
+   "signals": {
+    "loadDrop": 0.77
+   }
   },
   {
    "id": 36,
@@ -2197,7 +2224,10 @@
    "createdAt": "2025-11-25T10:49:49.427Z",
    "expiresAt": "2026-11-25T10:49:49.427Z",
    "status": "suspended",
-   "price": 22118
+   "price": 22118,
+   "signals": {
+    "loadDrop": 0.84
+   }
   },
   {
    "id": 37,
@@ -2362,7 +2392,10 @@
    "createdAt": "2026-03-28T01:21:01.080Z",
    "expiresAt": "2026-11-28T01:21:01.080Z",
    "status": "suspended",
-   "price": 999
+   "price": 999,
+   "signals": {
+    "loadDrop": 0.74
+   }
   },
   {
    "id": 52,
@@ -2384,7 +2417,10 @@
    "createdAt": "2025-07-30T15:25:26.814Z",
    "expiresAt": "2026-10-31T15:25:26.814Z",
    "status": "suspended",
-   "price": 8883
+   "price": 8883,
+   "signals": {
+    "loadDrop": 0.94
+   }
   },
   {
    "id": 54,
@@ -2395,7 +2431,10 @@
    "createdAt": "2026-03-16T10:24:27.197Z",
    "expiresAt": "2026-11-16T10:24:27.197Z",
    "status": "suspended",
-   "price": 2119
+   "price": 2119,
+   "signals": {
+    "loadDrop": 0.78
+   }
   },
   {
    "id": 55,
@@ -2516,7 +2555,10 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-08-03T20:38:05.114Z",
    "status": "suspended",
-   "price": 579
+   "price": 579,
+   "signals": {
+    "loadDrop": 0.89
+   }
   },
   {
    "id": 66,
@@ -2813,7 +2855,10 @@
    "createdAt": "2026-08-10T02:02:16.181Z",
    "expiresAt": "2026-11-10T02:02:16.181Z",
    "status": "suspended",
-   "price": 4275
+   "price": 4275,
+   "signals": {
+    "downgraded": true
+   }
   },
   {
    "id": 93,
@@ -2923,7 +2968,10 @@
    "createdAt": "2023-11-05T19:59:40.015Z",
    "expiresAt": "2026-11-05T19:59:40.015Z",
    "status": "suspended",
-   "price": 15280
+   "price": 15280,
+   "signals": {
+    "loadDrop": 0.51
+   }
   },
   {
    "id": 103,
@@ -3330,7 +3378,10 @@
    "createdAt": "2024-10-27T13:50:45.823Z",
    "expiresAt": "2026-10-27T13:50:45.823Z",
    "status": "suspended",
-   "price": 4212
+   "price": 4212,
+   "signals": {
+    "loadDrop": 0.63
+   }
   },
   {
    "id": 140,
@@ -3418,7 +3469,10 @@
    "createdAt": "2025-05-27T23:35:49.124Z",
    "expiresAt": "2027-02-27T23:35:49.124Z",
    "status": "active",
-   "price": 11104
+   "price": 11104,
+   "signals": {
+    "loadDrop": 0.63
+   }
   },
   {
    "id": 148,
@@ -3616,7 +3670,10 @@
    "createdAt": "2026-10-10T01:53:02.620Z",
    "expiresAt": "2026-10-31T01:53:02.620Z",
    "status": "active",
-   "price": 648
+   "price": 648,
+   "signals": {
+    "downgraded": true
+   }
   },
   {
    "id": 166,
@@ -3781,7 +3838,10 @@
    "createdAt": "2026-09-02T03:34:40.064Z",
    "expiresAt": "2026-11-02T03:34:40.064Z",
    "status": "suspended",
-   "price": 1930
+   "price": 1930,
+   "signals": {
+    "loadDrop": 0.89
+   }
   },
   {
    "id": 181,
@@ -3792,7 +3852,10 @@
    "createdAt": "2026-05-02T17:43:21.640Z",
    "expiresAt": "2026-11-02T17:43:21.640Z",
    "status": "suspended",
-   "price": 1673
+   "price": 1673,
+   "signals": {
+    "loadDrop": 0.86
+   }
   },
   {
    "id": 182,
@@ -3825,7 +3888,10 @@
    "createdAt": "2023-02-24T07:00:01.204Z",
    "expiresAt": "2027-02-24T07:00:01.204Z",
    "status": "suspended",
-   "price": 42187
+   "price": 42187,
+   "signals": {
+    "loadDrop": 0.66
+   }
   },
   {
    "id": 185,
@@ -4078,7 +4144,10 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-08-04T19:06:56.840Z",
    "status": "suspended",
-   "price": 2968
+   "price": 2968,
+   "signals": {
+    "loadDrop": 0.93
+   }
   },
   {
    "id": 208,
@@ -4287,7 +4356,10 @@
    "createdAt": "2026-04-12T09:52:58.343Z",
    "expiresAt": "2026-11-12T09:52:58.343Z",
    "status": "active",
-   "price": 1913
+   "price": 1913,
+   "signals": {
+    "downgraded": true
+   }
   },
   {
    "id": 227,
@@ -4650,7 +4722,10 @@
    "createdAt": "2025-04-30T08:44:00.917Z",
    "expiresAt": "2026-10-30T08:44:00.917Z",
    "status": "suspended",
-   "price": 1707
+   "price": 1707,
+   "signals": {
+    "loadDrop": 0.69
+   }
   },
   {
    "id": 260,
@@ -4661,7 +4736,10 @@
    "createdAt": "2026-05-03T17:25:26.787Z",
    "expiresAt": "2026-11-03T17:25:26.787Z",
    "status": "suspended",
-   "price": 3551
+   "price": 3551,
+   "signals": {
+    "loadDrop": 0.68
+   }
   },
   {
    "id": 261,
@@ -4683,7 +4761,10 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-06-02T10:28:43.835Z",
    "status": "suspended",
-   "price": 3813
+   "price": 3813,
+   "signals": {
+    "loadDrop": 0.72
+   }
   },
   {
    "id": 263,
@@ -4738,7 +4819,10 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-01-16T15:57:28.288Z",
    "status": "active",
-   "price": 3393
+   "price": 3393,
+   "signals": {
+    "loadDrop": 0.67
+   }
   },
   {
    "id": 268,
@@ -4969,7 +5053,10 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-04-10T21:09:47.096Z",
    "status": "suspended",
-   "price": 2469
+   "price": 2469,
+   "signals": {
+    "loadDrop": 0.74
+   }
   },
   {
    "id": 289,
@@ -5024,7 +5111,10 @@
    "createdAt": "2026-06-23T04:05:31.540Z",
    "expiresAt": "2027-06-23T04:05:31.540Z",
    "status": "active",
-   "price": 11312
+   "price": 11312,
+   "signals": {
+    "downgraded": true
+   }
   },
   {
    "id": 294,
@@ -5090,7 +5180,10 @@
    "createdAt": "2025-08-09T22:04:51.113Z",
    "expiresAt": "2027-08-09T22:04:51.113Z",
    "status": "active",
-   "price": 1750
+   "price": 1750,
+   "signals": {
+    "downgraded": true
+   }
   },
   {
    "id": 300,
@@ -5134,7 +5227,10 @@
    "createdAt": "2025-02-06T15:42:18.682Z",
    "expiresAt": "2027-02-06T15:42:18.682Z",
    "status": "suspended",
-   "price": 14668
+   "price": 14668,
+   "signals": {
+    "loadDrop": 0.85
+   }
   },
   {
    "id": 304,
@@ -5321,7 +5417,10 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-07-28T03:36:49.258Z",
    "status": "suspended",
-   "price": 2161
+   "price": 2161,
+   "signals": {
+    "loadDrop": 0.92
+   }
   },
   {
    "id": 321,
@@ -5343,7 +5442,11 @@
    "createdAt": "2026-10-19T14:55:00.000Z",
    "expiresAt": "2027-07-02T20:18:26.994Z",
    "status": "active",
-   "price": 2
+   "price": 2,
+   "signals": {
+    "loadDrop": 0.87,
+    "downgraded": true
+   }
   },
   {
    "id": 323,
@@ -5376,7 +5479,10 @@
    "createdAt": "2026-07-23T04:28:31.404Z",
    "expiresAt": "2027-01-23T04:28:31.404Z",
    "status": "suspended",
-   "price": 4331
+   "price": 4331,
+   "signals": {
+    "loadDrop": 0.67
+   }
   },
   {
    "id": 326,
@@ -5453,7 +5559,10 @@
    "createdAt": "2024-11-20T00:49:45.670Z",
    "expiresAt": "2026-11-20T00:49:45.670Z",
    "status": "suspended",
-   "price": 22318
+   "price": 22318,
+   "signals": {
+    "loadDrop": 0.85
+   }
   },
   {
    "id": 333,
@@ -5464,7 +5573,10 @@
    "createdAt": "2026-06-12T01:18:05.575Z",
    "expiresAt": "2026-11-12T01:18:05.575Z",
    "status": "suspended",
-   "price": 774
+   "price": 774,
+   "signals": {
+    "loadDrop": 0.69
+   }
   },
   {
    "id": 334,
@@ -5486,7 +5598,10 @@
    "createdAt": "2026-09-16T03:31:56.969Z",
    "expiresAt": "2026-11-16T03:31:56.969Z",
    "status": "suspended",
-   "price": 3983
+   "price": 3983,
+   "signals": {
+    "loadDrop": 0.65
+   }
   },
   {
    "id": 336,
@@ -5519,7 +5634,10 @@
    "createdAt": "2026-10-08T16:15:28.136Z",
    "expiresAt": "2027-05-08T16:15:28.136Z",
    "status": "suspended",
-   "price": 3727
+   "price": 3727,
+   "signals": {
+    "loadDrop": 0.54
+   }
   },
   {
    "id": 339,

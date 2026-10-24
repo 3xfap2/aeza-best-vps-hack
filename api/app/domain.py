@@ -31,6 +31,7 @@ class Account:
     totalReplenished: int
     bonusBalance: int
     bonusState: str
+    signals: dict = field(default_factory=dict)  # доп. сигналы из других систем, например supportTickets30d
 
     @property
     def available_funds(self) -> int:
@@ -49,6 +50,7 @@ class Service:
     expiresAt: datetime
     status: str
     price: int
+    signals: dict = field(default_factory=dict)  # например loadDrop, downgraded
 
     @property
     def is_live(self) -> bool:

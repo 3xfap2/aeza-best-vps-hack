@@ -4,7 +4,8 @@ import { useLiveData } from '../live'
 import { dateTime, Empty, Skeleton, useToast } from '../ui'
 import { StatusLine } from './Shell'
 
-type EventType = 'topup' | 'pay_renewal' | 'autoprolong' | 'service_status'
+type EventType = 'topup' | 'pay_renewal' | 'autoprolong' | 'service_status' | 'signal'
+const SIGNALS = [['loadDrop', 'Падение нагрузки сервера, 0–1'], ['downgraded', 'Понизил тариф'], ['supportTickets30d', 'Обращений в поддержку за 30 дней']]
 const STATUSES = [['active', 'Активна'], ['suspended', 'Выключена'], ['prolong_wait', 'Ждёт оплаты'], ['deleted', 'Удалена'], ['blocked', 'Заблокирована']]
 
 export default function DataPage() {
@@ -127,6 +128,8 @@ function EventsCard({ busy, run }: { busy: boolean; run: (label: string, fn: () 
   const [amount, setAmount] = useState('20')
   const [enabled, setEnabled] = useState(true)
   const [status, setStatus] = useState('active')
+  const [signal, setSignal] = useState('loadDrop')
+  const [signalValue, setSignalValue] = useState('0.8')
   const [lookupError, setLookupError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -148,6 +151,12 @@ function EventsCard({ busy, run }: { busy: boolean; run: (label: string, fn: () 
     else { body.serviceId = Number(serviceId) }
     if (type === 'autoprolong') body.enabled = enabled
     if (type === 'service_status') body.status = status
+    if (type === 'signal') {
+      body.name = signal
+      body.targetId = signal === 'supportTickets30d' ? customer.id : Number(serviceId)
+      body.value = signal === 'downgraded' ? true : Number(signalValue.replace(',', '.'))
+      delete body.serviceId
+    }
     await run('event', async () => {
       const before = customer.score
       const r = await api<{ summary: string }>('/api/v1/source/events', { method: 'POST', json: body })
@@ -172,6 +181,7 @@ function EventsCard({ busy, run }: { busy: boolean; run: (label: string, fn: () 
             <option value="pay_renewal">Оплата продления</option>
             <option value="autoprolong">Автопродление вкл/выкл</option>
             <option value="service_status">Смена статуса услуги</option>
+            <option value="signal">Сигнал: поддержка / мониторинг / тариф</option>
           </select></label>
         {type === 'topup' ? (
           <label className="field"><span>Сумма, €</span><input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
@@ -183,6 +193,17 @@ function EventsCard({ busy, run }: { busy: boolean; run: (label: string, fn: () 
         )}
         {type === 'autoprolong' && (
           <label className="check"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Включить автопродление</label>
+        )}
+        {type === 'signal' && (
+          <>
+            <label className="field"><span>Сигнал</span>
+              <select value={signal} onChange={(e) => setSignal(e.target.value)}>
+                {SIGNALS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+              </select></label>
+            {signal !== 'downgraded' && (
+              <label className="field"><span>Значение</span><input inputMode="decimal" value={signalValue} onChange={(e) => setSignalValue(e.target.value)} /></label>
+            )}
+          </>
         )}
         {type === 'service_status' && (
           <label className="field"><span>Новый статус</span>
