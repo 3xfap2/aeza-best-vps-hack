@@ -367,6 +367,8 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 .ask .ask__how { max-width: 60em; }
 .ask .ask__off { display: grid; gap: 8px; }
 .ask__off code { font-family: var(--font-mono); }
+.ask__connect { grid-column: 1 / -1; max-width: 640px; }
+.ai-card { padding: 24px; display: grid; gap: 14px; align-content: start; }
 .ask__turn { grid-column: 1 / -1; padding: 22px 26px; display: grid; gap: 12px; justify-items: start; }
 .ask__turn .ask__q { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; }
 .ask__turn .ask__q .ico { margin-top: 2px; color: var(--ink-3); }

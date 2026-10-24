@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type AIStatus, type AskAnswer } from '../api'
+import AIConfigCard from '../AIConnect'
+import { ApiError, api, can, type AIStatus, type AskAnswer } from '../api'
 import { Icon } from '../ui'
-import { StatusLine } from './Shell'
+import { StatusLine, useUser } from './Shell'
 
 const EXAMPLES = [
   'Кому звонить первым и что сказать?',
@@ -30,7 +31,9 @@ export default function Ask() {
   const [turns, setTurns] = useState<Turn[]>([])
   const [busy, setBusy] = useState(false)
   useEffect(() => { document.title = 'Спросить Радар — Радар оттока' }, [])
-  useEffect(() => { api<AIStatus>('/api/v1/ai/status').then(setStatus).catch(() => setStatus(null)) }, [])
+  const admin = can(useUser(), 'admin')
+  const loadStatus = () => { api<AIStatus>('/api/v1/ai/status').then(setStatus).catch(() => setStatus(null)) }
+  useEffect(loadStatus, [])
 
   async function ask(q: string) {
     const text = q.trim()
@@ -54,9 +57,9 @@ export default function Ask() {
           <h2 id="ask-t" className="ask__title">Вопрос простыми словами — ответ по данным Радара</h2>
           {status && !status.enabled ? (
             <div className="ask__off">
-              <p className="ro-text">ИИ-помощник не подключён. Чтобы включить, задайте в <code>.env</code> провайдера и ключ:
-                <code className="formula">AI_PROVIDER=openai · AI_API_KEY=sk-…</code>
-                или <code>AI_PROVIDER=yandex</code> / <code>gigachat</code> — тогда данные обрабатываются в РФ.</p>
+              <p className="ro-text">ИИ-помощник пока не подключён. {admin
+                ? 'Подключите его ниже: адрес API, модель и ключ любого OpenAI-совместимого сервиса (OpenAI, ИИ Aéza, OpenRouter, Ollama).'
+                : 'Подключает администратор — в разделе «Данные» → «ИИ-помощник».'}</p>
               <p className="ro-small">Без ИИ всё остальное работает: письма — по шаблонам, план дня — в «Удержании» и в боте (/today).</p>
             </div>
           ) : (
@@ -78,6 +81,10 @@ export default function Ask() {
             что панель, а каждое число ответа сверяет с данными. Email клиентов в модель не уходят — она видит «клиент #62».
           </p>
         </section>
+
+        {status && !status.enabled && admin && (
+          <div className="ask__connect"><AIConfigCard admin onConnected={loadStatus} /></div>
+        )}
 
         {turns.map((t, i) => (
           <section key={turns.length - i} className="ro-card ask__turn" aria-live={i === 0 ? 'polite' : undefined}>
