@@ -32,40 +32,74 @@ body { margin: 0; background: var(--paper); }
   background: none; color: var(--ink-2); cursor: pointer; }
 .theme-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 500; }
 
-/* --- тема Aéza: фирменные цвета aeza.net (бирюзовый #16B9CF, светлый фон, Inter) --- */
+/* --- тема Aéza: как на aeza.net — белая страница, плоские серые карточки, чёрные жирные заголовки,
+   Inter везде, бирюзовый #16B9CF только точечно. Без текстур, маркеров, рукописных и моноширинных шрифтов. --- */
 :root[data-theme="aeza"] {
-  --paper: #F4F4F4;
-  --kraft-100: #E8F8FA;
-  --kraft-200: #D3F1F5;
+  --paper: #FFFFFF;
+  --kraft-100: #F4F4F4;
+  --kraft-200: #ECECEC;
   --neutral-100: #ECECEC;
-  --card: #FFFFFF;
-  --ink: #1F1F1F;
-  --ink-2: #585858;
-  --ink-3: #7E7E7E;
-  --line: #E3E3E3;
-  --line-strong: #C9C9C9;
-  --line-draft: #CFE3E6;
+  --card: #F4F4F4;
+  --ink: #0F0F0F;
+  --ink-2: #5C5C5C;
+  --ink-3: #8C8C8C;
+  --line: #E4E4E4;
+  --line-strong: #D4D4D4;
+  --line-draft: #E4E4E4;
   --marker: #16B9CF;
   --marker-hover: #12A3B7;
   --marker-300: #5FCFDE;
-  --marker-200: #85D7E2;
-  --marker-100: #DDFBFF;
-  /* кнопки и ссылки — бирюзовый темнее фирменного: белый текст на #16B9CF не читается (контраст 2,3:1) */
-  --action: #0A7F8F;
-  --action-hover: #086C79;
-  --action-deep: #055660;
+  --marker-200: #BDEBF2;
+  --marker-100: #E3F7FA;
+  --action: #111111;          /* главные кнопки — чёрные, как «Войти» на aeza.net */
+  --action-hover: #000000;
+  --action-deep: #000000;
   --on-action: #FFFFFF;
-  --risk-none: #585858;
+  --risk-none: #5C5C5C;
   --risk-none-bg: #ECECEC;
-  --shadow-1: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-2: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
-  --shadow-3: 0 2px 4px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.08);
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: 0 12px 40px rgba(0,0,0,0.10);
   --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --radius-button: 12px;
-  --radius-card: 16px;
+  --font-mono: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hand: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-button: 14px;
+  --radius-card: 24px;
 }
-:root[data-theme="aeza"] .ro h1, :root[data-theme="aeza"] .ro-cardhead h2 { letter-spacing: -0.02em; font-weight: 600; }
+:root[data-theme="aeza"] .ro { font-variant-numeric: tabular-nums; }
+:root[data-theme="aeza"] .ro h1, :root[data-theme="aeza"] .ro-h1 { font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
+:root[data-theme="aeza"] .ro-cardhead h2, :root[data-theme="aeza"] .ro h2 { font-weight: 600; letter-spacing: -0.02em; }
+/* плоские карточки и панели: без рамок, теней и бумажной текстуры */
+:root[data-theme="aeza"] .ro-card { border-color: transparent; box-shadow: none; }
+:root[data-theme="aeza"] .ro-panel::before, :root[data-theme="aeza"] .ro-paper-texture::before { display: none; }
+:root[data-theme="aeza"] .ro-dots, :root[data-theme="aeza"] .ro-grid-pattern { background-image: none; }
+:root[data-theme="aeza"] .intro { box-shadow: none; }
+/* без маркера и рукописных пометок — обычный текст */
+:root[data-theme="aeza"] .ro-mark { background-image: none; padding: 0; margin: 0; }
+:root[data-theme="aeza"] .ro-note, :root[data-theme="aeza"] .t-note { font-size: 14px; font-weight: 400; color: var(--ink-3); }
+/* подписи — обычным текстом, не моноширинным капсом */
+:root[data-theme="aeza"] .ro-label { text-transform: none; letter-spacing: 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }
+:root[data-theme="aeza"] .ro-mono, :root[data-theme="aeza"] .ro-table .mono, :root[data-theme="aeza"] .ro-status { font-size: 14px; }
+/* сплошные тонкие разделители вместо штриховых */
+:root[data-theme="aeza"] .ro-rule, :root[data-theme="aeza"] .ro-dash-box, :root[data-theme="aeza"] .ro-side__foot,
+:root[data-theme="aeza"] .camp__fact, :root[data-theme="aeza"] .causes__ret, :root[data-theme="aeza"] .more__user,
+:root[data-theme="aeza"] .state--empty, :root[data-theme="aeza"] .drop, :root[data-theme="aeza"] .login__or::before,
+:root[data-theme="aeza"] .login__or::after { border-style: solid; border-width: 1px; }
+:root[data-theme="aeza"] .ro-side__foot, :root[data-theme="aeza"] .camp__fact, :root[data-theme="aeza"] .causes__ret,
+:root[data-theme="aeza"] .more__user { border-width: 1px 0 0; }
+/* поля и вторичные кнопки — белые на серых карточках */
+:root[data-theme="aeza"] .field input, :root[data-theme="aeza"] .field select, :root[data-theme="aeza"] .num-input,
+:root[data-theme="aeza"] .ask__input, :root[data-theme="aeza"] .message__text, :root[data-theme="aeza"] .team__role,
+:root[data-theme="aeza"] .ro-btn--quiet, :root[data-theme="aeza"] .chips button, :root[data-theme="aeza"] .ro-radar__filters button,
+:root[data-theme="aeza"] .theme-switch button[aria-pressed="true"] { background: #FFFFFF; }
+:root[data-theme="aeza"] .ro-btn--quiet { box-shadow: inset 0 0 0 1px var(--line-strong); }
+:root[data-theme="aeza"] .chips button[aria-pressed="true"], :root[data-theme="aeza"] .ro-radar__filters button[aria-pressed="true"] {
+  background: #111111; color: #FFFFFF; border-color: #111111; }
+:root[data-theme="aeza"] .ro-table th { background: #ECECEC; }
+:root[data-theme="aeza"] .ro-table tbody tr:hover { background: #FFFFFF; }
+:root[data-theme="aeza"] .ro-side nav a[aria-current="page"] { box-shadow: none; }
+:root[data-theme="aeza"] .ro-sum .ro-sum__paid { background: #FFFFFF; border-left-color: var(--marker); }
 .ro-side nav a:focus-visible, .side__foot > a:focus-visible, .side__foot > button:focus-visible { outline-offset: 0; border-radius: var(--radius-button); }
 .ro-live-dot.is-off { background: var(--ink-3); animation: none; }
 .ro-status { flex-wrap: wrap; row-gap: 4px; }
