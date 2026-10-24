@@ -185,7 +185,10 @@ class WithdrawableBalance(Feature):
 | Чтение без лишнего трафика | у каждого GET есть `ETag`; повтор с `If-None-Match` — `304` без тела |
 | Чужая правка настроек | `ETag` у `GET /model/settings` → `If-Match` в `PATCH` (не совпал — `412`); для простых клиентов — `?expectedVersion=` (`409`) |
 | Создание | `201 Created` и `Location` с адресом нового ресурса |
-| Страницы | `page` и `pageSize` (до 200), в теле `total` и `version` расчёта, в заголовке `Link` — `first`, `prev`, `next`, `last` |
+| Страницы | `page` и `pageSize` (до 200), в теле `total` и `version` расчёта, в заголовке `Link` — `first`, `prev`, `next`, `last` с закреплённой `version`; если данные пересчитались между страницами — `409`, обход начинается заново |
+| Трассировка | `X-Request-ID` из запроса или созданный сервером — в ответе, в теле ошибки (`requestId`) и в каждой строке журнала |
+| Журнал | JSON в stdout, одна строка на запрос: метод, путь, статус, длительность, `requestId` ([api/app/observability.py](api/app/observability.py)) |
+| Здоровье | `/health/live` — процесс жив; `/health/ready` — база отвечает и расчёт готов (иначе `503`) |
 | Частичное изменение | `PATCH` — JSON Merge Patch (RFC 7386): только изменённые поля |
 | Безопасный повтор | любой `POST` с заголовком `Idempotency-Key`: повтор с тем же ключом получает сохранённый ответ (`Idempotent-Replayed: true`) и второй раз не выполняется; тот же ключ с другим телом — `422`, первый ещё выполняется — `409`; ключ живёт сутки ([api/app/idempotency.py](api/app/idempotency.py)) |
 | Повторная доставка | события пачками через `POST /api/v1/ingest/events` с `eventId`: повтор отбрасывается |

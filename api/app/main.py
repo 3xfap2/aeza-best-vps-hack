@@ -15,7 +15,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import ai, db, demo_stream, http, idempotency
+from app import ai, db, demo_stream, http, idempotency, observability
 from app.config import load_config
 from app.inbox import Inbox
 from app.integrations import Outbox, build_sinks
@@ -94,6 +94,7 @@ async def scheduled_recalc(radar: AppState) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    observability.setup_logging()
     config = load_config()
     pool = db.create_pool(config.database_url)
     applied = db.migrate(pool)
@@ -191,6 +192,8 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+observability.install(app)   # X-Request-ID и журнал запросов JSON — самый внешний слой, см. app/observability.py
+
 STATIC = Path(__file__).resolve().parent / "static"
 app.mount("/api/v1/docs-static", StaticFiles(directory=STATIC / "swagger"), name="swagger-static")
 
@@ -207,8 +210,24 @@ def swagger_ui():
 
 
 @app.get("/health", include_in_schema=False)
+@app.get("/health/live", tags=["Служебное"], summary="Процесс жив (для перезапуска контейнера)")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["Служебное"], summary="Готов принимать запросы: база отвечает, расчёт есть",
+         responses={503: {"description": "Не готов — в теле что именно"}})
+def ready(request: Request):
+    checks: dict = {}
+    try:
+        with request.app.state.pool.connection(timeout=2) as conn:
+            conn.execute("SELECT 1")
+            checks["inboxPending"] = db.inbox_counts(conn)["pending"]
+        checks["database"] = "ok"
+        checks["calculationVersion"] = request.app.state.radar.current.version
+    except Exception as e:  # база недоступна или расчёт ещё не выполнен
+        return http.problem(request, 503, f"Не готов: {e}"[:300])
+    return {"status": "ready", **checks}
 
 
 def custom_openapi() -> dict:

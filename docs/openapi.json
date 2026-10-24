@@ -498,6 +498,24 @@
               "default": 25,
               "title": "Pagesize"
             }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Версия расчёта, с которой начат обход страниц (из ответа или Link). Если данные уже пересчитаны — 409: начните с первой страницы",
+              "title": "Version"
+            },
+            "description": "Версия расчёта, с которой начат обход страниц (из ответа или Link). Если данные уже пересчитаны — 409: начните с первой страницы"
           }
         ],
         "responses": {
@@ -2520,6 +2538,63 @@
           },
           "401": {
             "description": "Нет доступа"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Процесс жив (для перезапуска контейнера)",
+        "operationId": "health_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Live Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Готов принимать запросы: база отвечает, расчёт есть",
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "503": {
+            "description": "Не готов — в теле что именно"
           }
         },
         "security": [

@@ -98,15 +98,19 @@ def list_customers(
     cause: str | None = Query(None, max_length=64, description="Главная причина риска (ключ признака) — клиенты высокого и среднего риска"),
     page: int = Query(1, ge=1),
     pageSize: int = Query(25, ge=1, le=200),
+    version: int | None = Query(None, description="Версия расчёта, с которой начат обход страниц (из ответа или Link). "
+                                                     "Если данные уже пересчитаны — 409: начните с первой страницы"),
 ) -> CustomerPage:
     cur, ordered = _filtered(request, sort, order, level, q, hasIssues, cause)
+    if version is not None and version != cur.version:
+        raise HTTPException(409, f"Данные пересчитаны (версия {cur.version}, у вас {version}) — начните с первой страницы")
     start = (page - 1) * pageSize
     with request.app.state.pool.connection() as conn:
         last = db.last_actions(conn)
     items = [list_item(c) for c in ordered[start:start + pageSize]]
     for item in items:
         item.lastAction = last.get(item.id, {}).get("kind")
-    pages = page_links(request, page, pageSize, len(ordered))
+    pages = page_links(request, page, pageSize, len(ordered), version=cur.version)
     if pages:
         response.headers["Link"] = pages
     return CustomerPage(

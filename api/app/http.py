@@ -16,13 +16,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from app.observability import request_id
+
 PROBLEM = "application/problem+json"
 
 
 def problem(request: Request, status: int, detail: str, errors: list[dict] | None = None,
             headers: dict | None = None) -> JSONResponse:
     body = {"type": "about:blank", "title": HTTPStatus(status).phrase, "status": status, "detail": detail,
-            "instance": request.url.path}
+            "instance": request.url.path, "requestId": request_id.get()}
     if errors:
         body["errors"] = errors
     return JSONResponse(body, status_code=status, media_type=PROBLEM, headers=headers)
@@ -78,8 +80,12 @@ def check_if_match(request: Request, current_etag: str) -> None:
         raise HTTPException(412, f"Ресурс уже изменили (текущая версия {current_etag}). Перечитайте и повторите.")
 
 
-def page_links(request: Request, page: int, page_size: int, total: int) -> str:
-    """Заголовок Link (RFC 8288) для постраничного списка: first, prev, next, last."""
+def page_links(request: Request, page: int, page_size: int, total: int, **pin) -> str:
+    """Заголовок Link (RFC 8288) для постраничного списка: first, prev, next, last.
+
+    pin — параметры, которые закрепляются в ссылках (версия расчёта: обход страниц идёт по одной версии данных).
+    """
     last = max(1, -(-total // page_size))
     rels = {"first": 1, "prev": page - 1 if page > 1 else None, "next": page + 1 if page < last else None, "last": last}
-    return ", ".join(f'<{request.url.include_query_params(page=p)}>; rel="{rel}"' for rel, p in rels.items() if p) if last > 1 else ""
+    return ", ".join(f'<{request.url.include_query_params(page=p, **pin)}>; rel="{rel}"'
+                     for rel, p in rels.items() if p) if last > 1 else ""

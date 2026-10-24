@@ -812,3 +812,22 @@ def test_idempotency_key(client, auth):
     plain = client.post("/api/v1/source/events", headers=auth, json={"type": "topup", "accountId": 3, "amount": 1})
     assert plain.status_code == 200 and "Idempotent-Replayed" not in plain.headers
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_observability_and_pinned_pages(client, auth):
+    """X-Request-ID в ответе и в ошибке, готовность сервиса, страницы по одной версии расчёта."""
+    r = client.get("/api/v1/customers/999999", headers={**auth, "X-Request-ID": "trace-42"})
+    assert r.headers["X-Request-ID"] == "trace-42" and r.json()["requestId"] == "trace-42"
+    assert len(client.get("/api/v1/analytics/summary", headers=auth).headers["X-Request-ID"]) == 32   # создан сервером
+    assert client.get("/api/v1/customers/1", headers={**auth, "X-Request-ID": "bad id with spaces"}).headers["X-Request-ID"] != "bad id with spaces"
+
+    ready = client.get("/health/ready").json()
+    assert ready["status"] == "ready" and ready["database"] == "ok" and ready["calculationVersion"] >= 1
+    assert client.get("/health/live").json() == {"status": "ok"}
+
+    page = client.get("/api/v1/customers?pageSize=2", headers=auth)
+    version = page.json()["version"]
+    assert f"version={version}" in page.headers["Link"]
+    assert client.get(f"/api/v1/customers?pageSize=2&page=2&version={version}", headers=auth).status_code == 200
+    stale = client.get(f"/api/v1/customers?pageSize=2&page=2&version={version - 1}", headers=auth)
+    assert stale.status_code == 409 and "первой страницы" in stale.json()["detail"]
