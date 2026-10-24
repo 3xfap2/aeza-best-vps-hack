@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import db
-from app.retention import BUCKETS, queue
+from app.retention import BUCKETS, effect, queue
 from app.security import current_user
 from app.views import eur
 
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/v1/retention", tags=["Удержание"], depe
 
 SaveRate = Query(30, ge=0, le=100, description="Какую долю клиентов под риском удаётся удержать контактом, %")
 CallCost = Query(3, ge=0, le=1000, description="Стоимость одного звонка (время менеджера), €; письмо считается бесплатным")
+CallsPerDay = Query(0, ge=0, le=1000, description="Сколько звонков менеджер успевает за день; 0 — без ограничения")
 
 
 class QueueItem(BaseModel):
@@ -41,6 +42,12 @@ class QueueItem(BaseModel):
     lastActionAt: datetime | None
     lastAuthor: str | None
     status: Literal["new", "in_progress", "done"]
+    followUp: date | None = Field(description="Договорились перезвонить в эту дату")
+    followUpDue: bool = Field(description="Дата «перезвонить» наступила — клиент в «Сегодня»")
+    planned: bool = Field(description="Входит в план звонков на день (первые callsPerDay звонков очереди)")
+    contactAt: datetime | None = Field(description="Первая отметка работы с клиентом")
+    riskAtContact: float | None = Field(description="Сумма под угрозой в момент первой отметки, €")
+    scoreAtContact: int | None
 
 
 class QueueSummary(BaseModel):
@@ -57,6 +64,25 @@ class QueueSummary(BaseModel):
     renewed: int
     churned: int
     savedFact: float = Field(description="Сохранено фактически: сумма под угрозой у клиентов с отметкой «продлил», €")
+    followUpsDue: int = Field(description="Перезвонить сегодня")
+    planned: int = Field(description="Звонков в плане на день")
+    plannedSaved: float = Field(description="Ожидаемо сохраним звонками из плана дня, €")
+    reducedAfterContact: float = Field(description="На сколько снизилась сумма под угрозой у отработанных клиентов "
+                                                   "(по данным биллинга; совпадение по времени, не доказательство эффекта), €")
+    improvedAfterContact: int
+
+
+class EffectItem(BaseModel):
+    customerId: int
+    email: str
+    contactAt: datetime
+    contactBy: str
+    riskBefore: float = Field(description="Сумма под угрозой в момент первой отметки, €")
+    riskNow: float
+    scoreBefore: int | None
+    scoreNow: int | None
+    levelNow: str
+    reduced: float = Field(description="max(0, было − стало), €")
 
 
 class QueueOut(BaseModel):
@@ -68,19 +94,23 @@ class QueueOut(BaseModel):
     items: list[QueueItem]
 
 
-def _queue(request: Request, save_rate: float, call_cost: float):
+def _queue(request: Request, save_rate: float, call_cost: float, calls_per_day: int = 0):
     cur = request.app.state.radar.current
     with request.app.state.pool.connection() as conn:
         last = db.last_actions(conn)
+        first = db.first_contacts(conn)
         saved_fact = db.saved_by_renewals(conn)
-    return cur, last, saved_fact, queue(cur.result, last, save_rate, call_cost)
+    return cur, last, saved_fact, queue(cur.result, last, save_rate, call_cost, calls_per_day, first), first
 
 
 @router.get("/queue", response_model=QueueOut,
             summary="Очередь удержания: кому написать или позвонить, до какого срока и окупится ли звонок")
-def retention_queue(request: Request, saveRate: float = SaveRate, callCost: float = CallCost) -> QueueOut:
-    cur, last, saved_fact, items = _queue(request, saveRate, callCost)
+def retention_queue(request: Request, saveRate: float = SaveRate, callCost: float = CallCost,
+                    callsPerDay: int = CallsPerDay) -> QueueOut:
+    cur, last, saved_fact, items, first = _queue(request, saveRate, callCost, callsPerDay)
     calls = [x for x in items if x["channel"] == "call"]
+    planned = [x for x in items if x["planned"]]
+    after = effect(cur.result, first)
     return QueueOut(
         asOf=cur.result.as_of, horizonDays=cur.result.settings.horizonDays, saveRate=saveRate, callCost=callCost,
         summary=QueueSummary(
@@ -95,9 +125,23 @@ def retention_queue(request: Request, saveRate: float = SaveRate, callCost: floa
             renewed=sum(1 for r in last.values() if r["kind"] == "renewed"),
             churned=sum(1 for r in last.values() if r["kind"] == "churned"),
             savedFact=eur(saved_fact),
+            followUpsDue=sum(1 for x in items if x["followUpDue"]),
+            planned=len(planned), plannedSaved=round(sum(x["expectedSaved"] for x in planned), 2),
+            reducedAfterContact=round(sum(x["reduced"] for x in after), 2),
+            improvedAfterContact=sum(1 for x in after if x["reduced"] > 0),
         ),
         items=[QueueItem(**x) for x in items],
     )
+
+
+@router.get("/effect", response_model=list[EffectItem],
+            summary="Что изменилось после контакта: сумма под угрозой и score в момент первой отметки и сейчас",
+            description="Совпадение по времени с данными биллинга, а не доказательство, что сработал именно контакт.")
+def retention_effect(request: Request) -> list[EffectItem]:
+    cur = request.app.state.radar.current
+    with request.app.state.pool.connection() as conn:
+        first = db.first_contacts(conn)
+    return [EffectItem(**x) for x in effect(cur.result, first)]
 
 
 BUCKET_TITLE = {"today": "сегодня", "week": "на неделе", "later": "позже"}
@@ -109,7 +153,7 @@ CHANNEL_TITLE = {"call": "звонок", "email": "письмо"}
             summary="Очередь удержания в CSV для обзвона и рассылки")
 def retention_csv(request: Request, saveRate: float = SaveRate, callCost: float = CallCost,
                   includeEmail: bool = Query(False, description="Добавить email (персональные данные)")) -> Response:
-    cur, _, _, items = _queue(request, saveRate, callCost)
+    cur, _, _, items, _ = _queue(request, saveRate, callCost)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["когда", "срок", "вид_срока", "id"] + (["email"] if includeEmail else []) +

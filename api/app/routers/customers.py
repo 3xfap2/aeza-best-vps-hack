@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -145,6 +145,8 @@ class ActionIn(BaseModel):
     kind: ActionKind
     reason: Literal[CHURN_REASONS] | None = None  # type: ignore[valid-type]
     note: str | None = Field(None, max_length=500)
+    followUpDays: int | None = Field(None, ge=1, le=60, description="Перезвонить через N дней (от даты расчёта); "
+                                                                     "в этот день клиент вернётся в «Сегодня»")
 
 
 class ActionOut(BaseModel):
@@ -154,6 +156,7 @@ class ActionOut(BaseModel):
     note: str | None
     author: str
     createdAt: datetime
+    followUp: date | None = None
 
 
 @router.get("/{customer_id}/actions", response_model=list[ActionOut], summary="Журнал работы с клиентом")
@@ -170,9 +173,11 @@ def add_action(customer_id: int, body: ActionIn, request: Request, user: User = 
         raise HTTPException(404, f"Клиент #{customer_id} не найден")
     if body.kind == "churned" and not body.reason:
         raise HTTPException(422, "Для «ушёл» укажите причину")
+    as_of = request.app.state.radar.current.result.as_of
+    follow_up = as_of.date() + timedelta(days=body.followUpDays) if body.followUpDays and body.kind not in ("renewed", "churned") else None
     with request.app.state.pool.connection() as conn:
         row = db.add_action(conn, customer_id, body.kind, body.reason if body.kind == "churned" else None, body.note, user.login,
-                            round(customer.expected_loss))
+                            round(customer.expected_loss), follow_up, customer.score)
     request.app.state.radar.broker.publish("action", {"customerId": customer_id, "kind": body.kind})
     return ActionOut(**row)
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ACTION_TITLE, api, ApiError, can, CHURN_REASONS, LEVEL_TITLE, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
 import { useLiveData } from '../live'
-import { dateTime, ErrorBox, eur, RiskBadge, Skeleton } from '../ui'
+import { dateTime, ErrorBox, eur, RiskBadge, shortDate, Skeleton } from '../ui'
 import { StatusLine, useUser } from './Shell'
 
 const TERMS: Record<string, string> = {
@@ -232,6 +232,7 @@ function WorkCard({ customerId }: { customerId: number }) {
   const [items, setItems] = useState<RetentionAction[] | null>(null)
   const [note, setNote] = useState('')
   const [reason, setReason] = useState(CHURN_REASONS[0])
+  const [followUp, setFollowUp] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const load = () => api<RetentionAction[]>(`/api/v1/customers/${customerId}/actions`).then(setItems).catch(() => setItems([]))
@@ -239,8 +240,9 @@ function WorkCard({ customerId }: { customerId: number }) {
   async function mark(kind: string) {
     setBusy(true); setError(null)
     try {
-      await api(`/api/v1/customers/${customerId}/actions`, { method: 'POST', json: { kind, note: note || null, reason: kind === 'churned' ? reason : null } })
-      setNote(''); await load()
+      await api(`/api/v1/customers/${customerId}/actions`, { method: 'POST',
+        json: { kind, note: note || null, reason: kind === 'churned' ? reason : null, followUpDays: followUp || null } })
+      setNote(''); setFollowUp(0); await load()
     } catch (e) { setError(e instanceof ApiError ? e.message : 'Не удалось сохранить') } finally { setBusy(false) }
   }
   return (
@@ -249,6 +251,10 @@ function WorkCard({ customerId }: { customerId: number }) {
       {editable ? <>
       <label className="field"><span>Комментарий (необязательно)</span>
         <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="например, обещал оплатить в пятницу" /></label>
+      <label className="field"><span>Перезвонить — клиент вернётся в «Сегодня» в этот день</span>
+        <select value={followUp} onChange={(e) => setFollowUp(Number(e.target.value))}>
+          {[[0, 'не нужно'], [1, 'завтра'], [3, 'через 3 дня'], [7, 'через неделю']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+        </select></label>
       <div className="btns">
         {['called', 'no_answer', 'messaged', 'offer', 'renewed'].map((k) => (
           <button key={k} type="button" className={'ro-btn ro-btn--sm' + (k === 'renewed' ? '' : ' ro-btn--quiet')} disabled={busy} onClick={() => mark(k)}>{ACTION_TITLE[k]}</button>
@@ -265,7 +271,8 @@ function WorkCard({ customerId }: { customerId: number }) {
         <ul className="log">
           {items.map((a) => (
             <li key={a.id}><span className="ro-small ro-mono">{dateTime(a.createdAt)} · {a.author}</span>
-              <span><b>{ACTION_TITLE[a.kind] ?? a.kind}</b>{a.reason ? ` — ${a.reason}` : ''}{a.note ? `: ${a.note}` : ''}</span></li>
+              <span><b>{ACTION_TITLE[a.kind] ?? a.kind}</b>{a.reason ? ` — ${a.reason}` : ''}{a.note ? `: ${a.note}` : ''}
+                {a.followUp && <span className="ro-small"> · перезвонить {shortDate(a.followUp)}</span>}</span></li>
           ))}
         </ul>
       )}

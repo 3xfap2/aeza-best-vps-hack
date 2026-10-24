@@ -219,3 +219,24 @@ def test_retention_queue_deadlines_and_channel():
     assert all(x["channel"] == "email" and x["net"] == x["expectedSaved"] for x in queue(r, {}, 30, 10_000))
     done = queue(r, {2: {"kind": "renewed", "author": "anna", "created_at": T0}}, 30, 0)
     assert next(x for x in done if x["customerId"] == 2)["status"] == "done"
+    # перезвонить сегодня — клиент из «на неделе» поднимается в «Сегодня», и первым
+    due = queue(r, {2: {"kind": "no_answer", "author": "anna", "created_at": T0, "follow_up": T0.date()}}, 30, 0)
+    assert due[0]["customerId"] == 2 and due[0]["bucket"] == "today" and due[0]["followUpDue"]
+    later = queue(r, {2: {"kind": "no_answer", "author": "anna", "created_at": T0, "follow_up": T0.date() + timedelta(days=3)}}, 30, 0)
+    assert next(x for x in later if x["customerId"] == 2)["bucket"] == "week"
+    # ёмкость: в план дня попадают первые N звонков
+    payers = [Account(i, f"user-{i}@example.test", 0, 0, 1_000_000, 0, "locked") for i in (1, 2)]
+    r2 = evaluate(snap(payers, [overdue, soon]), default_settings())
+    assert all(x["channel"] == "call" for x in queue(r2, {}, 30, 1))
+    planned = queue(r2, {}, 30, 1, calls_per_day=1)
+    assert [x["customerId"] for x in planned if x["planned"]] == [1]
+
+
+def test_effect_after_contact():
+    from app.retention import effect
+    acc = account(balance=0)
+    s = Service(1, "service-1", 1, "month", False, T0 - timedelta(days=27), T0 + timedelta(days=3), "active", 5000)
+    r = evaluate(snap([acc], [s]), default_settings())
+    first = {1: {"author": "anna", "created_at": T0, "at_risk": round(r.by_id[1].expected_loss) + 1000, "score_at": 90}}
+    e = effect(r, first)
+    assert e[0]["reduced"] == 10.0 and e[0]["scoreBefore"] == 90

@@ -4,6 +4,11 @@
 окончания срока — вместе с данными, и такой клиент почти наверняка уходит насовсем. Поэтому
 очередь сортируется по времени, когда деньги будут потеряны безвозвратно, а внутри срока —
 по выгоде контакта: ожидаемо сохраним (реально собираемая потеря × доля удержания) − стоимость звонка.
+
+«Перезвонить в дату» возвращает клиента в «Сегодня», когда наступает дата (по дате расчёта).
+Ёмкость: если менеджер успевает calls_per_day звонков, в план дня попадают первые из очереди.
+После контакта сравниваем сумму под угрозой в момент первой отметки и сейчас — это совпадение
+по времени с данными биллинга, а не доказательство, что сработал именно звонок.
 """
 from __future__ import annotations
 
@@ -48,9 +53,12 @@ def bucket(kind: str, days: float) -> str:
     return "week" if days <= 7 else "later"
 
 
-def queue(result: EngineResult, last: dict[int, dict], save_rate: float, call_cost: float) -> list[dict]:
+def queue(result: EngineResult, last: dict[int, dict], save_rate: float, call_cost: float,
+          calls_per_day: int = 0, first: dict[int, dict] | None = None) -> list[dict]:
     """Клиенты высокого и среднего риска со сроком, каналом и выгодой контакта (деньги — в евро)."""
     titles = {f.key: f.title for f in FEATURES}
+    today = result.as_of.date()
+    first = first or {}
     items = []
     for c in result.customers:
         if c.level not in ("high", "medium"):
@@ -59,6 +67,10 @@ def queue(result: EngineResult, last: dict[int, dict], save_rate: float, call_co
         saved = c.expected_loss_paid / 100 * save_rate / 100
         channel = "call" if saved > call_cost else "email"
         act = last.get(c.account.id)
+        status = "new" if not act else "done" if act["kind"] in DONE else "in_progress"
+        follow_up = act.get("follow_up") if act and status != "done" else None
+        due = follow_up is not None and follow_up <= today
+        contact = first.get(c.account.id)
         cause = c.main_cause
         items.append({
             "customerId": c.account.id, "email": c.account.email, "level": c.level, "score": c.score,
@@ -66,12 +78,36 @@ def queue(result: EngineResult, last: dict[int, dict], save_rate: float, call_co
             "kind": "involuntary" if cause in INVOLUNTARY else "voluntary",
             "action": c.actions[0] if c.actions else c.top_reason,
             "expectedLoss": round(c.expected_loss / 100, 2), "expectedLossPaid": round(c.expected_loss_paid / 100, 2),
-            "deadline": when, "deadlineKind": kind, "daysLeft": round(days, 2), "bucket": bucket(kind, days),
+            "deadline": when, "deadlineKind": kind, "daysLeft": round(days, 2),
+            "bucket": "today" if due else bucket(kind, days), "followUp": follow_up, "followUpDue": due,
             "channel": channel, "expectedSaved": round(saved, 2),
             "net": round(saved - (call_cost if channel == "call" else 0), 2),
             "lastAction": act["kind"] if act else None, "lastActionAt": act["created_at"] if act else None,
-            "lastAuthor": act["author"] if act else None,
-            "status": "new" if not act else "done" if act["kind"] in DONE else "in_progress",
+            "lastAuthor": act["author"] if act else None, "status": status, "planned": False,
+            "contactAt": contact["created_at"] if contact else None,
+            "riskAtContact": round(contact["at_risk"] / 100, 2) if contact and contact["at_risk"] is not None else None,
+            "scoreAtContact": contact["score_at"] if contact else None,
         })
-    items.sort(key=lambda x: (BUCKETS.index(x["bucket"]), x["status"] == "done", -x["net"]))
+    # перезвонить сегодня — первыми: клиенту обещали
+    items.sort(key=lambda x: (BUCKETS.index(x["bucket"]), x["status"] == "done", not x["followUpDue"], -x["net"]))
+    if calls_per_day > 0:
+        for x in [x for x in items if x["channel"] == "call" and x["status"] != "done"][:calls_per_day]:
+            x["planned"] = True
     return items
+
+
+def effect(result: EngineResult, first: dict[int, dict]) -> list[dict]:
+    """Что изменилось после первого контакта: сумма под угрозой и score тогда и сейчас (евро)."""
+    out = []
+    for account_id, contact in first.items():
+        c = result.by_id.get(account_id)
+        if c is None or contact["at_risk"] is None:
+            continue
+        before, now = contact["at_risk"] / 100, c.expected_loss / 100
+        out.append({
+            "customerId": account_id, "email": c.account.email, "contactAt": contact["created_at"],
+            "contactBy": contact["author"], "riskBefore": round(before, 2), "riskNow": round(now, 2),
+            "scoreBefore": contact["score_at"], "scoreNow": c.score, "levelNow": c.level,
+            "reduced": round(max(0.0, before - now), 2),
+        })
+    return sorted(out, key=lambda x: -x["reduced"])

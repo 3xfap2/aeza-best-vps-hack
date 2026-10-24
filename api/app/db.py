@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -308,23 +308,32 @@ def score_history(conn: Connection, account_id: int, limit: int) -> list[dict]:
 # --- работа с клиентом ---------------------------------------------------------
 
 def add_action(conn: Connection, account_id: int, kind: str, reason: str | None, note: str | None, author: str,
-               at_risk: int | None = None) -> dict:
+               at_risk: int | None = None, follow_up: date | None = None, score_at: int | None = None) -> dict:
     return conn.execute(
-        "INSERT INTO retention_actions (account_id, kind, reason, note, author, at_risk) VALUES (%s, %s, %s, %s, %s, %s) "
-        "RETURNING id, kind, reason, note, author, created_at AS \"createdAt\"",
-        (account_id, kind, reason, note, author, at_risk),
+        "INSERT INTO retention_actions (account_id, kind, reason, note, author, at_risk, follow_up, score_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "RETURNING id, kind, reason, note, author, created_at AS \"createdAt\", follow_up AS \"followUp\"",
+        (account_id, kind, reason, note, author, at_risk, follow_up, score_at),
     ).fetchone()
 
 
 def actions_for(conn: Connection, account_id: int, limit: int = 50) -> list[dict]:
     return list(conn.execute(
-        "SELECT id, kind, reason, note, author, created_at AS \"createdAt\" FROM retention_actions "
+        "SELECT id, kind, reason, note, author, created_at AS \"createdAt\", follow_up AS \"followUp\" FROM retention_actions "
         "WHERE account_id = %s ORDER BY id DESC LIMIT %s", (account_id, limit)))
 
 
 def last_actions(conn: Connection) -> dict[int, dict]:
     return {r["account_id"]: r for r in conn.execute(
-        "SELECT DISTINCT ON (account_id) account_id, kind, author, created_at FROM retention_actions ORDER BY account_id, id DESC")}
+        "SELECT DISTINCT ON (account_id) account_id, kind, author, created_at, follow_up FROM retention_actions "
+        "ORDER BY account_id, id DESC")}
+
+
+def first_contacts(conn: Connection) -> dict[int, dict]:
+    """Первая отметка по каждому клиенту: когда и кто взял в работу, score и сумма под угрозой в тот момент."""
+    return {r["account_id"]: r for r in conn.execute(
+        "SELECT DISTINCT ON (account_id) account_id, kind, author, created_at, at_risk, score_at FROM retention_actions "
+        "ORDER BY account_id, id")}
 
 
 def saved_by_renewals(conn: Connection) -> int:

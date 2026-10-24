@@ -369,6 +369,22 @@ def test_retention_queue_and_paid_loss(client, auth):
     after = client.get("/api/v1/retention/queue", headers=auth).json()
     assert after["summary"]["savedFact"] > before
     assert next(x for x in after["items"] if x["customerId"] == 5)["status"] == "done"
+    # «не дозвонились, перезвонить завтра» → после «+1 день» клиент в «Сегодня» с пометкой
+    target = next(x for x in after["items"] if x["bucket"] != "today" and x["status"] == "new")
+    r = client.post(f"/api/v1/customers/{target['customerId']}/actions", headers=auth, json={"kind": "no_answer", "followUpDays": 1})
+    assert r.status_code == 201 and r.json()["followUp"]
+    item = next(x for x in client.get("/api/v1/retention/queue", headers=auth).json()["items"] if x["customerId"] == target["customerId"])
+    assert item["followUp"] and not item["followUpDue"] and item["riskAtContact"] is not None
+    client.post("/api/v1/source/simulate", headers=auth, json={"days": 1})
+    moved = client.get("/api/v1/retention/queue?callsPerDay=3", headers=auth).json()
+    item = next((x for x in moved["items"] if x["customerId"] == target["customerId"]), None)
+    assert item is None or (item["followUpDue"] and item["bucket"] == "today")
+    calls = sum(1 for x in moved["items"] if x["channel"] == "call" and x["status"] != "done")
+    assert moved["summary"]["planned"] == min(3, calls) == sum(x["planned"] for x in moved["items"]) > 0
+    eff = client.get("/api/v1/retention/effect", headers=auth).json()
+    assert any(x["customerId"] == 5 for x in eff) and all(x["reduced"] >= 0 for x in eff)
+    client.post("/api/v1/source/reset", headers=auth)
+
     csv_plain = client.get("/api/v1/retention/queue.csv", headers=auth).text
     assert "@example.test" not in csv_plain and "канал" in csv_plain.splitlines()[0]
     assert "@example.test" in client.get("/api/v1/retention/queue.csv?includeEmail=true", headers=auth).text

@@ -771,6 +771,20 @@
               "title": "Callcost"
             },
             "description": "Стоимость одного звонка (время менеджера), €; письмо считается бесплатным"
+          },
+          {
+            "name": "callsPerDay",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 0,
+              "description": "Сколько звонков менеджер успевает за день; 0 — без ограничения",
+              "default": 0,
+              "title": "Callsperday"
+            },
+            "description": "Сколько звонков менеджер успевает за день; 0 — без ограничения"
           }
         ],
         "responses": {
@@ -790,6 +804,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/retention/effect": {
+      "get": {
+        "tags": [
+          "Удержание"
+        ],
+        "summary": "Что изменилось после контакта: сумма под угрозой и score в момент первой отметки и сейчас",
+        "description": "Совпадение по времени с данными биллинга, а не доказательство, что сработал именно контакт.",
+        "operationId": "retention_effect_api_v1_retention_effect_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EffectItem"
+                  },
+                  "type": "array",
+                  "title": "Response Retention Effect Api V1 Retention Effect Get"
                 }
               }
             }
@@ -1879,6 +1924,20 @@
               }
             ],
             "title": "Note"
+          },
+          "followUpDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followupdays",
+            "description": "Перезвонить через N дней (от даты расчёта); в этот день клиент вернётся в «Сегодня»"
           }
         },
         "type": "object",
@@ -1927,6 +1986,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Createdat"
+          },
+          "followUp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followup"
           }
         },
         "type": "object",
@@ -2494,6 +2565,81 @@
           "version"
         ],
         "title": "CustomerPage"
+      },
+      "EffectItem": {
+        "properties": {
+          "customerId": {
+            "type": "integer",
+            "title": "Customerid"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "contactAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Contactat"
+          },
+          "contactBy": {
+            "type": "string",
+            "title": "Contactby"
+          },
+          "riskBefore": {
+            "type": "number",
+            "title": "Riskbefore",
+            "description": "Сумма под угрозой в момент первой отметки, €"
+          },
+          "riskNow": {
+            "type": "number",
+            "title": "Risknow"
+          },
+          "scoreBefore": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scorebefore"
+          },
+          "scoreNow": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scorenow"
+          },
+          "levelNow": {
+            "type": "string",
+            "title": "Levelnow"
+          },
+          "reduced": {
+            "type": "number",
+            "title": "Reduced",
+            "description": "max(0, было − стало), €"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customerId",
+          "email",
+          "contactAt",
+          "contactBy",
+          "riskBefore",
+          "riskNow",
+          "scoreBefore",
+          "scoreNow",
+          "levelNow",
+          "reduced"
+        ],
+        "title": "EffectItem"
       },
       "EventResult": {
         "properties": {
@@ -3347,6 +3493,65 @@
               "done"
             ],
             "title": "Status"
+          },
+          "followUp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followup",
+            "description": "Договорились перезвонить в эту дату"
+          },
+          "followUpDue": {
+            "type": "boolean",
+            "title": "Followupdue",
+            "description": "Дата «перезвонить» наступила — клиент в «Сегодня»"
+          },
+          "planned": {
+            "type": "boolean",
+            "title": "Planned",
+            "description": "Входит в план звонков на день (первые callsPerDay звонков очереди)"
+          },
+          "contactAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contactat",
+            "description": "Первая отметка работы с клиентом"
+          },
+          "riskAtContact": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskatcontact",
+            "description": "Сумма под угрозой в момент первой отметки, €"
+          },
+          "scoreAtContact": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scoreatcontact"
           }
         },
         "type": "object",
@@ -3371,7 +3576,13 @@
           "lastAction",
           "lastActionAt",
           "lastAuthor",
-          "status"
+          "status",
+          "followUp",
+          "followUpDue",
+          "planned",
+          "contactAt",
+          "riskAtContact",
+          "scoreAtContact"
         ],
         "title": "QueueItem"
       },
@@ -3476,6 +3687,30 @@
             "type": "number",
             "title": "Savedfact",
             "description": "Сохранено фактически: сумма под угрозой у клиентов с отметкой «продлил», €"
+          },
+          "followUpsDue": {
+            "type": "integer",
+            "title": "Followupsdue",
+            "description": "Перезвонить сегодня"
+          },
+          "planned": {
+            "type": "integer",
+            "title": "Planned",
+            "description": "Звонков в плане на день"
+          },
+          "plannedSaved": {
+            "type": "number",
+            "title": "Plannedsaved",
+            "description": "Ожидаемо сохраним звонками из плана дня, €"
+          },
+          "reducedAfterContact": {
+            "type": "number",
+            "title": "Reducedaftercontact",
+            "description": "На сколько снизилась сумма под угрозой у отработанных клиентов (по данным биллинга; совпадение по времени, не доказательство эффекта), €"
+          },
+          "improvedAfterContact": {
+            "type": "integer",
+            "title": "Improvedaftercontact"
           }
         },
         "type": "object",
@@ -3492,7 +3727,12 @@
           "worked",
           "renewed",
           "churned",
-          "savedFact"
+          "savedFact",
+          "followUpsDue",
+          "planned",
+          "plannedSaved",
+          "reducedAfterContact",
+          "improvedAfterContact"
         ],
         "title": "QueueSummary"
       },

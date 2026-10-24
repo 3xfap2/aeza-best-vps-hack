@@ -200,7 +200,9 @@ class TelegramBot:
                       f"{channel} · сохраним {_money(x['expectedSaved'] * 100)} · {html.escape(x['causeTitle'] or '')}"]
             if x["action"]:
                 lines.append(f"→ {html.escape(x['action'])}")
-            if x["lastAction"]:
+            if x["followUpDue"]:
+                lines.append(f"↻ перезвонить — договорились ({x['lastAuthor']})")
+            elif x["lastAction"]:
                 lines.append(f"уже в работе: {x['lastAuthor']}")
         if len(today) > MAX_TODAY:
             lines.append(f"\nи ещё {len(today) - MAX_TODAY}")

@@ -42,7 +42,7 @@ export interface CustomerDetail extends CustomerItem {
   asOf: string; horizonDays: number; version: number
   history: { score: number | null; level: Level; asOf: string; reason: string; recordedAt: string }[]
 }
-export interface RetentionAction { id: number; kind: string; reason: string | null; note: string | null; author: string; createdAt: string }
+export interface RetentionAction { id: number; kind: string; reason: string | null; note: string | null; author: string; createdAt: string; followUp: string | null }
 export interface Message { subject: string; text: string; cause: string; email: string; generatedBy: string }
 export const ACTION_TITLE: Record<string, string> = {
   called: 'Позвонили', no_answer: 'Не дозвонились', messaged: 'Написали', offer: 'Сделали предложение',
@@ -72,12 +72,19 @@ export interface QueueItem {
   deadline: string; deadlineKind: 'deletion' | 'overdue' | 'renewal'; daysLeft: number; bucket: 'today' | 'week' | 'later'
   channel: 'call' | 'email'; expectedSaved: number; net: number
   lastAction: string | null; lastActionAt: string | null; lastAuthor: string | null; status: 'new' | 'in_progress' | 'done'
+  followUp: string | null; followUpDue: boolean; planned: boolean
+  contactAt: string | null; riskAtContact: number | null; scoreAtContact: number | null
+}
+export interface Effect {
+  customerId: number; email: string; contactAt: string; contactBy: string
+  riskBefore: number; riskNow: number; scoreBefore: number | null; scoreNow: number | null; levelNow: Level; reduced: number
 }
 export interface Queue {
   asOf: string; horizonDays: number; saveRate: number; callCost: number
   summary: { customers: number; buckets: Record<'today' | 'week' | 'later', number>; expectedLoss: number; expectedLossPaid: number
     expectedSaved: number; calls: number; emails: number; callsCost: number; net: number
-    worked: number; renewed: number; churned: number; savedFact: number }
+    worked: number; renewed: number; churned: number; savedFact: number
+    followUpsDue: number; planned: number; plannedSaved: number; reducedAfterContact: number; improvedAfterContact: number }
   items: QueueItem[]
 }
 export interface TimelinePoint {
