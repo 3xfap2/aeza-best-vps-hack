@@ -434,3 +434,14 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 /* факт с восстановленной датой — светлее факта из журнала */
 .ro-chart__bar--restored { fill: var(--ink-3); opacity: .55; }
 .ro-sw-restored { background: var(--ink-3); opacity: .55; }
+
+/* --- уведомление о cookie --- */
+.cookie { position: fixed; left: 16px; bottom: 16px; z-index: 70; width: min(420px, calc(100vw - 32px)); box-sizing: border-box;
+  display: grid; gap: 12px; padding: 18px 20px; border-radius: 16px; background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-3); font-size: 14px; line-height: 1.5; color: var(--ink); }
+.cookie p { margin: 0; }
+.cookie .ro-btn { justify-self: start; }
+@media (max-width: 860px) { .cookie { bottom: 84px; } }
+
+/* ссылки внутри текста — обычной строкой, без высокой зоны нажатия */
+.cookie p .ro-link, .login__hint .ro-link, .privacy__body .ro-link { display: inline; min-height: 0; }

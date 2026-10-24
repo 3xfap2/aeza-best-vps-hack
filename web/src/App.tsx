@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import CookieNotice from './CookieNotice'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Privacy from './pages/Privacy'
@@ -40,5 +41,5 @@ const router = createBrowserRouter([
 ])
 
 export default function App() {
-  return <RouterProvider router={router} />
+  return <><RouterProvider router={router} /><CookieNotice /></>
 }
