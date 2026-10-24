@@ -53,7 +53,7 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 @keyframes ro-skel { to { background-position: -200% 0; } }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(560px, calc(100vw - 32px)); padding: 12px 18px; border-radius: 12px; background: var(--ink); color: var(--paper); font-size: 14px; box-shadow: var(--shadow-3); }
 .toast--error { background: var(--risk-high); color: #fff; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; position: relative; } /* скрытые подписи для экранного диктора не вылезают за таблицу */
 
 /* --- фильтры клиентов --- */
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 20px; }
@@ -141,7 +141,7 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 
 /* --- телефон --- */
 @media (max-width: 860px) {
-  .ro-app { grid-template-columns: 1fr; padding-bottom: 72px; }
+  .ro-app { grid-template-columns: minmax(0, 1fr); padding-bottom: 72px; }
   .ro-side { display: none; }
   .ro-main { padding: 20px 16px 32px; }
   .ro-top { flex-direction: column; align-items: flex-start; }

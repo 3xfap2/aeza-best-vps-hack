@@ -24,7 +24,8 @@ docker compose up -d --build
 | Сайт и панель | http://localhost:8080 | логин `admin`, пароль `radar-demo-2026` |
 | Swagger (документация API) | http://localhost:8080/api/v1/docs | кнопка **Authorize** → токен из `POST /api/v1/auth/login` |
 | Метрики | http://localhost:8080/metrics | Bearer `radar-metrics-demo-token` или вход в панель |
-| Prometheus | http://localhost:9090/targets | цель `churn-radar` в состоянии UP |
+| Prometheus | http://localhost:9090/targets | цель `churn-radar` в состоянии UP; правила алертов — /alerts |
+| Grafana | http://localhost:3000 | дашборд «Радар оттока» открыт на просмотр; админ — `admin` / `radar-grafana-demo` |
 | Вход через SSO (Dex) | кнопка «Войти через SSO» на странице входа | `marketing@radar.example` / `radar-sso-2026` |
 
 Без файла `.env` используются демо-значения выше. Чтобы задать свои пароли и токены, скопируйте `.env.example` в `.env` и поменяйте значения.
@@ -201,7 +202,7 @@ curl -s -X PATCH localhost:8080/api/v1/model/settings -H "Authorization: Bearer 
 | `churn_radar_services_at_risk`, `churn_radar_data_quality_issues` | услуги под риском, противоречия в данных |
 | `churn_radar_model_settings_version`, `churn_radar_calculation_*`, `churn_radar_as_of_timestamp_seconds` | версия настроек, номер, время и длительность пересчёта, дата расчёта |
 
-Prometheus из `compose.yaml` собирает их каждые 15 секунд с токеном `METRICS_TOKEN`.
+Prometheus из `compose.yaml` собирает их каждые 15 секунд с токеном `METRICS_TOKEN`. Правила алертов (`prometheus/alerts.yml`): реально собираемая потеря выросла больше чем на 20 % за час, Радар не пересчитывался 3 часа, `/metrics` недоступен. Grafana поднимается с готовым дашбордом (`grafana/dashboards/churn-radar.json`, собирается `python tools/build_grafana.py`): деньги по прайсу и реально, сохранено удержанием, клиенты по уровням, потеря по причинам, работа маркетологов. На дашборде только суммы и счётчики, без персональных данных, поэтому он открыт на просмотр без входа.
 
 ---
 

@@ -7,7 +7,13 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "grafana" / "dashboards" / "churn-radar.json"
 DS = {"type": "prometheus", "uid": "prometheus"}
-EUR = {"unit": "currencyEUR", "decimals": 0}
+EUR = {"unit": "prefix:€ ", "decimals": 0}
+CAUSES = {"prolong_wait": "Ждёт оплаты", "insufficient_funds": "Не хватает средств", "unpaid_transactions": "Неоплаченные счета",
+          "expiring_no_autoprolong": "Истекает без автопродления", "no_autoprolong_no_funds": "Нет автопродления и денег",
+          "suspended": "Сервер выключен", "partial_churn": "Отказывался от услуг", "support_tickets": "Часто пишет в поддержку",
+          "usage_drop": "Сервером не пользуются", "plan_downgrade": "Понизил тариф"}
+ACTIONS = {"called": "Позвонили", "no_answer": "Не дозвонились", "messaged": "Написали", "offer": "Предложение",
+           "renewed": "Продлил", "churned": "Ушёл"}
 
 panels: list[dict] = []
 
@@ -45,26 +51,29 @@ def series(title: str, targets: list[dict], desc: str, unit: dict | None = None,
     }
 
 
-def bars(title: str, expr: str, legend: str, desc: str, unit: dict | None = None) -> dict:
+def bars(title: str, expr: str, legend: str, desc: str, unit: dict | None = None, names: dict | None = None,
+         color: dict | None = None) -> dict:
     return {
         "type": "bargauge", "title": title, "description": desc,
         "targets": [target(expr, legend, instant=True)],
-        "fieldConfig": {"defaults": {**(unit or {}), "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
+        "fieldConfig": {"defaults": {**(unit or {}), "min": 0, "color": color or {"mode": "continuous-YlRd"}}, "overrides": [
+            {"matcher": {"id": "byName", "options": k}, "properties": [{"id": "displayName", "value": v}]}
+            for k, v in (names or {}).items()]},
         "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
                     "reduceOptions": {"calcs": ["lastNotNull"]}},
     }
 
 
 H = '{horizon_days=~".+"}'
-add(stat("Потеря по прайсу, 30 дней", f"churn_radar_expected_loss_eur{H}",
+add(stat("По прайсу, 30 дн.", f"churn_radar_expected_loss_eur{H}",
          "Σ выручка услуги за горизонт × вероятность непродления — формула задания", "#C2410C", EUR), 0, 0, 4, 4)
 add(stat("Реально собираемая", f"churn_radar_expected_loss_paid_eur{H}",
          "Выручка клиента не больше, чем он платит в среднем или держит на счёте", "#B45309", EUR), 4, 0, 4, 4)
 add(stat("Худший случай", f"churn_radar_worst_case_loss_eur{H}", "Вся выручка клиентов высокого риска", "#7F1D1D", EUR), 8, 0, 4, 4)
 add(stat("LTV под угрозой", "churn_radar_ltv_at_risk_eur", "Выручка за срок жизни клиента × вероятность непродления", "#6B4F3A", EUR), 12, 0, 4, 4)
-add(stat("Сохранено удержанием", "churn_radar_retention_saved_eur",
+add(stat("Сохранено", "churn_radar_retention_saved_eur",
          "Сумма под угрозой у клиентов с отметкой «продлил»", "#15803D", EUR), 16, 0, 4, 4)
-add(stat("Клиентов высокого риска", 'churn_radar_customers{level="high"}', "Score от порога высокого риска", "#B91C1C"), 20, 0, 4, 4)
+add(stat("Высокий риск", 'churn_radar_customers{level="high"}', "Score от порога высокого риска", "#B91C1C"), 20, 0, 4, 4)
 
 add(series("Деньги под угрозой", [
     target(f"churn_radar_expected_loss_eur{H}", "по прайсу"),
@@ -77,17 +86,17 @@ add(series("Клиенты по уровням риска", [
     target('churn_radar_customers{level="low"}', "низкий"),
 ], "Число клиентов в каждом уровне", stack=True), 14, 4, 10, 9)
 
-add(bars("За что теряем деньги", "churn_radar_expected_loss_by_cause_eur", "{{cause}} · {{kind}}",
-         "Клиенты высокого и среднего риска по главной причине: involuntary — не прошла оплата", EUR), 0, 13, 10, 9)
+add(bars("За что теряем деньги", "churn_radar_expected_loss_by_cause_eur", "{{cause}}",
+         "Клиенты высокого и среднего риска по главной причине риска", EUR, CAUSES), 0, 13, 10, 9)
 add(bars("Работа с клиентами", "churn_radar_retention_actions", "{{kind}}",
-         "Отметки маркетологов: called, messaged, renewed, churned…"), 10, 13, 7, 9)
+         "Отметки маркетологов в очереди удержания", names=ACTIONS, color={"mode": "fixed", "fixedColor": "#15803D"}), 10, 13, 7, 9)
 add(series("Пересчёт модели", [
     target("churn_radar_calculation_duration_seconds", "длительность, с"),
 ], "Полный пересчёт всех клиентов после каждого изменения", {"unit": "s"}), 17, 13, 7, 9)
 
 dashboard = {
     "uid": "churn-radar", "title": "Радар оттока", "tags": ["churn-radar"], "timezone": "browser",
-    "schemaVersion": 39, "version": 1, "refresh": "15s", "time": {"from": "now-6h", "to": "now"},
+    "schemaVersion": 39, "version": 1, "refresh": "15s", "time": {"from": "now-1h", "to": "now"},
     "panels": panels,
 }
 OUT.parent.mkdir(parents=True, exist_ok=True)

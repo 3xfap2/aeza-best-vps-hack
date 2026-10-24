@@ -9,13 +9,13 @@
   "version": 1,
   "refresh": "15s",
   "time": {
-    "from": "now-6h",
+    "from": "now-1h",
     "to": "now"
   },
   "panels": [
     {
       "type": "stat",
-      "title": "Потеря по прайсу, 30 дней",
+      "title": "По прайсу, 30 дн.",
       "description": "Σ выручка услуги за горизонт × вероятность непродления — формула задания",
       "targets": [
         {
@@ -32,7 +32,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "color": {
             "mode": "fixed",
@@ -83,7 +83,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "color": {
             "mode": "fixed",
@@ -134,7 +134,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "color": {
             "mode": "fixed",
@@ -185,7 +185,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "color": {
             "mode": "fixed",
@@ -219,7 +219,7 @@
     },
     {
       "type": "stat",
-      "title": "Сохранено удержанием",
+      "title": "Сохранено",
       "description": "Сумма под угрозой у клиентов с отметкой «продлил»",
       "targets": [
         {
@@ -236,7 +236,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "color": {
             "mode": "fixed",
@@ -270,7 +270,7 @@
     },
     {
       "type": "stat",
-      "title": "Клиентов высокого риска",
+      "title": "Высокий риск",
       "description": "Score от порога высокого риска",
       "targets": [
         {
@@ -358,7 +358,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "custom": {
             "lineWidth": 2,
@@ -468,7 +468,7 @@
     {
       "type": "bargauge",
       "title": "За что теряем деньги",
-      "description": "Клиенты высокого и среднего риска по главной причине: involuntary — не прошла оплата",
+      "description": "Клиенты высокого и среднего риска по главной причине риска",
       "targets": [
         {
           "datasource": {
@@ -476,7 +476,7 @@
             "uid": "prometheus"
           },
           "expr": "churn_radar_expected_loss_by_cause_eur",
-          "legendFormat": "{{cause}} · {{kind}}",
+          "legendFormat": "{{cause}}",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -484,14 +484,135 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "prefix:€ ",
           "decimals": 0,
           "min": 0,
           "color": {
             "mode": "continuous-YlRd"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "prolong_wait"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Ждёт оплаты"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "insufficient_funds"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Не хватает средств"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unpaid_transactions"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Неоплаченные счета"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "expiring_no_autoprolong"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Истекает без автопродления"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "no_autoprolong_no_funds"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Нет автопродления и денег"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "suspended"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Сервер выключен"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "partial_churn"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Отказывался от услуг"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "support_tickets"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Часто пишет в поддержку"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage_drop"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Сервером не пользуются"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "plan_downgrade"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Понизил тариф"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "orientation": "horizontal",
@@ -518,7 +639,7 @@
     {
       "type": "bargauge",
       "title": "Работа с клиентами",
-      "description": "Отметки маркетологов: called, messaged, renewed, churned…",
+      "description": "Отметки маркетологов в очереди удержания",
       "targets": [
         {
           "datasource": {
@@ -536,10 +657,84 @@
         "defaults": {
           "min": 0,
           "color": {
-            "mode": "continuous-YlRd"
+            "mode": "fixed",
+            "fixedColor": "#15803D"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "called"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Позвонили"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "no_answer"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Не дозвонились"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "messaged"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Написали"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "offer"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Предложение"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "renewed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Продлил"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "churned"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Ушёл"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "orientation": "horizontal",

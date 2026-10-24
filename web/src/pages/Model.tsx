@@ -91,7 +91,7 @@ export default function Model() {
             onClick={() => setDraft(structuredClone(data.settings))}>Сбросить</button>
           {editable ? <button className="ro-btn ro-btn--sm" type="button" disabled={!dirty || saving || !!invalid} onClick={save}>
             {saving ? 'Сохраняем…' : 'Сохранить'}</button>
-            : <span className="ro-small">Роль «Наблюдатель»: веса можно подвигать для предпросмотра, сохранить — нет</span>}
+            : <span className="work-tag" title="Веса можно подвигать для предпросмотра; сохранить может маркетолог или администратор">только просмотр</span>}
         </div>
       </div>
 
