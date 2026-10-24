@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ACTION_TITLE, api, CAUSE_TITLE, LEVEL_TITLE, type CustomerPage, type Level } from '../api'
 import { useLiveData } from '../live'
+import { sign } from '../currency'
 import { Empty, ErrorBox, eur, RiskBadge, ScoreBar, Skeleton, useChanged } from '../ui'
 import { StatusLine } from './Shell'
 
@@ -118,7 +119,7 @@ export default function Customers() {
                   <th scope="col">Работа</th>
                   <th scope="col" className="r" aria-sort={sort === 'expectedLoss' ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}>
                     <button type="button" className={`sort${sort === 'expectedLoss' ? ' is-active' : ''}`} onClick={() => sortBy('expectedLoss')}>
-                      Потеря, €<span aria-hidden="true">{sort === 'expectedLoss' ? (order === 'asc' ? ' ↑' : ' ↓') : ' ↕'}</span>
+                      Потеря, {sign()}<span aria-hidden="true">{sort === 'expectedLoss' ? (order === 'asc' ? ' ↑' : ' ↓') : ' ↕'}</span>
                     </button>
                   </th>
                 </tr>

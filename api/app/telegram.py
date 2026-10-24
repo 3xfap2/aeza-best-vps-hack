@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from app import ai, db
+from app import ai, db, fx
 from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES, CustomerResult, EngineResult
 from app.views import eur
@@ -221,8 +221,10 @@ class TelegramBot:
     def _summary(self) -> str:
         s = self.radar.current.result.summary
         lv = s.levels
+        rate = fx.cached_rate()
+        rub = f" (≈ {s.expected_loss / 100 * rate:,.0f} ₽ по курсу ЦБ)".replace(",", " ") if rate else ""
         return (
-            f"<b>Под угрозой за {s.horizon_days} дн.: {_money(s.expected_loss)}</b>\n"
+            f"<b>Под угрозой за {s.horizon_days} дн.: {_money(s.expected_loss)}</b>{rub}\n"
             f"Худший случай: {_money(s.worst_case)}\n"
             f"Клиенты: высокий {lv['high']} · средний {lv['medium']} · низкий {lv['low']} · "
             f"нет оценки {lv['no_score']} · ушли {lv['churned']}\n"

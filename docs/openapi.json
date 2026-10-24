@@ -1976,6 +1976,36 @@
         ]
       }
     },
+    "/api/v1/fx": {
+      "get": {
+        "tags": [
+          "Аналитика"
+        ],
+        "summary": "Курс евро к рублю (ЦБ РФ) для показа сумм в рублях",
+        "description": "Расчёты и API остаются в евро; курс нужен только для отображения.",
+        "operationId": "eur_rub_api_v1_fx_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Курс недоступен"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/stream": {
       "get": {
         "tags": [
@@ -3319,6 +3349,38 @@
           "paidMonthly"
         ],
         "title": "Finances"
+      },
+      "FxOut": {
+        "properties": {
+          "rate": {
+            "type": "number",
+            "title": "Rate",
+            "description": "Рублей за 1 евро"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date",
+            "description": "Дата курса"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "ЦБ РФ или вручную (FX_EUR_RUB)"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "description": "ЦБ сейчас недоступен — показан последний известный курс"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rate",
+          "date",
+          "source",
+          "stale"
+        ],
+        "title": "FxOut"
       },
       "HTTPValidationError": {
         "properties": {

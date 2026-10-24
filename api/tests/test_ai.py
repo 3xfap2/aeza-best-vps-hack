@@ -39,6 +39,24 @@ def test_message_rejects_invented_numbers():
         ai.message(Fake("Тема: Скидка\n\nДарим скидку 25 % и € 500 на счёт."), facts, "Ждёт оплаты")
 
 
+def test_cbr_rate_is_parsed_and_cached():
+    import httpx
+    from app import fx
+    xml = ('<?xml version="1.0" encoding="windows-1251"?><ValCurs Date="24.10.2026" name="Foreign Currency Market">'
+           '<Valute ID="R01239"><NumCode>978</NumCode><CharCode>EUR</CharCode><Nominal>1</Nominal><Name>Евро</Name>'
+           '<Value>90,2429</Value></Valute></ValCurs>').encode("cp1251")
+    fx._cache = None
+    calls = []
+    t = httpx.MockTransport(lambda r: calls.append(1) or httpx.Response(200, content=xml))
+    out = fx.eur_rub(t)
+    assert out == {"rate": 90.2429, "date": "2026-10-24", "source": "ЦБ РФ", "stale": False}
+    assert fx.eur_rub(t)["rate"] == 90.2429 and len(calls) == 1            # второй раз — из кеша
+    fx._cache["fetched"] = 0
+    down = httpx.MockTransport(lambda r: httpx.Response(503))
+    assert fx.eur_rub(down)["stale"] is True                               # ЦБ недоступен — последний известный
+    fx._cache = None
+
+
 def test_config_from_env():
     assert ai.config_from_env({}) is None
     assert ai.config_from_env({"AI_PROVIDER": "off"}) is None

@@ -25,6 +25,14 @@
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function eur(n, noCents) {
+    // панель может показывать рубли по курсу ЦБ (window.RADAR_FX); копейки — только у сумм меньше 100 ₽
+    var fx = window.RADAR_FX;
+    if (fx && fx.currency === 'RUB' && fx.rate) {
+      var r = n * fx.rate, rn = r < 0; r = Math.abs(r);
+      var rp = (noCents || r >= 100 ? Math.round(r).toString() : r.toFixed(2)).split('.');
+      rp[0] = rp[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      return (rn ? '−' : '') + rp[0] + (rp[1] ? ',' + rp[1] : '') + ' ₽';
+    }
     var neg = n < 0; n = Math.abs(n);
     var p = (noCents ? Math.round(n).toString() : n.toFixed(2)).split('.');
     p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Level } from './api'
+import { money } from './currency'
 
 declare global {
   interface Window {
@@ -14,9 +15,9 @@ declare global {
   }
 }
 
-const nf = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-export const eur = (v: number) => '€ ' + nf.format(v)
-export const eur0 = (v: number) => '€ ' + Math.round(v).toLocaleString('ru-RU')
+// Деньги в API — в евро; показываем в выбранной валюте (€ или ₽ по курсу ЦБ), см. currency.ts
+export const eur = (v: number) => money(v, true)
+export const eur0 = (v: number) => money(v, false)
 export const dateTime = (iso: string) => new Date(iso).toLocaleString('ru-RU', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
 }) + ' UTC'

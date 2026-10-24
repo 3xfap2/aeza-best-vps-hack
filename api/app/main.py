@@ -21,7 +21,7 @@ from app.config import load_config
 from app import ai
 from app.routers.source import snapshot_origin
 from app.routers import ai as ai_router
-from app.routers import analytics, auth, customers, integrations, metrics, model, oidc, retention, source, stream, users
+from app.routers import analytics, auth, customers, fx, integrations, metrics, model, oidc, retention, source, stream, users
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
@@ -127,7 +127,7 @@ app = FastAPI(
 )
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
-          users.router, ai_router.router, stream.router, integrations.router, metrics.router):
+          users.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):
     app.include_router(r)
 
 

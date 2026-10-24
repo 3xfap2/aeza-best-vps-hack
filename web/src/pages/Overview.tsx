@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, LEVEL_TITLE, type CustomerItem, type CustomerPage, type Level, type Renewal, type Summary, type Timeline } from '../api'
 import { useLiveData } from '../live'
 import { ErrorBox, eur, eur0, Icon, radarLevel, RiskBadge, Skeleton, useChanged } from '../ui'
+import { sign } from '../currency'
 import { StatusLine } from './Shell'
 
 async function allCustomers(): Promise<CustomerItem[]> {
@@ -220,7 +221,7 @@ function ChartCard({ timeline, servicesAtRisk }: { timeline: Timeline; servicesA
       fact, forecast, restored, labels, width: 720, height: 330, max: Math.ceil(max / step) * step, unit: mode,
       alt: mode === 'count'
         ? `Отток по дням, услуг: ${fact.length} дней удалений и ${forecast.length} дней ожидаемых непродлений`
-        : `Отток по дням, € выручки: ${fact.length} дней факта и ${forecast.length} дней прогноза`,
+        : `Отток по дням, ${sign()} выручки: ${fact.length} дней факта и ${forecast.length} дней прогноза`,
     })
     return () => chart.destroy()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,7 +233,7 @@ function ChartCard({ timeline, servicesAtRisk }: { timeline: Timeline; servicesA
       <div className="ro-cardhead"><h2 id="ch-t">Отток по дням</h2>
         <div className="chips" role="group" aria-label="Единицы графика">
           <button type="button" aria-pressed={mode === 'count'} onClick={() => setMode('count')}>Услуги</button>
-          <button type="button" aria-pressed={mode === 'eur'} onClick={() => setMode('eur')}>€ выручки</button>
+          <button type="button" aria-pressed={mode === 'eur'} onClick={() => setMode('eur')}>{sign()} выручки</button>
         </div></div>
       <div ref={host} />
       <div className="ro-pchart__stats">

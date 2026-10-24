@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api, ROLE_TITLE, type SnapshotInfo, type User } from '../api'
 import { LiveProvider, useLive, useLiveData } from '../live'
+import CurrencySwitch from '../CurrencySwitch'
+import { currentFx, isRub } from '../currency'
 import ThemeSwitch from '../ThemeSwitch'
 import { Icon, Wordmark } from '../ui'
 
@@ -34,6 +36,7 @@ export const useUser = () => useContext(UserContext)
 export default function Shell() {
   const [user, setUser] = useState<User | null>(null)
   const [more, setMore] = useState(false)
+  const [money, setMoney] = useState('EUR')   // смена валюты перерисовывает экраны
   const nav = useNavigate()
   const { pathname } = useLocation()
   useEffect(() => { api<User>('/api/v1/auth/me').then(setUser).catch(() => undefined) }, [])
@@ -62,6 +65,7 @@ export default function Shell() {
             <NavLink to="/app/guide"><Icon name="book" />Как пользоваться</NavLink>
             <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
             <ThemeSwitch />
+            <CurrencySwitch onChange={setMoney} />
             <div className="side__user">
               <b>{user.displayName}</b>
               <span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}{user.viaSso ? ' · вход через SSO' : ''}</span>
@@ -69,7 +73,7 @@ export default function Shell() {
             <button type="button" onClick={logout}><Icon name="out" />Выйти</button>
           </div>
         </aside>
-        <main className="ro-main" id="main">
+        <main className="ro-main" id="main" key={money}>
           <Outlet />
         </main>
         <nav className="tabbar" aria-label="Разделы">
@@ -88,6 +92,7 @@ export default function Shell() {
             {MORE.map((n) => <NavLink key={n.to} to={n.to}><Icon name={n.icon} />{n.label}</NavLink>)}
             <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
             <ThemeSwitch />
+            <CurrencySwitch onChange={setMoney} />
             <div className="more__user"><b>{user.displayName}</b><span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}</span></div>
             <button type="button" onClick={logout}><Icon name="out" />Выйти</button>
           </div>
@@ -112,6 +117,7 @@ export function StatusLine({ asOf }: { asOf?: string }) {
       {connected ? (
         <span>
           {asOf && <>Данные на <b>{new Date(asOf).toLocaleString('ru-RU', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} UTC</b> · </>}
+          {isRub() && <>курс ЦБ <b>{currentFx()!.rate.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽/€</b> · </>}
           пересчитано <b>{ago ?? '—'}</b> с назад
         </span>
       ) : <span>нет связи, переподключаемся…</span>}
