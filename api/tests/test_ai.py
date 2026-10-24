@@ -94,3 +94,18 @@ def test_openai_requests_and_fallbacks():
         lambda r: httpx.Response(403, json={"error": {"code": "unsupported_country_region_territory"}})))
     with pytest.raises(ai.AIError, match="AI_PROXY"):
         region.complete("s", "u")
+
+
+def test_aeza_profile_and_auto_role():
+    import httpx
+    from app import aeza_auth
+    ok = httpx.MockTransport(lambda r: httpx.Response(200, json={"data": {"total": 1, "items": [
+        {"id": 4242, "email": "Anna@Aeza.net", "name": "Анна"}]}}) if r.headers["x-api-key"] == "good-key-123" else
+        httpx.Response(401, json={"error": {"slug": "unauthorized", "message": "Invalid API key"}}))
+    p = aeza_auth.fetch_profile("good-key-123", ok)
+    assert p == {"id": "4242", "email": "anna@aeza.net", "name": "Анна"}
+    with pytest.raises(aeza_auth.AezaAuthError, match="не подошёл"):
+        aeza_auth.fetch_profile("bad-key-0000", ok)
+    assert aeza_auth.auto_role("anna@aeza.net", "@aeza.net") == "marketer"
+    assert aeza_auth.auto_role("boss@corp.ru", "@aeza.net, boss@corp.ru") == "marketer"
+    assert aeza_auth.auto_role("stranger@mail.ru", "@aeza.net") == "pending"

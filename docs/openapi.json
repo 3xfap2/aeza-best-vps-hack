@@ -53,6 +53,62 @@
         }
       }
     },
+    "/api/v1/auth/aeza": {
+      "post": {
+        "tags": [
+          "Авторизация"
+        ],
+        "summary": "Вход через аккаунт Aéza (по API-ключу личного кабинета)",
+        "description": "Ключ проверяется запросом профиля к API Aéza и не сохраняется. Новый аккаунт ждёт подтверждения администратора (status=pending), если его email или домен не указан в AEZA_AUTO_APPROVE.",
+        "operationId": "aeza_login_api_v1_auth_aeza_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AezaLoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AezaLoginOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Ключ не подошёл"
+          },
+          "429": {
+            "description": "Слишком много попыток"
+          },
+          "502": {
+            "description": "API Aéza недоступно"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
@@ -2477,6 +2533,54 @@
         ],
         "title": "ActivityItem"
       },
+      "AezaLoginIn": {
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 8,
+            "title": "Apikey",
+            "description": "API-ключ из личного кабинета Aéza; Радар его не сохраняет"
+          }
+        },
+        "type": "object",
+        "required": [
+          "apiKey"
+        ],
+        "title": "AezaLoginIn"
+      },
+      "AezaLoginOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "pending"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "AezaLoginOut"
+      },
       "AsOf": {
         "properties": {
           "mode": {
@@ -3676,13 +3780,20 @@
             "enum": [
               "admin",
               "marketer",
-              "viewer"
+              "viewer",
+              "pending"
             ],
-            "title": "Role"
+            "title": "Role",
+            "description": "pending — вошёл через Aéza и ждёт, пока администратор выдаст роль"
           },
           "viaSso": {
             "type": "boolean",
             "title": "Viasso"
+          },
+          "viaAeza": {
+            "type": "boolean",
+            "title": "Viaaeza",
+            "default": false
           },
           "createdAt": {
             "type": "string",
@@ -5408,7 +5519,8 @@
             "enum": [
               "admin",
               "marketer",
-              "viewer"
+              "viewer",
+              "pending"
             ],
             "title": "Role",
             "description": "admin — всё; marketer — модель и работа с клиентами; viewer — только просмотр"

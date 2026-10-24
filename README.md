@@ -290,6 +290,8 @@ Prometheus из `compose.yaml` собирает их каждые 15 секун�
 
 Права проверяет сервер (403 без нужной роли). Учётная запись из `ADMIN_LOGIN` — администратор.
 
+**Вход через аккаунт Aéza.** На странице входа — «Войти через аккаунт Aéza»: пользователь вводит API-ключ из личного кабинета Aéza, Радар один раз запрашивает профиль (`GET https://core.aeza.net/api/accounts?current=1`, заголовок `X-API-Key` — как в официальном SDK AezaGroup/aeza-net-sdk) и ключ не сохраняет. Новый аккаунт получает статус «ждёт подтверждения» и не видит данных, пока администратор не выдаст роль в «Команде»; сотрудников можно пускать сразу — `AEZA_AUTO_APPROVE=@aeza.net` (домены или email через запятую).
+
 **Роль из системы входа компании.** При входе через SSO роль берётся из claim `groups` (Keycloak, Authentik, Azure AD) по таблице `OIDC_ROLE_MAP`, например `radar-admins=admin,radar-marketing=marketer,radar-viewers=viewer`; ключом может быть и email. Если совпадение есть, роль обновляется при каждом входе — права ведутся в IdP, а не в Радаре. Если нет — новый пользователь получает `OIDC_DEFAULT_ROLE` (маркетолог), роль можно сменить в «Команде». В демо: `marketing@radar.example` — маркетолог, `viewer@radar.example` — наблюдатель (пароль у обоих `radar-sso-2026`).
 
 **Защита сайта и контейнеров.** Content-Security-Policy: скрипты только с нашего домена, без inline и eval; запрет встраивания в чужие сайты; Permissions-Policy. Контейнеры api и web работают не от root, с файловой системой только для чтения, без capabilities Linux и с `no-new-privileges`; Prometheus, Grafana и Dex — без capabilities и `no-new-privileges`.

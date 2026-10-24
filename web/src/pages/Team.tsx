@@ -53,9 +53,10 @@ export default function Team() {
                     return (
                       <tr key={m.id}>
                         <td><b>{m.displayName}</b>{self && <span className="ro-small"> · это вы</span>}
-                          <div className="ro-small ro-mono">{m.login}{m.viaSso ? ' · SSO' : ''}</div></td>
+                          <div className="ro-small ro-mono">{m.login}{m.viaSso ? ' · SSO' : ''}{m.viaAeza ? ' · аккаунт Aéza' : ''}</div></td>
                         <td>{isAdmin && !self
-                          ? <select className="team__role" aria-label={`Роль ${m.login}`} value={m.role} onChange={(e) => setRole(m, e.target.value as Role)}>
+                          ? <select className={`team__role${m.role === 'pending' ? ' is-pending' : ''}`} aria-label={`Роль ${m.login}`} value={m.role} onChange={(e) => setRole(m, e.target.value as Role)}>
+                            {m.role === 'pending' && <option value="pending" disabled>Ждёт подтверждения — выдать роль</option>}
                             {ROLES.map((r) => <option key={r} value={r}>{ROLE_TITLE[r]}</option>)}</select>
                           : <span className={`work-tag team__tag--${m.role}`}>{ROLE_TITLE[m.role]}</span>}</td>
                         <td className="r mono">{m.actions}</td>

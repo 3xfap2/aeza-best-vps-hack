@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import db
+from app import aeza_auth, db
 from app.security import COOKIE_NAME, User, current_user, new_token, request_token, token_hash, verify_password
 from app.views import UserOut
 
@@ -51,13 +52,54 @@ def login(body: LoginIn, request: Request, response: Response) -> LoginOut:
                             headers={"Retry-After": str(wait)})
     with request.app.state.pool.connection() as conn:
         row = db.user_by_login(conn, body.login)
-    if not row or not verify_password(body.password, row["password_hash"]):
+    if not row or not verify_password(body.password, row["password_hash"]) or row["role"] == "pending":
         limiter.fail(key)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")
     limiter.reset(key)
     token, expires = start_session(request, response, row["id"])
     user = User(row["id"], row["login"], row["display_name"], False, row["role"])
     return LoginOut(user=user_out(user), token=token, expiresAt=expires)
+
+
+class AezaLoginIn(BaseModel):
+    apiKey: str = Field(min_length=8, max_length=300, description="API-ключ из личного кабинета Aéza; Радар его не сохраняет")
+
+
+class AezaLoginOut(BaseModel):
+    status: Literal["ok", "pending"]
+    message: str
+    user: UserOut | None = None
+
+
+@router.post("/aeza", response_model=AezaLoginOut, summary="Вход через аккаунт Aéza (по API-ключу личного кабинета)",
+             description="Ключ проверяется запросом профиля к API Aéza и не сохраняется. Новый аккаунт ждёт подтверждения "
+                         "администратора (status=pending), если его email или домен не указан в AEZA_AUTO_APPROVE.",
+             responses={401: {"description": "Ключ не подошёл"}, 429: {"description": "Слишком много попыток"},
+                        502: {"description": "API Aéza недоступно"}})
+def aeza_login(body: AezaLoginIn, request: Request, response: Response) -> AezaLoginOut:
+    limiter = request.app.state.login_limiter
+    key = f"aeza|{request.client.host if request.client else '-'}"
+    wait = limiter.retry_after(key)
+    if wait:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"Слишком много попыток. Попробуйте через {wait} с",
+                            headers={"Retry-After": str(wait)})
+    try:
+        profile = aeza_auth.fetch_profile(body.apiKey.strip())
+    except aeza_auth.AezaAuthError as e:
+        limiter.fail(key)
+        code = status.HTTP_502_BAD_GATEWAY if "недоступно" in str(e) or "ответило" in str(e) else status.HTTP_401_UNAUTHORIZED
+        raise HTTPException(code, str(e)) from e
+    limiter.reset(key)
+    with request.app.state.pool.connection() as conn:
+        row = db.upsert_aeza_user(conn, profile["id"], profile["email"], profile["name"], aeza_auth.auto_role(profile["email"]))
+        if row["role"] == "pending":
+            db.log_activity(conn, "team", f"Заявка на доступ через Aéza: {row['login']}", "aeza")
+    if row["role"] == "pending":
+        return AezaLoginOut(status="pending", message=f"{profile['name']}, заявка на доступ отправлена — администратор Радара "
+                                                      "выдаст роль в разделе «Команда». После этого войдите снова.")
+    start_session(request, response, row["id"])
+    return AezaLoginOut(status="ok", message="Вход выполнен",
+                        user=user_out(User(row["id"], row["login"], row["display_name"], False, row["role"])))
 
 
 @router.get("/me", response_model=UserOut, summary="Текущий пользователь")

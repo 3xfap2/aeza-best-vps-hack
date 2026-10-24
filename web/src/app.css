@@ -136,6 +136,10 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
 .login__or { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: 13px; }
 .login__or::before, .login__or::after { content: ""; flex: 1; border-top: 1.5px dashed var(--line-draft); }
 .login__hint { margin: 0; }
+.login__aeza { gap: 10px; }
+.login__aeza .ro-small, .login .login__notice { margin: 0; }
+.login .login__notice { padding: 10px 12px; border-radius: 10px; background: var(--marker-100); color: var(--ink); }
+.team__role.is-pending { border-color: var(--marker); background: var(--marker-100); }
 
 /* --- общие состояния --- */
 .state { display: grid; gap: 8px; justify-items: start; padding: 24px; }

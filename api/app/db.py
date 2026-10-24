@@ -226,7 +226,8 @@ def upsert_password_user(conn: Connection, login: str, password_hash: str, displ
     )
 
 
-USER_COLS = 'id, login, display_name AS "displayName", role, oidc_subject IS NOT NULL AS "viaSso", created_at AS "createdAt"'
+USER_COLS = ('id, login, display_name AS "displayName", role, oidc_subject IS NOT NULL AS "viaSso", '
+             'aeza_id IS NOT NULL AS "viaAeza", created_at AS "createdAt"')
 
 
 def list_users(conn: Connection) -> list[dict]:
@@ -279,6 +280,18 @@ def upsert_oidc_user(conn: Connection, subject: str, login: str, display_name: s
         "INSERT INTO app_users (login, display_name, oidc_subject, role) VALUES (%s, %s, %s, %s) "
         "ON CONFLICT (login) DO UPDATE SET oidc_subject = EXCLUDED.oidc_subject RETURNING *",
         (f"sso:{login}", display_name, subject, role),
+    ).fetchone()
+
+
+def upsert_aeza_user(conn: Connection, aeza_id: str, email: str, name: str, role: str) -> dict:
+    """Аккаунт Aéza → пользователь Радара; у существующего роль не меняется (её ведёт администратор)."""
+    row = conn.execute("SELECT * FROM app_users WHERE aeza_id = %s", (aeza_id,)).fetchone()
+    if row:
+        return row
+    return conn.execute(
+        "INSERT INTO app_users (login, display_name, aeza_id, role) VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (login) DO UPDATE SET aeza_id = EXCLUDED.aeza_id RETURNING *",
+        (f"aeza:{email or aeza_id}", name, aeza_id, role),
     ).fetchone()
 
 

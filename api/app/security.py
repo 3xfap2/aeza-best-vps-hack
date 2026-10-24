@@ -53,7 +53,7 @@ def request_token(request: Request) -> str | None:
 
 
 ROLES = ("viewer", "marketer", "admin")
-ROLE_TITLES = {"admin": "Администратор", "marketer": "Маркетолог", "viewer": "Наблюдатель"}
+ROLE_TITLES = {"admin": "Администратор", "marketer": "Маркетолог", "viewer": "Наблюдатель", "pending": "Ждёт подтверждения"}
 
 
 @dataclass(frozen=True)
@@ -75,6 +75,8 @@ def current_user(request: Request) -> User:
         with request.app.state.pool.connection() as conn:
             row = db.session_user(conn, token_hash(token))
         if row:
+            if row["role"] == "pending":
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "Доступ ждёт подтверждения администратора")
             return User(row["id"], row["login"], row["display_name"], row["oidc_subject"] is not None, row["role"])
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Нужно войти", headers={"WWW-Authenticate": "Bearer"})
 

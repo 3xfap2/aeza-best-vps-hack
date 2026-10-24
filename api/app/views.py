@@ -26,7 +26,7 @@ class UserOut(BaseModel):
     login: str
     displayName: str
     viaSso: bool
-    role: Literal["admin", "marketer", "viewer"] = Field(description="admin — всё; marketer — модель и работа с клиентами; viewer — только просмотр")
+    role: Literal["admin", "marketer", "viewer", "pending"] = Field(description="admin — всё; marketer — модель и работа с клиентами; viewer — только просмотр")
 
 
 class ContributionOut(BaseModel):

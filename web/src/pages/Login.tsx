@@ -17,6 +17,9 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [sso, setSso] = useState<string | null>(null)
+  const [aezaOpen, setAezaOpen] = useState(false)
+  const [aezaKey, setAezaKey] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const next = params.get('next')?.startsWith('/app') ? params.get('next')! : '/app'
 
   useEffect(() => {
@@ -42,6 +45,21 @@ export default function Login() {
     }
   }
 
+  async function aeza(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true); setError(null); setNotice(null)
+    try {
+      const r = await api<{ status: 'ok' | 'pending'; message: string }>('/api/v1/auth/aeza', { method: 'POST', json: { apiKey: aezaKey } })
+      setAezaKey('')
+      if (r.status === 'ok') nav(next, { replace: true })
+      else setNotice(r.message)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось войти через Aéza')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="ro login">
       <div className="login__card ro-card">
@@ -62,12 +80,23 @@ export default function Login() {
             {busy ? 'Входим…' : 'Войти'}
           </button>
         </form>
-        {sso && (
-          <>
-            <div className="login__or"><span>или</span></div>
-            <a className="ro-btn ro-btn--quiet" href={sso}>Войти через SSO</a>
-          </>
+        <div className="login__or"><span>или</span></div>
+        {sso && <a className="ro-btn ro-btn--quiet" href={sso}>Войти через SSO</a>}
+        {!aezaOpen ? (
+          <button className="ro-btn ro-btn--quiet" type="button" onClick={() => setAezaOpen(true)}>Войти через аккаунт Aéza</button>
+        ) : (
+          <form onSubmit={aeza} className="form login__aeza">
+            <label className="field">
+              <span>API-ключ Aéza</span>
+              <input type="password" autoComplete="off" value={aezaKey} onChange={(e) => setAezaKey(e.target.value)} required autoFocus />
+            </label>
+            <p className="ro-small">Ключ создаётся в личном кабинете Aéza (раздел API). Радар один раз проверяет его и не сохраняет.
+              Новому аккаунту доступ подтверждает администратор.</p>
+            <button className="ro-btn ro-btn--quiet" type="submit" disabled={busy || aezaKey.trim().length < 8}>
+              {busy ? 'Проверяем…' : 'Войти через Aéza'}</button>
+          </form>
         )}
+        {notice && <p className="ro-small login__notice" role="status">{notice}</p>}
         <p className="ro-small login__hint">Доступ выдаёт администратор Радара.</p>
       </div>
     </div>

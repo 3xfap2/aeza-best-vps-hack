@@ -535,3 +535,29 @@ def test_ai_connection_from_panel(client, auth, monkeypatch):
 
     assert client.delete("/api/v1/ai/config", headers=auth).status_code == 204
     assert client.get("/api/v1/ai/status", headers=auth).json()["enabled"] is False
+
+
+def test_login_with_aeza_account(client, auth, monkeypatch):
+    from app import aeza_auth
+    monkeypatch.setattr(aeza_auth, "fetch_profile", lambda key: {"id": "777", "email": "client@mail.ru", "name": "Клиент"})
+    monkeypatch.setenv("AEZA_AUTO_APPROVE", "@aeza.net")
+    r = client.post("/api/v1/auth/aeza", json={"apiKey": "some-aeza-key"})
+    assert r.status_code == 200 and r.json()["status"] == "pending" and "radar_session" not in r.cookies
+    member = next(m for m in client.get("/api/v1/users", headers=auth).json() if m["login"] == "aeza:client@mail.ru")
+    assert member["role"] == "pending" and member["viaAeza"]
+    # администратор выдаёт роль — теперь вход создаёт сессию
+    client.patch(f"/api/v1/users/{member['id']}", headers=auth, json={"role": "viewer"})
+    r = client.post("/api/v1/auth/aeza", json={"apiKey": "some-aeza-key"})
+    assert r.json()["status"] == "ok" and r.json()["user"]["role"] == "viewer"
+    assert client.get("/api/v1/auth/me").json()["login"] == "aeza:client@mail.ru"
+    client.post("/api/v1/auth/logout")
+    # сотрудник с доменом из AEZA_AUTO_APPROVE входит сразу маркетологом
+    monkeypatch.setattr(aeza_auth, "fetch_profile", lambda key: {"id": "778", "email": "anna@aeza.net", "name": "Анна"})
+    r = client.post("/api/v1/auth/aeza", json={"apiKey": "staff-aeza-key"})
+    assert r.json()["status"] == "ok" and r.json()["user"]["role"] == "marketer"
+    client.post("/api/v1/auth/logout")
+
+    def bad(key):
+        raise aeza_auth.AezaAuthError("Ключ API Aéza не подошёл")
+    monkeypatch.setattr(aeza_auth, "fetch_profile", bad)
+    assert client.post("/api/v1/auth/aeza", json={"apiKey": "wrong-key-1"}).status_code == 401

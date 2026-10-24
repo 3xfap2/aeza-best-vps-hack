@@ -2,14 +2,14 @@
 
 export type Level = 'high' | 'medium' | 'low' | 'no_score' | 'churned'
 
-export type Role = 'admin' | 'marketer' | 'viewer'
+export type Role = 'admin' | 'marketer' | 'viewer' | 'pending'
 export interface User { id: number; login: string; displayName: string; viaSso: boolean; role: Role }
-export const ROLE_TITLE: Record<Role, string> = { admin: 'Администратор', marketer: 'Маркетолог', viewer: 'Наблюдатель' }
+export const ROLE_TITLE: Record<Role, string> = { admin: 'Администратор', marketer: 'Маркетолог', viewer: 'Наблюдатель', pending: 'Ждёт подтверждения' }
 const ROLE_RANK: Role[] = ['viewer', 'marketer', 'admin']
 /** Есть ли у пользователя роль не ниже нужной: viewer < marketer < admin. */
 export const can = (u: User | null, role: Role) => !!u && ROLE_RANK.indexOf(u.role) >= ROLE_RANK.indexOf(role)
 export interface Member {
-  id: number; login: string; displayName: string; role: Role; viaSso: boolean; createdAt: string
+  id: number; login: string; displayName: string; role: Role; viaSso: boolean; viaAeza: boolean; createdAt: string
   actions: number; customers: number; renewed: number; saved: number
 }
 

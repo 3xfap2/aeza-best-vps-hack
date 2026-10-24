@@ -14,6 +14,7 @@ from app.views import eur
 router = APIRouter(prefix="/api/v1/users", tags=["Команда"])
 
 Role = Literal["admin", "marketer", "viewer"]
+MemberRole = Literal["admin", "marketer", "viewer", "pending"]
 WORKLOAD_DAYS = 7
 
 
@@ -21,8 +22,9 @@ class MemberOut(BaseModel):
     id: int
     login: str
     displayName: str
-    role: Role
+    role: MemberRole = Field(description="pending — вошёл через Aéza и ждёт, пока администратор выдаст роль")
     viaSso: bool
+    viaAeza: bool = False
     createdAt: datetime
     actions: int = Field(description=f"Отметок работы с клиентами за {WORKLOAD_DAYS} дней")
     customers: int = Field(description="Скольких клиентов отработал")
