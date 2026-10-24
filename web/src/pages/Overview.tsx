@@ -60,6 +60,7 @@ export default function Overview() {
             <li><b>Сумма под угрозой</b> — сколько выручки за 30 дней, скорее всего, не продлят.</li>
             <li><b>Топ клиентов</b> внизу — откройте первого: там причина риска и что сделать.</li>
             <li><b>«За что мы теряем деньги»</b> — кампании по причинам и CSV для обзвона.</li>
+            <li><b>«Удержание»</b> — кому звонить сегодня, до какого срока и окупится ли звонок.</li>
             <li><b>«Модель»</b> — подвиньте вес признака и посмотрите, как изменится рейтинг.</li>
           </ol>
           <Link className="ro-link" to="/app/guide">Полный гайд: шесть шагов, уровни риска, Telegram-бот →</Link>
@@ -71,6 +72,10 @@ export default function Overview() {
           <section className="ro-panel ro-sum" aria-labelledby="sum-t">
             <span className="ro-label" id="sum-t">Ожидаемая потеря за {s.horizonDays} дней</span>
             <div className="ro-sum__amount"><span className="ro-mark" data-draw="done">{eur(s.expectedLoss)}</span></div>
+            <p className="ro-sum__paid">
+              <span>Реально собираемая: <b className="ro-mono">{eur(s.expectedLossPaid)}</b></span>
+              <span className="ro-small">выручка клиента не больше, чем он платит в среднем или держит на счёте — почасовой сервер по прайсу стоит тысячи евро в месяц, но столько клиент не заплатит</span>
+            </p>
             <p className="ro-text" style={{ maxWidth: '44em' }}>
               {s.levels.high} клиентов высокого риска и {s.levels.medium} среднего из {s.customersTotal}.
               Сумма — выручка услуг за {s.horizonDays} дней × вероятность непродления, сложенная по всем клиентам.
@@ -91,6 +96,8 @@ export default function Overview() {
                   <tr key={l}><td><RiskBadge level={l} title={LEVEL_TITLE[l]} /></td><td className="ro-mono">{s.levels[l]}</td><td>{eur(s.levelLoss[l])}</td></tr>
                 ))}
               </tbody></table>
+              <code className="ro-mono">реально собираемая = потеря клиента × min(1, платёжеспособность / выручка за {s.horizonDays} дн.)</code>
+              <p className="ro-small">Платёжеспособность — больше из двух: деньги на счёте или средний платёж (пополнено всего / месяцы с первой услуги) за {s.horizonDays} дней. По этой сумме считаем отдачу от удержания.</p>
               <code className="ro-mono">LTV под угрозой = Σ месячная выручка / {s.ltvMonthlyChurn} % × score / 100</code>
               <p className="ro-small">LTV — выручка за ожидаемый срок жизни клиента при базовом оттоке {s.ltvMonthlyChurn} % в месяц (не больше 36 месяцев): сколько бизнес теряет, если клиент уйдёт насовсем, а не только в этом месяце.</p>
               <p className="ro-small">«Нет оценки» ({s.levels.no_score}) и «Ушёл» ({s.levels.churned}) в сумму не входят. Худший случай — вся выручка клиентов высокого риска.</p>
@@ -245,6 +252,7 @@ const KIND_TITLE = {
 function CausesCard({ summary }: { summary: Summary }) {
   const [rate, setRate] = useState(30)
   const atRisk = summary.causes.reduce((a, g) => a + g.expectedLoss, 0)
+  const atRiskPaid = summary.causes.reduce((a, g) => a + g.expectedLossPaid, 0)
   const kinds = (['involuntary', 'voluntary'] as const).map((k) => {
     const items = summary.causes.filter((g) => g.kind === k)
     return { k, items, loss: items.reduce((a, g) => a + g.expectedLoss, 0), count: items.reduce((a, g) => a + g.customers, 0) }
@@ -287,7 +295,9 @@ function CausesCard({ summary }: { summary: Summary }) {
             <div className="causes__roiv"><b className="ro-display">{rate} %</b><span className="ro-small">клиентов под риском</span></div>
             <input id="roi" className="ro-range" type="range" min={0} max={100} step={5} value={rate}
               style={{ ['--p' as string]: `${rate}%` }} onChange={(e) => setRate(Number(e.target.value))} />
-            <p className="ro-text">сохраним <b className="ro-mono">{eur(atRisk * rate / 100)}</b> выручки за {summary.horizonDays} дней</p>
+            <p className="ro-text">сохраним <b className="ro-mono">{eur(atRiskPaid * rate / 100)}</b> реально собираемой выручки за {summary.horizonDays} дней</p>
+            <p className="ro-small">по прайсу — {eur(atRisk * rate / 100)}</p>
+            <Link className="ro-btn ro-btn--sm" to="/app/retention">Очередь удержания<Icon name="arrow" /></Link>
             {summary.retention && (
               <div className="causes__ret">
                 <span className="ro-label">Работа с клиентами</span>
@@ -297,7 +307,7 @@ function CausesCard({ summary }: { summary: Summary }) {
                 )}
               </div>
             )}
-            <p className="ro-small">Ориентир рынка: напоминания об оплате возвращают 20–50 % неуспешных платежей. Расчёт: ожидаемая потеря клиентов под риском × доля удержанных.</p>
+            <p className="ro-small">Ориентир рынка: напоминания об оплате возвращают 20–50 % неуспешных платежей. Расчёт: реально собираемая потеря клиентов под риском × доля удержанных.</p>
           </div>
         </div>
       )}

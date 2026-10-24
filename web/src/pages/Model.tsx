@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
-import { api, ApiError, LEVEL_TITLE, type HistoryItem, type ModelSettings, type Preview, type SettingsOut } from '../api'
+import { api, ApiError, can, LEVEL_TITLE, type HistoryItem, type ModelSettings, type Preview, type SettingsOut } from '../api'
 import { useLive, useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, Skeleton, useToast } from '../ui'
-import { StatusLine } from './Shell'
+import { StatusLine, useUser } from './Shell'
 
 /** Разница между сохранёнными и черновыми настройками — тело PATCH (JSON Merge Patch). */
 function diffPatch(saved: ModelSettings, draft: ModelSettings) {
@@ -23,6 +23,7 @@ function diffPatch(saved: ModelSettings, draft: ModelSettings) {
 }
 
 export default function Model() {
+  const editable = can(useUser(), 'marketer')
   const { version } = useLive()
   const { data, error } = useLiveData(() => api<SettingsOut>('/api/v1/model/settings'))
   const history = useLiveData(() => api<HistoryItem[]>('/api/v1/model/settings/history?limit=20'))
@@ -88,8 +89,9 @@ export default function Model() {
         <div className="ro-top__actions">
           <button className="ro-btn ro-btn--quiet ro-btn--sm" type="button" disabled={!dirty || saving}
             onClick={() => setDraft(structuredClone(data.settings))}>Сбросить</button>
-          <button className="ro-btn ro-btn--sm" type="button" disabled={!dirty || saving || !!invalid} onClick={save}>
+          {editable ? <button className="ro-btn ro-btn--sm" type="button" disabled={!dirty || saving || !!invalid} onClick={save}>
             {saving ? 'Сохраняем…' : 'Сохранить'}</button>
+            : <span className="ro-small">Роль «Наблюдатель»: веса можно подвигать для предпросмотра, сохранить — нет</span>}
         </div>
       </div>
 
@@ -214,7 +216,7 @@ export default function Model() {
       {dirty && preview && (
         <div className="pv-dock" aria-hidden="true">
           Высокий {preview.before.levels.high} → {preview.after.levels.high} · Потеря {eur(preview.after.expectedLoss - preview.before.expectedLoss)}
-          <button className="ro-btn ro-btn--sm" type="button" disabled={saving || !!invalid} onClick={save} tabIndex={-1}>Сохранить</button>
+          <button className="ro-btn ro-btn--sm" type="button" disabled={saving || !!invalid || !editable} onClick={save} tabIndex={-1}>Сохранить</button>
         </div>
       )}
       {toast.node}

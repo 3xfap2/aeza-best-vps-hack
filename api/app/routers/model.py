@@ -10,7 +10,7 @@ from app import db
 from app.scoring.engine import evaluate
 from app.scoring.features import FEATURES
 from app.scoring.settings import ModelSettings, diff_settings, merge_patch
-from app.security import User, current_user
+from app.security import User, current_user, require
 from app.views import eur
 
 router = APIRouter(prefix="/api/v1/model", tags=["Модель"])
@@ -102,7 +102,7 @@ def patch_settings(
     request: Request,
     patch: dict[str, Any] = Body(..., examples=[PATCH_EXAMPLE]),
     expectedVersion: int | None = Query(None, description="Версия, с которой начата правка; если настройки уже изменили — 409"),
-    user: User = Depends(current_user),
+    user: User = Depends(require("marketer")),
 ) -> SettingsOut:
     radar = request.app.state.radar
     with radar.write_lock:

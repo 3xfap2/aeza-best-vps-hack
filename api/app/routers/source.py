@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app import db, simulator
 from app.scoring.settings import AsOf, diff_settings
-from app.security import User, current_user
+from app.security import User, current_user, require
 from app.source import SnapshotIn
 
 router = APIRouter(prefix="/api/v1/source", tags=["Данные источника"])
@@ -109,7 +109,7 @@ def load_snapshot(request: Request, snap: SnapshotIn, author: str, kind: str) ->
             description="Формат — как data.json из комплекта кейса: {accounts, services, transactions}, "
                         "суммы в евроцентах. Необязательное поле referenceAt — момент снимка.",
             responses={422: {"description": "Данные не прошли проверку; в detail указано поле"}})
-def put_snapshot(request: Request, snap: SnapshotIn, user: User = Depends(current_user)) -> LoadResult:
+def put_snapshot(request: Request, snap: SnapshotIn, user: User = Depends(require("admin"))) -> LoadResult:
     return load_snapshot(request, snap, user.login, "snapshot")
 
 
@@ -122,7 +122,7 @@ def snapshot_info(request: Request, _: User = Depends(current_user)) -> Snapshot
 
 @router.post("/preset/{name}", response_model=LoadResult,
              summary="Загрузить готовый набор: case — данные кейса (10 клиентов), extended — кейс + 190 сгенерированных")
-def load_preset(name: Literal["case", "extended"], request: Request, user: User = Depends(current_user)) -> LoadResult:
+def load_preset(name: Literal["case", "extended"], request: Request, user: User = Depends(require("admin"))) -> LoadResult:
     cfg = request.app.state.config
     path = cfg.case_path if name == "case" else cfg.demo_path
     if not path or not path.exists():
@@ -137,7 +137,7 @@ def load_preset(name: Literal["case", "extended"], request: Request, user: User 
 @router.post("/events", response_model=EventResult,
              summary="Событие из системы-источника (пополнение, оплата, автопродление, смена статуса)",
              responses={404: {"description": "Аккаунт или услуга не найдены"}, 409: {"description": "Событие невозможно"}})
-def post_event(request: Request, event: SourceEvent = Body(...), user: User = Depends(current_user)) -> EventResult:
+def post_event(request: Request, event: SourceEvent = Body(...), user: User = Depends(require("admin"))) -> EventResult:
     radar = request.app.state.radar
     with radar.write_lock:
         at = radar.current.result.as_of
@@ -166,7 +166,7 @@ def _apply_event(conn, event: Any, at: datetime) -> str:
 
 @router.post("/simulate", response_model=SimulateResult,
              summary="Перемотка времени: сдвинуть дату расчёта и применить правила жизненного цикла услуг")
-def simulate(request: Request, body: SimulateIn, user: User = Depends(current_user)) -> SimulateResult:
+def simulate(request: Request, body: SimulateIn, user: User = Depends(require("admin"))) -> SimulateResult:
     radar = request.app.state.radar
     with radar.write_lock:
         since = radar.current.result.as_of
@@ -184,7 +184,7 @@ def simulate(request: Request, body: SimulateIn, user: User = Depends(current_us
 
 @router.post("/reset", response_model=LoadResult,
              summary="Вернуть данные к последнему загруженному снимку и дату расчёта — к дате снимка")
-def reset(request: Request, user: User = Depends(current_user)) -> LoadResult:
+def reset(request: Request, user: User = Depends(require("admin"))) -> LoadResult:
     radar = request.app.state.radar
     with radar.write_lock:
         with request.app.state.pool.connection() as conn:

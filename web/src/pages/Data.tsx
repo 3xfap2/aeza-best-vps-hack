@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { api, ApiError, type ActivityItem, type CustomerDetail, type LoadResult, type SnapshotInfo } from '../api'
+import { api, ApiError, can, type ActivityItem, type CustomerDetail, type LoadResult, type SnapshotInfo } from '../api'
 import { useLiveData } from '../live'
 import { dateTime, Empty, Skeleton, useToast } from '../ui'
-import { StatusLine } from './Shell'
+import { StatusLine, useUser } from './Shell'
 
 type EventType = 'topup' | 'pay_renewal' | 'autoprolong' | 'service_status' | 'signal'
 const SIGNALS = [['loadDrop', 'Падение нагрузки сервера, 0–1'], ['downgraded', 'Понизил тариф'], ['supportTickets30d', 'Обращений в поддержку за 30 дней']]
 const STATUSES = [['active', 'Активна'], ['suspended', 'Выключена'], ['prolong_wait', 'Ждёт оплаты'], ['deleted', 'Удалена'], ['blocked', 'Заблокирована']]
 
 export default function DataPage() {
+  const admin = can(useUser(), 'admin')
   const info = useLiveData(() => api<SnapshotInfo | null>('/api/v1/source/snapshot'))
   const activity = useLiveData(() => api<ActivityItem[]>('/api/v1/source/activity?limit=30'))
   const tg = useLiveData(() => api<{ enabled: boolean; botUsername: string | null; connectUrl: string | null }>('/api/v1/integrations/telegram'))
@@ -50,6 +51,7 @@ export default function DataPage() {
   return (
     <>
       <div className="ro-top"><div><h1>Данные</h1><StatusLine /></div></div>
+      {!admin && <p className="ro-panel data__ro" role="note">Загружать данные, отправлять события биллинга и перематывать время может только администратор — у вас доступ на просмотр.</p>}
 
       <div className="data">
         <section className="ro-card" aria-labelledby="snap-t">

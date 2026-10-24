@@ -1,20 +1,32 @@
-import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { api, type User } from '../api'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { api, ROLE_TITLE, type User } from '../api'
 import { LiveProvider, useLive } from '../live'
 import { Icon, Wordmark } from '../ui'
 
 const NAV = [
   { to: '/app', end: true, icon: 'grid', label: 'Обзор' },
   { to: '/app/customers', end: false, icon: 'users', label: 'Клиенты' },
+  { to: '/app/retention', end: false, icon: 'phone', label: 'Удержание' },
   { to: '/app/model', end: false, icon: 'sliders', label: 'Модель' },
   { to: '/app/data', end: false, icon: 'plug', label: 'Данные' },
+  { to: '/app/team', end: false, icon: 'team', label: 'Команда' },
 ]
+// на телефоне внизу — четыре главных раздела, остальное в «Ещё»
+const TABS = NAV.slice(0, 4)
+const MORE = [...NAV.slice(4), { to: '/app/guide', end: false, icon: 'book', label: 'Как пользоваться' }]
+
+const UserContext = createContext<User | null>(null)
+/** Текущий пользователь панели (роль решает, какие кнопки доступны). */
+export const useUser = () => useContext(UserContext)
 
 export default function Shell() {
   const [user, setUser] = useState<User | null>(null)
+  const [more, setMore] = useState(false)
   const nav = useNavigate()
+  const { pathname } = useLocation()
   useEffect(() => { api<User>('/api/v1/auth/me').then(setUser).catch(() => undefined) }, [])
+  useEffect(() => setMore(false), [pathname])
 
   async function logout() {
     await api('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined)
@@ -23,6 +35,7 @@ export default function Shell() {
 
   if (!user) return <div className="ro boot" aria-busy="true"><Wordmark /></div>
   return (
+    <UserContext.Provider value={user}>
     <LiveProvider>
       <div className="ro ro-app">
         <a className="ro-sr" href="#main">К содержанию</a>
@@ -33,25 +46,41 @@ export default function Shell() {
               <NavLink key={n.to} to={n.to} end={n.end}><Icon name={n.icon} />{n.label}</NavLink>
             ))}
           </nav>
-          <div className="ro-side__foot">
-            <NavLink className="ro-link side__guide" to="/app/guide">Как пользоваться</NavLink>
-            <span className="ro-small side__user">{user.displayName}{user.viaSso ? ' · SSO' : ''}</span>
-            <a className="ro-link" href="/api/v1/docs" target="_blank" rel="noreferrer">Документация API</a>
-            <button className="ro-link side__logout" type="button" onClick={logout}><Icon name="out" />Выйти</button>
+          <div className="ro-side__foot side__foot">
+            <NavLink to="/app/guide"><Icon name="book" />Как пользоваться</NavLink>
+            <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
+            <div className="side__user">
+              <b>{user.displayName}</b>
+              <span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}{user.viaSso ? ' · вход через SSO' : ''}</span>
+            </div>
+            <button type="button" onClick={logout}><Icon name="out" />Выйти</button>
           </div>
         </aside>
         <main className="ro-main" id="main">
           <Outlet />
         </main>
         <nav className="tabbar" aria-label="Разделы">
-          {[...NAV, { to: "/app/guide", end: false, icon: "plus", label: "Гайд" }].map((n) => (
+          {TABS.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}>
               <Icon name={n.icon} /><span>{n.label}</span>
             </NavLink>
           ))}
+          <button type="button" aria-expanded={more} aria-controls="more-menu" onClick={() => setMore(!more)}
+            className={MORE.some((n) => pathname.startsWith(n.to)) ? 'active' : undefined}>
+            <Icon name="more" /><span>Ещё</span>
+          </button>
         </nav>
+        {more && (
+          <div className="more" id="more-menu">
+            {MORE.map((n) => <NavLink key={n.to} to={n.to}><Icon name={n.icon} />{n.label}</NavLink>)}
+            <a href="/api/v1/docs" target="_blank" rel="noreferrer"><Icon name="code" />Документация API</a>
+            <div className="more__user"><b>{user.displayName}</b><span className="ro-small">роль: {ROLE_TITLE[user.role].toLowerCase()}</span></div>
+            <button type="button" onClick={logout}><Icon name="out" />Выйти</button>
+          </div>
+        )}
       </div>
     </LiveProvider>
+    </UserContext.Provider>
   )
 }
 

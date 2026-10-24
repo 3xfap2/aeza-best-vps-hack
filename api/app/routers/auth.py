@@ -24,7 +24,7 @@ class LoginOut(BaseModel):
 
 
 def user_out(u: User) -> UserOut:
-    return UserOut(id=u.id, login=u.login, displayName=u.display_name, viaSso=u.via_sso)
+    return UserOut(id=u.id, login=u.login, displayName=u.display_name, viaSso=u.via_sso, role=u.role)
 
 
 def start_session(request: Request, response: Response, user_id: int) -> tuple[str, datetime]:
@@ -56,7 +56,7 @@ def login(body: LoginIn, request: Request, response: Response) -> LoginOut:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")
     limiter.reset(key)
     token, expires = start_session(request, response, row["id"])
-    user = User(row["id"], row["login"], row["display_name"], False)
+    user = User(row["id"], row["login"], row["display_name"], False, row["role"])
     return LoginOut(user=user_out(user), token=token, expiresAt=expires)
 
 

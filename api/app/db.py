@@ -192,22 +192,63 @@ def settings_history(conn: Connection, limit: int) -> list[dict]:
 
 # --- пользователи и сессии ----------------------------------------------------
 
-def upsert_password_user(conn: Connection, login: str, password_hash: str, display_name: str) -> None:
+def upsert_password_user(conn: Connection, login: str, password_hash: str, display_name: str, role: str = "admin") -> None:
     conn.execute(
-        "INSERT INTO app_users (login, password_hash, display_name) VALUES (%s, %s, %s) "
-        "ON CONFLICT (login) DO UPDATE SET password_hash = EXCLUDED.password_hash",
-        (login, password_hash, display_name),
+        "INSERT INTO app_users (login, password_hash, display_name, role) VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (login) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role",
+        (login, password_hash, display_name, role),
     )
 
 
-def upsert_oidc_user(conn: Connection, subject: str, login: str, display_name: str) -> dict:
+USER_COLS = 'id, login, display_name AS "displayName", role, oidc_subject IS NOT NULL AS "viaSso", created_at AS "createdAt"'
+
+
+def list_users(conn: Connection) -> list[dict]:
+    return list(conn.execute(f"SELECT {USER_COLS} FROM app_users ORDER BY id"))
+
+
+def create_user(conn: Connection, login: str, password_hash: str, display_name: str, role: str) -> dict | None:
+    return conn.execute(
+        f"INSERT INTO app_users (login, password_hash, display_name, role) VALUES (%s, %s, %s, %s) "
+        f"ON CONFLICT (login) DO NOTHING RETURNING {USER_COLS}",
+        (login, password_hash, display_name, role),
+    ).fetchone()
+
+
+def update_user(conn: Connection, user_id: int, fields: dict) -> dict | None:
+    cols = {"displayName": "display_name", "role": "role", "passwordHash": "password_hash"}
+    sets = [(cols[k], v) for k, v in fields.items() if k in cols]
+    if sets:
+        conn.execute(f"UPDATE app_users SET {', '.join(c + ' = %s' for c, _ in sets)} WHERE id = %s",
+                     (*[v for _, v in sets], user_id))
+    return conn.execute(f"SELECT {USER_COLS} FROM app_users WHERE id = %s", (user_id,)).fetchone()
+
+
+def delete_user(conn: Connection, user_id: int) -> None:
+    conn.execute("DELETE FROM app_users WHERE id = %s", (user_id,))
+
+
+def count_admins(conn: Connection) -> int:
+    return conn.execute("SELECT count(*) AS n FROM app_users WHERE role = 'admin'").fetchone()["n"]
+
+
+def workload(conn: Connection, days: int) -> dict[str, dict]:
+    """Работа с клиентами по сотрудникам за последние days дней: отметок, продлили, сохранено (евроценты)."""
+    return {r["author"]: r for r in conn.execute(
+        "SELECT author, count(*) AS actions, count(DISTINCT account_id) AS customers, "
+        "count(*) FILTER (WHERE kind = 'renewed') AS renewed, "
+        "coalesce(sum(at_risk) FILTER (WHERE kind = 'renewed'), 0) AS saved "
+        "FROM retention_actions WHERE created_at > now() - make_interval(days => %s) GROUP BY author", (days,))}
+
+
+def upsert_oidc_user(conn: Connection, subject: str, login: str, display_name: str, role: str = "marketer") -> dict:
     row = conn.execute("SELECT * FROM app_users WHERE oidc_subject = %s", (subject,)).fetchone()
     if row:
         return row
     return conn.execute(
-        "INSERT INTO app_users (login, display_name, oidc_subject) VALUES (%s, %s, %s) "
+        "INSERT INTO app_users (login, display_name, oidc_subject, role) VALUES (%s, %s, %s, %s) "
         "ON CONFLICT (login) DO UPDATE SET oidc_subject = EXCLUDED.oidc_subject RETURNING *",
-        (f"sso:{login}", display_name, subject),
+        (f"sso:{login}", display_name, subject, role),
     ).fetchone()
 
 
@@ -225,7 +266,7 @@ def create_session(conn: Connection, token_hash: str, user_id: int, expires_at: 
 
 def session_user(conn: Connection, token_hash: str) -> dict | None:
     return conn.execute(
-        "SELECT u.id, u.login, u.display_name, u.oidc_subject, s.expires_at FROM app_sessions s "
+        "SELECT u.id, u.login, u.display_name, u.oidc_subject, u.role, s.expires_at FROM app_sessions s "
         "JOIN app_users u ON u.id = s.user_id WHERE s.token_hash = %s AND s.expires_at > now()",
         (token_hash,),
     ).fetchone()
@@ -266,11 +307,12 @@ def score_history(conn: Connection, account_id: int, limit: int) -> list[dict]:
 
 # --- работа с клиентом ---------------------------------------------------------
 
-def add_action(conn: Connection, account_id: int, kind: str, reason: str | None, note: str | None, author: str) -> dict:
+def add_action(conn: Connection, account_id: int, kind: str, reason: str | None, note: str | None, author: str,
+               at_risk: int | None = None) -> dict:
     return conn.execute(
-        "INSERT INTO retention_actions (account_id, kind, reason, note, author) VALUES (%s, %s, %s, %s, %s) "
+        "INSERT INTO retention_actions (account_id, kind, reason, note, author, at_risk) VALUES (%s, %s, %s, %s, %s, %s) "
         "RETURNING id, kind, reason, note, author, created_at AS \"createdAt\"",
-        (account_id, kind, reason, note, author),
+        (account_id, kind, reason, note, author, at_risk),
     ).fetchone()
 
 
@@ -282,7 +324,12 @@ def actions_for(conn: Connection, account_id: int, limit: int = 50) -> list[dict
 
 def last_actions(conn: Connection) -> dict[int, dict]:
     return {r["account_id"]: r for r in conn.execute(
-        "SELECT DISTINCT ON (account_id) account_id, kind, created_at FROM retention_actions ORDER BY account_id, id DESC")}
+        "SELECT DISTINCT ON (account_id) account_id, kind, author, created_at FROM retention_actions ORDER BY account_id, id DESC")}
+
+
+def saved_by_renewals(conn: Connection) -> int:
+    """Сумма под угрозой у клиентов в момент отметки «продлил» — сохранённая выручка (евроценты)."""
+    return conn.execute("SELECT coalesce(sum(at_risk), 0) AS s FROM retention_actions WHERE kind = 'renewed'").fetchone()["s"]
 
 
 def action_counts(conn: Connection) -> dict[str, int]:

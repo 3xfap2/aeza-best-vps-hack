@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.config import load_config
-from app.routers import analytics, auth, customers, integrations, metrics, model, oidc, source, stream
+from app.routers import analytics, auth, customers, integrations, metrics, model, oidc, retention, source, stream, users
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
@@ -110,7 +110,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for r in (auth.router, oidc.router, customers.router, analytics.router, model.router, source.router, stream.router, integrations.router, metrics.router):
+for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
+          users.router, stream.router, integrations.router, metrics.router):
     app.include_router(r)
 
 

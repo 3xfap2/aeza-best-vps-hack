@@ -52,12 +52,20 @@ def request_token(request: Request) -> str | None:
     return request.cookies.get(COOKIE_NAME)
 
 
+ROLES = ("viewer", "marketer", "admin")
+ROLE_TITLES = {"admin": "Администратор", "marketer": "Маркетолог", "viewer": "Наблюдатель"}
+
+
 @dataclass(frozen=True)
 class User:
     id: int
     login: str
     display_name: str
     via_sso: bool
+    role: str = "admin"
+
+    def can(self, role: str) -> bool:
+        return ROLES.index(self.role) >= ROLES.index(role)
 
 
 def current_user(request: Request) -> User:
@@ -67,8 +75,18 @@ def current_user(request: Request) -> User:
         with request.app.state.pool.connection() as conn:
             row = db.session_user(conn, token_hash(token))
         if row:
-            return User(row["id"], row["login"], row["display_name"], row["oidc_subject"] is not None)
+            return User(row["id"], row["login"], row["display_name"], row["oidc_subject"] is not None, row["role"])
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Нужно войти", headers={"WWW-Authenticate": "Bearer"})
+
+
+def require(role: str):
+    """Зависимость FastAPI: пускает пользователя с ролью не ниже role (viewer < marketer < admin)."""
+    def check(request: Request) -> User:
+        user = current_user(request)
+        if not user.can(role):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Недостаточно прав: нужна роль «{ROLE_TITLES[role]}»")
+        return user
+    return check
 
 
 class LoginLimiter:

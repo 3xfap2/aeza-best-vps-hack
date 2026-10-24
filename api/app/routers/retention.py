@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+import csv
+import io
+from datetime import datetime
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import BaseModel, Field
+
+from app import db
+from app.retention import BUCKETS, queue
+from app.security import current_user
+from app.views import eur
+
+router = APIRouter(prefix="/api/v1/retention", tags=["Удержание"], dependencies=[Depends(current_user)])
+
+SaveRate = Query(30, ge=0, le=100, description="Какую долю клиентов под риском удаётся удержать контактом, %")
+CallCost = Query(3, ge=0, le=1000, description="Стоимость одного звонка (время менеджера), €; письмо считается бесплатным")
+
+
+class QueueItem(BaseModel):
+    customerId: int
+    email: str
+    level: str
+    score: int | None
+    cause: str | None
+    causeTitle: str | None
+    kind: Literal["involuntary", "voluntary"]
+    action: str | None = Field(description="Что сделать — первая рекомендация модели")
+    expectedLoss: float = Field(description="Ожидаемая потеря по прайсу, €")
+    expectedLossPaid: float = Field(description="Ожидаемая потеря в пределах платёжеспособности, €")
+    deadline: datetime = Field(description="Когда деньги будут потеряны: удаление или продление")
+    deadlineKind: Literal["deletion", "overdue", "renewal"]
+    daysLeft: float
+    bucket: Literal["today", "week", "later"] = Field(description="today — до суток или удаление задержано; week — до 7 дней")
+    channel: Literal["call", "email"] = Field(description="call — ожидаемо сохраним больше стоимости звонка")
+    expectedSaved: float = Field(description="Реально собираемая потеря × доля удержания, €")
+    net: float = Field(description="Выгода контакта: ожидаемо сохраним − стоимость звонка, €")
+    lastAction: str | None
+    lastActionAt: datetime | None
+    lastAuthor: str | None
+    status: Literal["new", "in_progress", "done"]
+
+
+class QueueSummary(BaseModel):
+    customers: int
+    buckets: dict[str, int]
+    expectedLoss: float
+    expectedLossPaid: float
+    expectedSaved: float = Field(description="Ожидаемо сохраним, если отработать всю очередь, €")
+    calls: int
+    emails: int
+    callsCost: float
+    net: float = Field(description="Ожидаемо сохраним − стоимость звонков, €")
+    worked: int = Field(description="Клиентов очереди с отметкой работы")
+    renewed: int
+    churned: int
+    savedFact: float = Field(description="Сохранено фактически: сумма под угрозой у клиентов с отметкой «продлил», €")
+
+
+class QueueOut(BaseModel):
+    asOf: datetime
+    horizonDays: int
+    saveRate: float
+    callCost: float
+    summary: QueueSummary
+    items: list[QueueItem]
+
+
+def _queue(request: Request, save_rate: float, call_cost: float):
+    cur = request.app.state.radar.current
+    with request.app.state.pool.connection() as conn:
+        last = db.last_actions(conn)
+        saved_fact = db.saved_by_renewals(conn)
+    return cur, last, saved_fact, queue(cur.result, last, save_rate, call_cost)
+
+
+@router.get("/queue", response_model=QueueOut,
+            summary="Очередь удержания: кому написать или позвонить, до какого срока и окупится ли звонок")
+def retention_queue(request: Request, saveRate: float = SaveRate, callCost: float = CallCost) -> QueueOut:
+    cur, last, saved_fact, items = _queue(request, saveRate, callCost)
+    calls = [x for x in items if x["channel"] == "call"]
+    return QueueOut(
+        asOf=cur.result.as_of, horizonDays=cur.result.settings.horizonDays, saveRate=saveRate, callCost=callCost,
+        summary=QueueSummary(
+            customers=len(items),
+            buckets={b: sum(1 for x in items if x["bucket"] == b) for b in BUCKETS},
+            expectedLoss=round(sum(x["expectedLoss"] for x in items), 2),
+            expectedLossPaid=round(sum(x["expectedLossPaid"] for x in items), 2),
+            expectedSaved=round(sum(x["expectedSaved"] for x in items), 2),
+            calls=len(calls), emails=len(items) - len(calls), callsCost=round(len(calls) * callCost, 2),
+            net=round(sum(x["net"] for x in items), 2),
+            worked=sum(1 for x in items if x["status"] != "new"),
+            renewed=sum(1 for r in last.values() if r["kind"] == "renewed"),
+            churned=sum(1 for r in last.values() if r["kind"] == "churned"),
+            savedFact=eur(saved_fact),
+        ),
+        items=[QueueItem(**x) for x in items],
+    )
+
+
+BUCKET_TITLE = {"today": "сегодня", "week": "на неделе", "later": "позже"}
+DEADLINE_TITLE = {"deletion": "удаление", "overdue": "удаление задержано", "renewal": "продление"}
+CHANNEL_TITLE = {"call": "звонок", "email": "письмо"}
+
+
+@router.get("/queue.csv", response_class=Response, responses={200: {"content": {"text/csv": {}}}},
+            summary="Очередь удержания в CSV для обзвона и рассылки")
+def retention_csv(request: Request, saveRate: float = SaveRate, callCost: float = CallCost,
+                  includeEmail: bool = Query(False, description="Добавить email (персональные данные)")) -> Response:
+    cur, _, _, items = _queue(request, saveRate, callCost)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["когда", "срок", "вид_срока", "id"] + (["email"] if includeEmail else []) +
+               ["канал", "причина", "что_сделать", "потеря_eur", "реально_eur", "сохраним_eur", "статус"])
+    for x in items:
+        w.writerow([BUCKET_TITLE[x["bucket"]], f"{x['deadline']:%d.%m.%Y %H:%M}", DEADLINE_TITLE[x["deadlineKind"]], x["customerId"]] +
+                   ([x["email"]] if includeEmail else []) +
+                   [CHANNEL_TITLE[x["channel"]], x["causeTitle"] or "", x["action"] or "", x["expectedLoss"],
+                    x["expectedLossPaid"], x["expectedSaved"], x["lastAction"] or ""])
+    name = f"radar-retention-{cur.result.as_of:%Y%m%d}.csv"
+    return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})

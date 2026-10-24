@@ -736,6 +736,146 @@
         ]
       }
     },
+    "/api/v1/retention/queue": {
+      "get": {
+        "tags": [
+          "Удержание"
+        ],
+        "summary": "Очередь удержания: кому написать или позвонить, до какого срока и окупится ли звонок",
+        "operationId": "retention_queue_api_v1_retention_queue_get",
+        "parameters": [
+          {
+            "name": "saveRate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 100,
+              "minimum": 0,
+              "description": "Какую долю клиентов под риском удаётся удержать контактом, %",
+              "default": 30,
+              "title": "Saverate"
+            },
+            "description": "Какую долю клиентов под риском удаётся удержать контактом, %"
+          },
+          {
+            "name": "callCost",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 1000,
+              "minimum": 0,
+              "description": "Стоимость одного звонка (время менеджера), €; письмо считается бесплатным",
+              "default": 3,
+              "title": "Callcost"
+            },
+            "description": "Стоимость одного звонка (время менеджера), €; письмо считается бесплатным"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/retention/queue.csv": {
+      "get": {
+        "tags": [
+          "Удержание"
+        ],
+        "summary": "Очередь удержания в CSV для обзвона и рассылки",
+        "operationId": "retention_csv_api_v1_retention_queue_csv_get",
+        "parameters": [
+          {
+            "name": "saveRate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 100,
+              "minimum": 0,
+              "description": "Какую долю клиентов под риском удаётся удержать контактом, %",
+              "default": 30,
+              "title": "Saverate"
+            },
+            "description": "Какую долю клиентов под риском удаётся удержать контактом, %"
+          },
+          {
+            "name": "callCost",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 1000,
+              "minimum": 0,
+              "description": "Стоимость одного звонка (время менеджера), €; письмо считается бесплатным",
+              "default": 3,
+              "title": "Callcost"
+            },
+            "description": "Стоимость одного звонка (время менеджера), €; письмо считается бесплатным"
+          },
+          {
+            "name": "includeEmail",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Добавить email (персональные данные)",
+              "default": false,
+              "title": "Includeemail"
+            },
+            "description": "Добавить email (персональные данные)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/analytics/summary": {
       "get": {
         "tags": [
@@ -1381,6 +1521,178 @@
         ]
       }
     },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "Команда"
+        ],
+        "summary": "Команда: пользователи, роли и работа с клиентами за 7 дней",
+        "operationId": "list_members_api_v1_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Members Api V1 Users Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Команда"
+        ],
+        "summary": "Добавить сотрудника (только администратор)",
+        "operationId": "add_member_api_v1_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Такой логин уже есть"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "Команда"
+        ],
+        "summary": "Изменить имя, роль или пароль сотрудника (только администратор)",
+        "operationId": "edit_member_api_v1_users__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Команда"
+        ],
+        "summary": "Удалить сотрудника и завершить его сессии (только администратор)",
+        "operationId": "remove_member_api_v1_users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/stream": {
       "get": {
         "tags": [
@@ -1742,6 +2054,10 @@
           "expectedLoss": {
             "type": "number",
             "title": "Expectedloss"
+          },
+          "expectedLossPaid": {
+            "type": "number",
+            "title": "Expectedlosspaid"
           }
         },
         "type": "object",
@@ -1750,7 +2066,8 @@
           "title",
           "kind",
           "customers",
-          "expectedLoss"
+          "expectedLoss",
+          "expectedLossPaid"
         ],
         "title": "CauseOut"
       },
@@ -1880,6 +2197,11 @@
             "title": "Expectedloss",
             "description": "Ожидаемая потеря за горизонт, €"
           },
+          "expectedLossPaid": {
+            "type": "number",
+            "title": "Expectedlosspaid",
+            "description": "Ожидаемая потеря в пределах платёжеспособности клиента, €"
+          },
           "qualityIssues": {
             "type": "integer",
             "title": "Qualityissues",
@@ -1989,6 +2311,7 @@
           "levelTitle",
           "topReason",
           "expectedLoss",
+          "expectedLossPaid",
           "qualityIssues",
           "note",
           "revenueHorizon",
@@ -2080,6 +2403,11 @@
             "title": "Expectedloss",
             "description": "Ожидаемая потеря за горизонт, €"
           },
+          "expectedLossPaid": {
+            "type": "number",
+            "title": "Expectedlosspaid",
+            "description": "Ожидаемая потеря в пределах платёжеспособности клиента, €"
+          },
           "qualityIssues": {
             "type": "integer",
             "title": "Qualityissues",
@@ -2110,6 +2438,7 @@
           "levelTitle",
           "topReason",
           "expectedLoss",
+          "expectedLossPaid",
           "qualityIssues"
         ],
         "title": "CustomerListItem"
@@ -2275,6 +2604,11 @@
             "type": "number",
             "title": "Renewalneed",
             "description": "Сколько нужно на продления всех услуг в горизонте, €"
+          },
+          "paidMonthly": {
+            "type": "number",
+            "title": "Paidmonthly",
+            "description": "Сколько клиент в среднем платит в месяц: пополнено / месяцы с первой услуги, €"
           }
         },
         "type": "object",
@@ -2285,7 +2619,8 @@
           "withdrawBalance",
           "totalReplenished",
           "availableFunds",
-          "renewalNeed"
+          "renewalNeed",
+          "paidMonthly"
         ],
         "title": "Finances"
       },
@@ -2518,6 +2853,168 @@
         ],
         "title": "LoginOut"
       },
+      "MemberIn": {
+        "properties": {
+          "login": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9._@-]+$",
+            "title": "Login",
+            "examples": [
+              "anna"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Displayname",
+            "examples": [
+              "Анна, маркетинг"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 10,
+            "title": "Password"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "marketer",
+              "viewer"
+            ],
+            "title": "Role",
+            "default": "marketer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "login",
+          "displayName",
+          "password"
+        ],
+        "title": "MemberIn"
+      },
+      "MemberOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "displayName": {
+            "type": "string",
+            "title": "Displayname"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "marketer",
+              "viewer"
+            ],
+            "title": "Role"
+          },
+          "viaSso": {
+            "type": "boolean",
+            "title": "Viasso"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "actions": {
+            "type": "integer",
+            "title": "Actions",
+            "description": "Отметок работы с клиентами за 7 дней"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers",
+            "description": "Скольких клиентов отработал"
+          },
+          "renewed": {
+            "type": "integer",
+            "title": "Renewed",
+            "description": "Сколько из них продлили"
+          },
+          "saved": {
+            "type": "number",
+            "title": "Saved",
+            "description": "Сохранено: сумма под угрозой у продливших в момент отметки, €"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "login",
+          "displayName",
+          "role",
+          "viaSso",
+          "createdAt",
+          "actions",
+          "customers",
+          "renewed",
+          "saved"
+        ],
+        "title": "MemberOut"
+      },
+      "MemberPatch": {
+        "properties": {
+          "displayName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displayname"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "admin",
+                  "marketer",
+                  "viewer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "title": "MemberPatch"
+      },
       "MessageOut": {
         "properties": {
           "subject": {
@@ -2682,6 +3179,322 @@
           "changes"
         ],
         "title": "PreviewOut"
+      },
+      "QueueItem": {
+        "properties": {
+          "customerId": {
+            "type": "integer",
+            "title": "Customerid"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause"
+          },
+          "causeTitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causetitle"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "involuntary",
+              "voluntary"
+            ],
+            "title": "Kind"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action",
+            "description": "Что сделать — первая рекомендация модели"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss",
+            "description": "Ожидаемая потеря по прайсу, €"
+          },
+          "expectedLossPaid": {
+            "type": "number",
+            "title": "Expectedlosspaid",
+            "description": "Ожидаемая потеря в пределах платёжеспособности, €"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deadline",
+            "description": "Когда деньги будут потеряны: удаление или продление"
+          },
+          "deadlineKind": {
+            "type": "string",
+            "enum": [
+              "deletion",
+              "overdue",
+              "renewal"
+            ],
+            "title": "Deadlinekind"
+          },
+          "daysLeft": {
+            "type": "number",
+            "title": "Daysleft"
+          },
+          "bucket": {
+            "type": "string",
+            "enum": [
+              "today",
+              "week",
+              "later"
+            ],
+            "title": "Bucket",
+            "description": "today — до суток или удаление задержано; week — до 7 дней"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "call",
+              "email"
+            ],
+            "title": "Channel",
+            "description": "call — ожидаемо сохраним больше стоимости звонка"
+          },
+          "expectedSaved": {
+            "type": "number",
+            "title": "Expectedsaved",
+            "description": "Реально собираемая потеря × доля удержания, €"
+          },
+          "net": {
+            "type": "number",
+            "title": "Net",
+            "description": "Выгода контакта: ожидаемо сохраним − стоимость звонка, €"
+          },
+          "lastAction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastaction"
+          },
+          "lastActionAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastactionat"
+          },
+          "lastAuthor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastauthor"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "in_progress",
+              "done"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customerId",
+          "email",
+          "level",
+          "score",
+          "cause",
+          "causeTitle",
+          "kind",
+          "action",
+          "expectedLoss",
+          "expectedLossPaid",
+          "deadline",
+          "deadlineKind",
+          "daysLeft",
+          "bucket",
+          "channel",
+          "expectedSaved",
+          "net",
+          "lastAction",
+          "lastActionAt",
+          "lastAuthor",
+          "status"
+        ],
+        "title": "QueueItem"
+      },
+      "QueueOut": {
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Asof"
+          },
+          "horizonDays": {
+            "type": "integer",
+            "title": "Horizondays"
+          },
+          "saveRate": {
+            "type": "number",
+            "title": "Saverate"
+          },
+          "callCost": {
+            "type": "number",
+            "title": "Callcost"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/QueueSummary"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asOf",
+          "horizonDays",
+          "saveRate",
+          "callCost",
+          "summary",
+          "items"
+        ],
+        "title": "QueueOut"
+      },
+      "QueueSummary": {
+        "properties": {
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "buckets": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Buckets"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "expectedLossPaid": {
+            "type": "number",
+            "title": "Expectedlosspaid"
+          },
+          "expectedSaved": {
+            "type": "number",
+            "title": "Expectedsaved",
+            "description": "Ожидаемо сохраним, если отработать всю очередь, €"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "emails": {
+            "type": "integer",
+            "title": "Emails"
+          },
+          "callsCost": {
+            "type": "number",
+            "title": "Callscost"
+          },
+          "net": {
+            "type": "number",
+            "title": "Net",
+            "description": "Ожидаемо сохраним − стоимость звонков, €"
+          },
+          "worked": {
+            "type": "integer",
+            "title": "Worked",
+            "description": "Клиентов очереди с отметкой работы"
+          },
+          "renewed": {
+            "type": "integer",
+            "title": "Renewed"
+          },
+          "churned": {
+            "type": "integer",
+            "title": "Churned"
+          },
+          "savedFact": {
+            "type": "number",
+            "title": "Savedfact",
+            "description": "Сохранено фактически: сумма под угрозой у клиентов с отметкой «продлил», €"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customers",
+          "buckets",
+          "expectedLoss",
+          "expectedLossPaid",
+          "expectedSaved",
+          "calls",
+          "emails",
+          "callsCost",
+          "net",
+          "worked",
+          "renewed",
+          "churned",
+          "savedFact"
+        ],
+        "title": "QueueSummary"
       },
       "RenewalOut": {
         "properties": {
@@ -3276,6 +4089,11 @@
             "title": "Expectedloss",
             "description": "Σ выручка услуг за горизонт × вероятность непродления, €"
           },
+          "expectedLossPaid": {
+            "type": "number",
+            "title": "Expectedlosspaid",
+            "description": "То же, но выручка клиента не больше того, что он способен заплатить (деньги на счёте или средний платёж в месяц), €"
+          },
           "worstCase": {
             "type": "number",
             "title": "Worstcase",
@@ -3348,6 +4166,7 @@
           "levels",
           "levelLoss",
           "expectedLoss",
+          "expectedLossPaid",
           "worstCase",
           "ltvAtRisk",
           "ltvMonthlyChurn",
@@ -3680,6 +4499,16 @@
           "viaSso": {
             "type": "boolean",
             "title": "Viasso"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "marketer",
+              "viewer"
+            ],
+            "title": "Role",
+            "description": "admin — всё; marketer — модель и работа с клиентами; viewer — только просмотр"
           }
         },
         "type": "object",
@@ -3687,7 +4516,8 @@
           "id",
           "login",
           "displayName",
-          "viaSso"
+          "viaSso",
+          "role"
         ],
         "title": "UserOut"
       },

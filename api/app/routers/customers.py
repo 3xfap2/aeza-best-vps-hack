@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app import db
 from app.insights import message, what_if
-from app.security import User, current_user
+from app.security import User, current_user, require
 from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
 
 router = APIRouter(prefix="/api/v1/customers", tags=["Клиенты"], dependencies=[Depends(current_user)])
@@ -164,13 +164,15 @@ def list_actions(customer_id: int, request: Request) -> list[ActionOut]:
 
 @router.post("/{customer_id}/actions", response_model=ActionOut, status_code=201,
              summary="Отметить работу с клиентом: позвонили, написали, предложение, продлил, ушёл (с причиной)")
-def add_action(customer_id: int, body: ActionIn, request: Request, user: User = Depends(current_user)) -> ActionOut:
-    if customer_id not in request.app.state.radar.current.result.by_id:
+def add_action(customer_id: int, body: ActionIn, request: Request, user: User = Depends(require("marketer"))) -> ActionOut:
+    customer = request.app.state.radar.current.result.by_id.get(customer_id)
+    if customer is None:
         raise HTTPException(404, f"Клиент #{customer_id} не найден")
     if body.kind == "churned" and not body.reason:
         raise HTTPException(422, "Для «ушёл» укажите причину")
     with request.app.state.pool.connection() as conn:
-        row = db.add_action(conn, customer_id, body.kind, body.reason if body.kind == "churned" else None, body.note, user.login)
+        row = db.add_action(conn, customer_id, body.kind, body.reason if body.kind == "churned" else None, body.note, user.login,
+                            round(customer.expected_loss))
     request.app.state.radar.broker.publish("action", {"customerId": customer_id, "kind": body.kind})
     return ActionOut(**row)
 

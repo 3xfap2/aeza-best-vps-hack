@@ -39,6 +39,10 @@ class RadarCollector:
                                  "Ожидаемая потеря выручки за горизонт, EUR", labels=["horizon_days"])
         loss.add_metric([horizon], eur(s.expected_loss))
         yield loss
+        paid = GaugeMetricFamily("churn_radar_expected_loss_paid_eur",
+                                 "Ожидаемая потеря в пределах платёжеспособности клиентов, EUR", labels=["horizon_days"])
+        paid.add_metric([horizon], eur(s.expected_loss_paid))
+        yield paid
         worst = GaugeMetricFamily("churn_radar_worst_case_loss_eur",
                                   "Выручка клиентов высокого риска за горизонт, EUR", labels=["horizon_days"])
         worst.add_metric([horizon], eur(s.worst_case))
@@ -62,7 +66,10 @@ class RadarCollector:
         with self.radar.pool.connection() as conn:
             for kind, n in db.action_counts(conn).items():
                 actions.add_metric([kind], n)
+            saved = db.saved_by_renewals(conn)
         yield actions
+        yield GaugeMetricFamily("churn_radar_retention_saved_eur",
+                                "Сохранено удержанием: сумма под угрозой у клиентов с отметкой «продлил», EUR", value=eur(saved))
 
         yield GaugeMetricFamily("churn_radar_services_at_risk", "Услуги со score не ниже порога среднего риска",
                                 value=s.services_at_risk)

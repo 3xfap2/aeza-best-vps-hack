@@ -300,3 +300,66 @@ def test_external_signals(client, auth):
     assert client.post("/api/v1/source/events", headers=auth,
                        json={"type": "signal", "name": "loadDrop", "targetId": 99999, "value": 0.5}).status_code == 404
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def _login(client, login, password):
+    r = client.post("/api/v1/auth/login", json={"login": login, "password": password})
+    assert r.status_code == 200, r.text
+    assert r.json()["user"]["role"]
+    return {"Authorization": f"Bearer {r.json()['token']}"}
+
+
+def test_roles_and_team(client, auth):
+    me = client.get("/api/v1/auth/me", headers=auth).json()
+    assert me["role"] == "admin"
+    for login, role in (("viewer1", "viewer"), ("market1", "marketer")):
+        r = client.post("/api/v1/users", headers=auth, json={"login": login, "displayName": login, "password": "pass-2026-long", "role": role})
+        assert r.status_code == 201 and r.json()["role"] == role
+    assert client.post("/api/v1/users", headers=auth, json={"login": "viewer1", "displayName": "x", "password": "pass-2026-long"}).status_code == 409
+    viewer, marketer = _login(client, "viewer1", "pass-2026-long"), _login(client, "market1", "pass-2026-long")
+
+    assert client.get("/api/v1/customers", headers=viewer).status_code == 200
+    assert client.get("/api/v1/retention/queue", headers=viewer).status_code == 200
+    assert client.patch("/api/v1/model/settings", headers=viewer, json={"horizonDays": 30}).status_code == 403
+    assert client.post("/api/v1/customers/5/actions", headers=viewer, json={"kind": "called"}).status_code == 403
+    assert client.post("/api/v1/customers/5/actions", headers=marketer, json={"kind": "called"}).status_code == 201
+    assert client.patch("/api/v1/model/settings", headers=marketer, json={"horizonDays": 30}).status_code == 200
+    assert client.post("/api/v1/source/preset/case", headers=marketer).status_code == 403
+    assert client.post("/api/v1/users", headers=marketer, json={"login": "x1", "displayName": "x", "password": "pass-2026-long"}).status_code == 403
+
+    team = {m["login"]: m for m in client.get("/api/v1/users", headers=viewer).json()}
+    assert team["market1"]["actions"] >= 1 and team["admin"]["role"] == "admin"
+    admin_id = team["admin"]["id"]
+    assert client.delete(f"/api/v1/users/{admin_id}", headers=auth).status_code == 409
+    assert client.patch(f"/api/v1/users/{admin_id}", headers=auth, json={"role": "viewer"}).status_code == 409
+    assert client.patch(f"/api/v1/users/{team['viewer1']['id']}", headers=auth, json={"role": "marketer"}).json()["role"] == "marketer"
+    assert client.delete(f"/api/v1/users/{team['viewer1']['id']}", headers=auth).status_code == 204
+    assert client.get("/api/v1/customers", headers=viewer).status_code == 401
+
+
+def test_retention_queue_and_paid_loss(client, auth):
+    q = client.get("/api/v1/retention/queue?saveRate=30&callCost=3", headers=auth).json()
+    s = q["summary"]
+    assert s["customers"] == len(q["items"]) == sum(s["buckets"].values()) > 0
+    assert all(x["level"] in ("high", "medium") for x in q["items"])
+    order = ["today", "week", "later"]
+    assert [order.index(x["bucket"]) for x in q["items"]] == sorted(order.index(x["bucket"]) for x in q["items"])
+    assert all((x["channel"] == "call") == (x["expectedSaved"] > 3) for x in q["items"])
+    item5 = next(x for x in q["items"] if x["customerId"] == 5)
+    assert item5["deadlineKind"] == "overdue" and item5["bucket"] == "today"
+    assert item5["expectedLossPaid"] < item5["expectedLoss"] / 5  # почасовой сервер: клиент столько не платит
+
+    summary = client.get("/api/v1/analytics/summary", headers=auth).json()
+    assert 0 < summary["expectedLossPaid"] < summary["expectedLoss"]
+    assert client.get("/api/v1/customers/5", headers=auth).json()["finances"]["paidMonthly"] > 0
+
+    before = s["savedFact"]
+    client.post("/api/v1/customers/5/actions", headers=auth, json={"kind": "renewed"})
+    after = client.get("/api/v1/retention/queue", headers=auth).json()
+    assert after["summary"]["savedFact"] > before
+    assert next(x for x in after["items"] if x["customerId"] == 5)["status"] == "done"
+    csv_plain = client.get("/api/v1/retention/queue.csv", headers=auth).text
+    assert "@example.test" not in csv_plain and "канал" in csv_plain.splitlines()[0]
+    assert "@example.test" in client.get("/api/v1/retention/queue.csv?includeEmail=true", headers=auth).text
+    metrics = client.get("/metrics", headers={"Authorization": f"Bearer {METRICS_TOKEN}"}).text
+    assert "churn_radar_expected_loss_paid_eur" in metrics and "churn_radar_retention_saved_eur" in metrics

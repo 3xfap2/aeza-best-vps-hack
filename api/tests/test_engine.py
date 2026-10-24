@@ -190,3 +190,32 @@ def test_ltv_is_monthly_revenue_over_churn_and_capped():
     assert ltv(s, 1) == pytest.approx(1000 * LTV_CAP_MONTHS)        # не больше 36 месяцев
     c = only(evaluate(snap([account()], [service(autoprolong=False, expires_in_days=3, price=1000)]), default_settings()))
     assert c.ltv_at_risk == pytest.approx(ltv(c.services[0].service, 5) * c.services[0].probability)
+
+
+def test_paid_loss_is_capped_by_what_customer_pays():
+    # почасовой сервер: по прайсу € 7,2 тыс. за 30 дней (потеря — больше € 5 тыс.), а клиент платит € 100 в месяц и держит € 50 на счёте
+    acc = Account(1, "user-1@example.test", 5_000, 0, 120_000, 0, "locked")
+    hourly = Service(1, "service-1", 1, "hour", False, T0 - timedelta(days=360), T0 - timedelta(days=1), "prolong_wait", 1000)
+    c = only(evaluate(snap([acc], [hourly]), default_settings()))
+    assert c.expected_loss > 500_000
+    assert c.paid_monthly == pytest.approx(10_000)
+    assert c.expected_loss_paid == pytest.approx(c.expected_loss * 10_000 / c.revenue_horizon)
+    # кто платит больше, чем стоит услуга, — без ограничения
+    rich = Account(1, "user-1@example.test", 900_000, 0, 900_000, 0, "locked")
+    c = only(evaluate(snap([rich], [service(expires_in_days=2, autoprolong=False)]), default_settings()))
+    assert c.expected_loss_paid == pytest.approx(c.expected_loss)
+
+
+def test_retention_queue_deadlines_and_channel():
+    from app.retention import queue
+    acc = account(balance=0)
+    overdue = Service(1, "service-1", 1, "month", False, T0 - timedelta(days=60), T0 - timedelta(days=30), "prolong_wait", 5000)
+    soon = Service(2, "service-2", 2, "month", False, T0 - timedelta(days=27), T0 + timedelta(days=3), "active", 5000)
+    r = evaluate(snap([acc, account(2, balance=0)], [overdue, soon]), default_settings())
+    items = {x["customerId"]: x for x in queue(r, {}, save_rate=30, call_cost=0)}
+    assert items[1]["deadlineKind"] == "overdue" and items[1]["bucket"] == "today"
+    assert items[2]["deadlineKind"] == "renewal" and items[2]["bucket"] == "week"
+    assert [x["customerId"] for x in queue(r, {}, 30, 0)] == [1, 2]
+    assert all(x["channel"] == "email" and x["net"] == x["expectedSaved"] for x in queue(r, {}, 30, 10_000))
+    done = queue(r, {2: {"kind": "renewed", "author": "anna", "created_at": T0}}, 30, 0)
+    assert next(x for x in done if x["customerId"] == 2)["status"] == "done"

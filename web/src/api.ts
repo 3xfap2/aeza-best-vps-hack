@@ -2,12 +2,21 @@
 
 export type Level = 'high' | 'medium' | 'low' | 'no_score' | 'churned'
 
-export interface User { id: number; login: string; displayName: string; viaSso: boolean }
+export type Role = 'admin' | 'marketer' | 'viewer'
+export interface User { id: number; login: string; displayName: string; viaSso: boolean; role: Role }
+export const ROLE_TITLE: Record<Role, string> = { admin: 'Администратор', marketer: 'Маркетолог', viewer: 'Наблюдатель' }
+const ROLE_RANK: Role[] = ['viewer', 'marketer', 'admin']
+/** Есть ли у пользователя роль не ниже нужной: viewer < marketer < admin. */
+export const can = (u: User | null, role: Role) => !!u && ROLE_RANK.indexOf(u.role) >= ROLE_RANK.indexOf(role)
+export interface Member {
+  id: number; login: string; displayName: string; role: Role; viaSso: boolean; createdAt: string
+  actions: number; customers: number; renewed: number; saved: number
+}
 
 export interface CustomerItem {
   id: number; email: string; balance: number; totalReplenished: number
   score: number | null; loyalty: number | null; level: Level; levelTitle: string; topReason: string | null
-  expectedLoss: number; qualityIssues: number; lastAction?: string | null
+  expectedLoss: number; expectedLossPaid: number; qualityIssues: number; lastAction?: string | null
 }
 export interface CustomerPage {
   items: CustomerItem[]; total: number; page: number; pageSize: number
@@ -26,7 +35,7 @@ export interface ServiceOut {
 export interface CustomerDetail extends CustomerItem {
   note: string | null; revenueHorizon: number; ltvAtRisk: number
   finances: { balance: number; bonusBalance: number; bonusState: string; withdrawBalance: number
-    totalReplenished: number; availableFunds: number; renewalNeed: number }
+    totalReplenished: number; availableFunds: number; renewalNeed: number; paidMonthly: number }
   contributions: Contribution[]; actions: string[]; issues: string[]; services: ServiceOut[]
   transactions: { id: number; serviceId: number; type: string; amount: number; status: string
     createdAt: string; performedAt: string | null }[]
@@ -49,12 +58,27 @@ export interface Renewal {
 export interface Summary {
   asOf: string; horizonDays: number; customersTotal: number
   levels: Record<Level, number>; levelLoss: Record<Level, number>
-  expectedLoss: number; worstCase: number; revenueAtRisk: number; balanceAtRisk: number
+  expectedLoss: number; expectedLossPaid: number; worstCase: number; revenueAtRisk: number; balanceAtRisk: number
   ltvAtRisk: number; ltvMonthlyChurn: number
   servicesAtRisk: number; qualityIssues: number; explanation: string
-  causes: { feature: string; title: string; kind: 'involuntary' | 'voluntary'; customers: number; expectedLoss: number }[]
+  causes: { feature: string; title: string; kind: 'involuntary' | 'voluntary'; customers: number; expectedLoss: number; expectedLossPaid: number }[]
   retention: { actions: Record<string, number>; reasons: Record<string, number>; worked: number; atRisk: number; renewed: number; churned: number }
   version: number; computedAt: string; durationMs: number
+}
+export interface QueueItem {
+  customerId: number; email: string; level: Level; score: number | null
+  cause: string | null; causeTitle: string | null; kind: 'involuntary' | 'voluntary'; action: string | null
+  expectedLoss: number; expectedLossPaid: number
+  deadline: string; deadlineKind: 'deletion' | 'overdue' | 'renewal'; daysLeft: number; bucket: 'today' | 'week' | 'later'
+  channel: 'call' | 'email'; expectedSaved: number; net: number
+  lastAction: string | null; lastActionAt: string | null; lastAuthor: string | null; status: 'new' | 'in_progress' | 'done'
+}
+export interface Queue {
+  asOf: string; horizonDays: number; saveRate: number; callCost: number
+  summary: { customers: number; buckets: Record<'today' | 'week' | 'later', number>; expectedLoss: number; expectedLossPaid: number
+    expectedSaved: number; calls: number; emails: number; callsCost: number; net: number
+    worked: number; renewed: number; churned: number; savedFact: number }
+  items: QueueItem[]
 }
 export interface TimelinePoint {
   date: string; factRecorded: number; factRestored: number; forecast: number

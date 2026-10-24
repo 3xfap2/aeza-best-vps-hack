@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ACTION_TITLE, api, ApiError, CHURN_REASONS, LEVEL_TITLE, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
+import { ACTION_TITLE, api, ApiError, can, CHURN_REASONS, LEVEL_TITLE, type CustomerDetail, type Message, type RetentionAction, type WhatIf } from '../api'
 import { useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, Skeleton } from '../ui'
-import { StatusLine } from './Shell'
+import { StatusLine, useUser } from './Shell'
 
 const TERMS: Record<string, string> = {
   hour: 'почасово', week: 'неделя', month: 'месяц', quarter_year: 'квартал', half_year: 'полгода', year: 'год',
@@ -62,6 +62,10 @@ export default function Customer() {
               <p className="ro-small">Лояльность — обратная шкала: <b className="ro-mono">{c.loyalty} из 100</b></p>
               <p className="ro-text">Ожидаемая потеря <b className="ro-mono">{eur(c.expectedLoss)}</b> за {c.horizonDays} дней
                 из выручки <span className="ro-mono">{eur(c.revenueHorizon)}</span>. LTV под угрозой — <span className="ro-mono">{eur(c.ltvAtRisk)}</span>.</p>
+              {c.expectedLossPaid < c.expectedLoss - 0.5 && (
+                <p className="ro-small">Реально собираемая потеря — <b className="ro-mono">{eur(c.expectedLossPaid)}</b>: по прайсу услуги стоят больше,
+                  чем клиент платит в среднем ({eur(c.finances.paidMonthly)} в месяц) или держит на счёте.</p>
+              )}
             </>
           ) : (
             <>
@@ -78,6 +82,7 @@ export default function Customer() {
             <div><dt>Бонусы ({c.finances.bonusState === 'unlocked' ? 'доступны' : 'заблокированы'})</dt><dd>{eur(c.finances.bonusBalance)}</dd></div>
             <div><dt>Реферальные, к выводу</dt><dd>{eur(c.finances.withdrawBalance)}</dd></div>
             <div><dt>Пополнено всего</dt><dd>{eur(c.finances.totalReplenished)}</dd></div>
+            <div><dt>Платит в среднем в месяц</dt><dd>{eur(c.finances.paidMonthly)}</dd></div>
             <div><dt>Доступно для оплаты</dt><dd>{eur(c.finances.availableFunds)}</dd></div>
             <div><dt>Нужно на продления за {c.horizonDays} дн.</dt><dd>{eur(c.finances.renewalNeed)}</dd></div>
           </dl>
@@ -223,6 +228,7 @@ function HistoryCard({ history }: { history: CustomerDetail['history'] }) {
 }
 
 function WorkCard({ customerId }: { customerId: number }) {
+  const editable = can(useUser(), 'marketer')
   const [items, setItems] = useState<RetentionAction[] | null>(null)
   const [note, setNote] = useState('')
   const [reason, setReason] = useState(CHURN_REASONS[0])
@@ -240,6 +246,7 @@ function WorkCard({ customerId }: { customerId: number }) {
   return (
     <section className="ro-card work" aria-labelledby="work-t">
       <div className="ro-cardhead"><h2 id="work-t">Работа с клиентом</h2><span className="ro-small">отметьте, что сделали и чем закончилось</span></div>
+      {editable ? <>
       <label className="field"><span>Комментарий (необязательно)</span>
         <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="например, обещал оплатить в пятницу" /></label>
       <div className="btns">
@@ -252,6 +259,7 @@ function WorkCard({ customerId }: { customerId: number }) {
           <select value={reason} onChange={(e) => setReason(e.target.value)}>{CHURN_REASONS.map((r) => <option key={r}>{r}</option>)}</select></label>
         <button type="button" className="ro-btn ro-btn--sm ro-btn--quiet" disabled={busy} onClick={() => mark('churned')}>Ушёл</button>
       </div>
+      </> : <p className="ro-small">Роль «Наблюдатель»: отмечать работу может маркетолог или администратор.</p>}
       {error && <p className="form__error" role="alert">{error}</p>}
       {items && items.length > 0 && (
         <ul className="log">

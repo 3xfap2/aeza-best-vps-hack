@@ -26,6 +26,7 @@ class UserOut(BaseModel):
     login: str
     displayName: str
     viaSso: bool
+    role: Literal["admin", "marketer", "viewer"] = Field(description="admin — всё; marketer — модель и работа с клиентами; viewer — только просмотр")
 
 
 class ContributionOut(BaseModel):
@@ -50,6 +51,7 @@ class CustomerListItem(BaseModel):
     levelTitle: str
     topReason: str | None
     expectedLoss: float = Field(description="Ожидаемая потеря за горизонт, €")
+    expectedLossPaid: float = Field(description="Ожидаемая потеря в пределах платёжеспособности клиента, €")
     qualityIssues: int = Field(description="Сколько расхождений статуса и дат у клиента")
     lastAction: str | None = Field(None, description="Последняя отметка работы с клиентом: called, messaged, renewed…")
 
@@ -102,6 +104,7 @@ class Finances(BaseModel):
     totalReplenished: float
     availableFunds: float = Field(description="Баланс + разблокированные бонусы, €")
     renewalNeed: float = Field(description="Сколько нужно на продления всех услуг в горизонте, €")
+    paidMonthly: float = Field(description="Сколько клиент в среднем платит в месяц: пополнено / месяцы с первой услуги, €")
 
 
 class HistoryPoint(BaseModel):
@@ -135,6 +138,8 @@ class SummaryOut(BaseModel):
     levels: dict[str, int]
     levelLoss: dict[str, float] = Field(description="Ожидаемая потеря по уровням риска, €")
     expectedLoss: float = Field(description="Σ выручка услуг за горизонт × вероятность непродления, €")
+    expectedLossPaid: float = Field(description="То же, но выручка клиента не больше того, что он способен заплатить "
+                                                "(деньги на счёте или средний платёж в месяц), €")
     worstCase: float = Field(description="Вся выручка за горизонт клиентов высокого риска, €")
     ltvAtRisk: float = Field(description="Σ LTV услуги × вероятность непродления, €; LTV = месячная выручка / базовый отток")
     ltvMonthlyChurn: float
@@ -156,6 +161,7 @@ class CauseOut(BaseModel):
     kind: Literal["involuntary", "voluntary"] = Field(description="involuntary — не прошла оплата; voluntary — решение клиента")
     customers: int
     expectedLoss: float
+    expectedLossPaid: float
 
 
 class TimelinePointOut(BaseModel):
@@ -194,6 +200,7 @@ def list_item(c: CustomerResult) -> CustomerListItem:
         levelTitle=LEVEL_TITLES[c.level],
         topReason=c.top_reason or c.note,
         expectedLoss=eur(c.expected_loss),
+        expectedLossPaid=eur(c.expected_loss_paid),
         qualityIssues=len(c.quality_issues),
     )
 
@@ -223,7 +230,7 @@ def customer_detail(c: CustomerResult, result: EngineResult, snapshot: Snapshot,
         finances=Finances(
             balance=eur(a.balance), bonusBalance=eur(a.bonusBalance), bonusState=a.bonusState,
             withdrawBalance=eur(a.withdrawBalance), totalReplenished=eur(a.totalReplenished),
-            availableFunds=eur(a.available_funds), renewalNeed=eur(c.renewal_need),
+            availableFunds=eur(a.available_funds), renewalNeed=eur(c.renewal_need), paidMonthly=eur(c.paid_monthly),
         ),
         contributions=[contribution_out(x) for x in c.contributions],
         actions=c.actions,
@@ -249,6 +256,7 @@ def summary_out(result: EngineResult, version: int, computed_at: datetime, durat
         levels=s.levels,
         levelLoss={k: eur(v) for k, v in s.level_loss.items()},
         expectedLoss=eur(s.expected_loss),
+        expectedLossPaid=eur(s.expected_loss_paid),
         worstCase=eur(s.worst_case),
         ltvAtRisk=eur(s.ltv_at_risk),
         ltvMonthlyChurn=result.settings.ltvMonthlyChurn,
@@ -257,7 +265,8 @@ def summary_out(result: EngineResult, version: int, computed_at: datetime, durat
         servicesAtRisk=s.services_at_risk,
         qualityIssues=s.quality_issues,
         causes=[CauseOut(feature=g["feature"], title=g["title"], kind=g["kind"], customers=g["customers"],
-                         expectedLoss=eur(g["expected_loss"])) for g in s.causes],
+                         expectedLoss=eur(g["expected_loss"]), expectedLossPaid=eur(g["expected_loss_paid"]))
+                for g in s.causes],
         explanation=(
             f"Ожидаемая потеря — сколько выручки за {s.horizon_days} дн. бизнес, скорее всего, не получит: "
             "для каждой действующей услуги цена, приведённая к горизонту, умножается на вероятность непродления "

@@ -4,6 +4,8 @@ Score услуги = min(100, Σ вес признака × сила призн�
 Score клиента = максимум по его живым услугам (active, suspended, prolong_wait).
 Вероятность непродления услуги = score / 100.
 Ожидаемая потеря = Σ выручка услуги за горизонт × вероятность непродления.
+Реально собираемая потеря — та же сумма, но выручка клиента не больше того, что он способен заплатить
+(деньги на счёте или средний платёж в месяц за время жизни), — см. pay_capacity.
 """
 from __future__ import annotations
 
@@ -74,6 +76,8 @@ class CustomerResult:
     contributions: list[Contribution]
     actions: list[str]
     quality_issues: list[str]
+    paid_monthly: float = 0.0           # евроценты, сколько клиент в среднем платит в месяц
+    expected_loss_paid: float = 0.0     # евроценты, ожидаемая потеря в пределах платёжеспособности
 
     @property
     def main_cause(self) -> str | None:
@@ -107,6 +111,7 @@ class Summary:
     services_at_risk: int
     quality_issues: int
     causes: list[dict]
+    expected_loss_paid: float = 0.0
 
 
 # Недобровольный отток — клиент мог бы остаться, но не прошла оплата; добровольный — решение клиента.
@@ -161,6 +166,19 @@ def ltv(service: Service, monthly_churn_pct: float) -> float:
     """Выручка услуги за ожидаемый срок жизни клиента: месячная выручка / базовый месячный отток (не больше 36 мес.)."""
     monthly = service.price * 730 / service.term_hours
     return monthly * min(100 / monthly_churn_pct, LTV_CAP_MONTHS)
+
+
+def pay_capacity(account: Account, services: list[Service], as_of: datetime, horizon_days: int) -> tuple[float, float]:
+    """Сколько клиент реально платит: средний платёж в месяц и сколько он может заплатить за горизонт.
+
+    Средний платёж = всё пополненное / месяцы с первой услуги (не меньше одного). Почасовой сервер
+    по прайсу может стоить тысячи евро в месяц, но клиент не заплатит больше, чем платил до сих пор
+    или чем лежит у него на счёте.
+    """
+    start = min((s.createdAt for s in services), default=as_of)
+    months = max(1.0, (as_of - start).total_seconds() / 86400 / 30)
+    monthly = account.totalReplenished / months
+    return monthly, max(float(account.available_funds), monthly * horizon_days / 30)
 
 
 def evaluate(snapshot: Snapshot, settings: ModelSettings, now: datetime | None = None) -> EngineResult:
@@ -242,20 +260,25 @@ def _evaluate_customer(
     contributions = sorted((c for r in live_results for c in r.contributions), key=lambda c: c.points, reverse=True)
     top = max(live_results, key=lambda r: r.score)
     top_reason = top.contributions[0].reason if top.contributions else "Признаков риска нет"
+    expected_loss = sum(r.expected_loss for r in live_results)
+    revenue = sum(r.revenue_horizon for r in live_results)
+    monthly, capacity = pay_capacity(account, services, as_of, horizon)
     return CustomerResult(
         account=account,
         score=score,
         level=level,
         note=None,
         top_reason=top_reason,
-        expected_loss=sum(r.expected_loss for r in live_results),
-        revenue_horizon=sum(r.revenue_horizon for r in live_results),
+        expected_loss=expected_loss,
+        revenue_horizon=revenue,
         renewal_need=account_need,
         ltv_at_risk=sum(r.ltv * r.probability for r in live_results),
         services=results,
         contributions=contributions,
         actions=_actions(account, live_results, account_need, as_of),
         quality_issues=quality,
+        paid_monthly=monthly,
+        expected_loss_paid=expected_loss * min(1.0, capacity / revenue) if revenue else 0.0,
     )
 
 
@@ -334,6 +357,7 @@ def _summarize(customers: list[CustomerResult], settings: ModelSettings, as_of: 
         ),
         quality_issues=sum(len(c.quality_issues) for c in customers),
         causes=_causes(at_risk),
+        expected_loss_paid=sum(c.expected_loss_paid for c in customers),
     )
 
 
@@ -347,9 +371,10 @@ def _causes(at_risk: list[CustomerResult]) -> list[dict]:
             continue
         g = groups.setdefault(key, {"feature": key, "title": titles.get(key, key),
                                     "kind": "involuntary" if key in INVOLUNTARY else "voluntary",
-                                    "customers": 0, "expected_loss": 0.0})
+                                    "customers": 0, "expected_loss": 0.0, "expected_loss_paid": 0.0})
         g["customers"] += 1
         g["expected_loss"] += c.expected_loss
+        g["expected_loss_paid"] += c.expected_loss_paid
     return sorted(groups.values(), key=lambda g: -g["expected_loss"])
 
 
