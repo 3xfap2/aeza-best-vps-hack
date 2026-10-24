@@ -33,25 +33,26 @@ body { margin: 0; background: var(--paper); }
   background: none; color: var(--ink-2); cursor: pointer; }
 .theme-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 500; }
 
-/* --- тема Aéza: как на aeza.net — белая страница, плоские серые карточки, чёрные жирные заголовки,
-   Inter везде, бирюзовый #16B9CF только точечно. Без текстур, маркеров, рукописных и моноширинных шрифтов. --- */
+/* --- тема Aéza по брендбуку 2026: основные цвета #4CC6F1 (Pantone 298 C), #000000, #F4F4F4;
+   шрифты — Exo 2 (заголовки, интерфейс) и Inter (текст, подписи); фирменный паттерн линий.
+   Белая страница, плоские серые карточки, чёрные кнопки; голубой — только акцентом. --- */
 :root[data-theme="aeza"] {
   --paper: #FFFFFF;
   --kraft-100: #F4F4F4;
   --kraft-200: #ECECEC;
   --neutral-100: #ECECEC;
   --card: #F4F4F4;
-  --ink: #0F0F0F;
+  --ink: #000000;
   --ink-2: #5C5C5C;
   --ink-3: #8C8C8C;
   --line: #E4E4E4;
   --line-strong: #D4D4D4;
   --line-draft: #E4E4E4;
-  --marker: #16B9CF;
-  --marker-hover: #12A3B7;
-  --marker-300: #5FCFDE;
-  --marker-200: #BDEBF2;
-  --marker-100: #E3F7FA;
+  --marker: #4CC6F1;
+  --marker-hover: #2FB6E6;
+  --marker-300: #7DD5F5;
+  --marker-200: #B7E8FA;
+  --marker-100: #E4F6FD;
   --action: #111111;          /* главные кнопки — чёрные, как «Войти» на aeza.net */
   --action-hover: #000000;
   --action-deep: #000000;
@@ -61,7 +62,7 @@ body { margin: 0; background: var(--paper); }
   --shadow-1: none;
   --shadow-2: none;
   --shadow-3: 0 12px 40px rgba(0,0,0,0.10);
-  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Exo 2", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-hand: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -69,8 +70,13 @@ body { margin: 0; background: var(--paper); }
   --radius-card: 24px;
 }
 :root[data-theme="aeza"] .ro { font-variant-numeric: tabular-nums; }
-:root[data-theme="aeza"] .ro h1, :root[data-theme="aeza"] .ro-h1 { font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
-:root[data-theme="aeza"] .ro-cardhead h2, :root[data-theme="aeza"] .ro h2 { font-weight: 600; letter-spacing: -0.02em; }
+:root[data-theme="aeza"] .ro h1, :root[data-theme="aeza"] .ro-h1 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+:root[data-theme="aeza"] .ro-cardhead h2, :root[data-theme="aeza"] .ro h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; }
+:root[data-theme="aeza"] .ro-sum__amount { font-family: var(--font-display); font-weight: 800; }
+/* фирменный паттерн: три параллельные линии и акцентная с плавным поворотом — в углу карточки суммы */
+:root[data-theme="aeza"] .ro-sum { overflow: hidden; }
+:root[data-theme="aeza"] .ro-sum::after { content: ""; position: absolute; right: 0; top: 0; width: 150px; height: 84px; pointer-events: none; z-index: 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='84' fill='none'><g stroke-width='4'><path d='M70 0v84M80 0v84M90 0v84' stroke='%23000'/><path d='M106 0v26a22 22 0 0 0 22 22h22' stroke='%234CC6F1'/></g></svg>") no-repeat right top; }
 /* плоские карточки и панели: без рамок, теней и бумажной текстуры */
 :root[data-theme="aeza"] .ro-card { border-color: transparent; box-shadow: none; }
 :root[data-theme="aeza"] .ro-panel::before, :root[data-theme="aeza"] .ro-paper-texture::before { display: none; }
