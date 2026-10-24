@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, LEVEL_TITLE, type CustomerItem, type CustomerPage, type Level, type Summary, type Timeline } from '../api'
+import { api, LEVEL_TITLE, type CustomerItem, type CustomerPage, type Level, type Renewal, type Summary, type Timeline } from '../api'
 import { useLiveData } from '../live'
 import { ErrorBox, eur, eur0, Icon, radarLevel, RiskBadge, Skeleton, useChanged } from '../ui'
 import { StatusLine } from './Shell'
@@ -21,12 +21,13 @@ function angleOf(id: number) {
 
 export default function Overview() {
   const { data, error, loading } = useLiveData(async () => {
-    const [summary, timeline, customers] = await Promise.all([
+    const [summary, timeline, customers, renewals] = await Promise.all([
       api<Summary>('/api/v1/analytics/summary'),
       api<Timeline>('/api/v1/analytics/churn-timeline'),
       allCustomers(),
+      api<Renewal[]>('/api/v1/analytics/renewals?days=14'),
     ])
-    return { summary, timeline, customers }
+    return { summary, timeline, customers, renewals }
   })
   const [howOpen, setHowOpen] = useState(false)
   const top5 = useMemo(() => (data?.customers ?? []).filter((c) => c.score != null).slice(0, 5), [data])
@@ -103,6 +104,7 @@ export default function Overview() {
           <ChartCard timeline={data!.timeline} />
 
           <CausesCard summary={s} />
+          <RenewalsCard renewals={data!.renewals} />
 
           <section className="ro-card ro-top5" aria-labelledby="t5-t">
             <div className="ro-cardhead"><h2 id="t5-t">Топ-5 клиентов по сумме под угрозой</h2>
@@ -264,6 +266,46 @@ function CausesCard({ summary }: { summary: Summary }) {
             <p className="ro-small">Ориентир рынка: напоминания об оплате возвращают 20–50 % неуспешных платежей. Расчёт: ожидаемая потеря клиентов под риском × доля удержанных.</p>
           </div>
         </div>
+      )}
+    </section>
+  )
+}
+
+const PROBLEM: Record<string, string> = { no_money: 'не хватит денег', no_autoprolong: 'автопродление выключено' }
+
+function RenewalsCard({ renewals }: { renewals: Renewal[] }) {
+  const [all, setAll] = useState(false)
+  const problems = renewals.filter((r) => r.problem)
+  const lost = problems.reduce((a, r) => a + r.price, 0)
+  const shown = all ? problems : problems.slice(0, 8)
+  const day = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', weekday: 'short', timeZone: 'UTC' })
+  return (
+    <section className="ro-card ro-top5 renewals" aria-labelledby="ren-t">
+      <div className="ro-cardhead"><h2 id="ren-t">Календарь продлений · 14 дней</h2>
+        <span className="ro-small">предупредить заранее: {problems.length} из {renewals.length} продлений под угрозой, {eur(lost)}</span></div>
+      {problems.length === 0 ? <p className="ro-small renewals__empty">Все продления в ближайшие 14 дней пройдут автоматически.</p> : (
+        <div className="table-scroll">
+          <table className="ro-table">
+            <thead><tr><th>Дата</th><th>Клиент</th><th>Услуга</th><th className="r">Цена</th><th className="r">На счёте</th><th>Что помешает</th><th><span className="ro-sr">Действие</span></th></tr></thead>
+            <tbody>
+              {shown.map((r) => (
+                <tr key={r.serviceId}>
+                  <td className="mono">{day(r.date)}</td>
+                  <td className="mono">{r.email}</td>
+                  <td className="mono">{r.service}</td>
+                  <td className="r mono">{eur(r.price)}</td>
+                  <td className="r mono">{eur(r.funds)}</td>
+                  <td><span className={'ro-risk ro-risk--' + (r.problem === 'no_money' ? 'high' : 'mid')}>{PROBLEM[r.problem!]}</span></td>
+                  <td className="r"><Link to={'/app/customers/' + r.customerId}>Открыть</Link></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {problems.length > 8 && (
+        <div className="pager"><span className="ro-small">Показано {shown.length} из {problems.length}</span>
+          <button className="ro-btn ro-btn--quiet ro-btn--sm" type="button" onClick={() => setAll(!all)}>{all ? 'Свернуть' : 'Показать все'}</button></div>
       )}
     </section>
   )

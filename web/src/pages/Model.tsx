@@ -65,7 +65,7 @@ export default function Model() {
   async function save() {
     setSaving(true)
     try {
-      await api<SettingsOut>('/api/v1/model/settings', { method: 'PATCH', json: patch })
+      await api<SettingsOut>(`/api/v1/model/settings?expectedVersion=${data!.version}`, { method: 'PATCH', json: patch })
       toast.show('Сохранено. Панель пересчитана')
     } catch (e) {
       toast.show(e instanceof ApiError ? `Не удалось сохранить: ${e.message}` : 'Не удалось сохранить', 'error')

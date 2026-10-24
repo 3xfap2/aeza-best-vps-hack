@@ -101,11 +101,14 @@ def get_settings(request: Request, _: User = Depends(current_user)) -> SettingsO
 def patch_settings(
     request: Request,
     patch: dict[str, Any] = Body(..., examples=[PATCH_EXAMPLE]),
+    expectedVersion: int | None = Query(None, description="Версия, с которой начата правка; если настройки уже изменили — 409"),
     user: User = Depends(current_user),
 ) -> SettingsOut:
     radar = request.app.state.radar
     with radar.write_lock:
-        current, _ = radar.settings()
+        current, version = radar.settings()
+        if expectedVersion is not None and expectedVersion != version:
+            raise HTTPException(409, f"Настройки уже изменили (версия {version}, у вас {expectedVersion}). Обновите страницу и повторите.")
         new = _apply_patch(current, patch)
         changes = diff_settings(current, new)
         if changes:

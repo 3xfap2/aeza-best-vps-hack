@@ -31,6 +31,13 @@ export interface CustomerDetail extends CustomerItem {
   transactions: { id: number; serviceId: number; type: string; amount: number; status: string
     createdAt: string; performedAt: string | null }[]
   asOf: string; horizonDays: number; version: number
+  history: { score: number | null; level: Level; asOf: string; reason: string; recordedAt: string }[]
+}
+export interface WhatIf { key: string; title: string; score: number | null; level: Level; expectedLoss: number; saved: number }
+export interface Renewal {
+  date: string; customerId: number; email: string; serviceId: number; service: string; paymentTerm: string
+  price: number; autoProlong: boolean; funds: number; problem: 'no_money' | 'no_autoprolong' | null
+  level: Level | null; score: number | null
 }
 export interface Summary {
   asOf: string; horizonDays: number; customersTotal: number

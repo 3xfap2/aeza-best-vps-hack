@@ -6,7 +6,10 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+from urllib.parse import urlsplit
+
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 
 from app import db
@@ -89,8 +92,19 @@ for r in (auth.router, oidc.router, customers.router, analytics.router, model.ro
     app.include_router(r)
 
 
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    # Защита от CSRF: браузер всегда шлёт Origin с изменяющими запросами; чужой сайт — отказ.
+    # Клиенты API (curl, биллинг) Origin не шлют и проходят по Bearer-токену.
+    origin = request.headers.get("origin")
+    if request.method in UNSAFE_METHODS and origin and origin != "null":
+        allowed = {request.headers.get("host", ""), request.headers.get("x-forwarded-host", ""),
+                   urlsplit(request.app.state.config.public_url).netloc}
+        if urlsplit(origin).netloc not in allowed:
+            return JSONResponse({"detail": "Запрос с чужого сайта отклонён"}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")

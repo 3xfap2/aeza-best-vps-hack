@@ -238,3 +238,27 @@ def test_own_snapshot_changes_results(client, auth):
     metrics = client.get("/metrics", headers=auth).text
     assert 'churn_radar_customers{level="high"} 1.0' in metrics
     client.post("/api/v1/source/preset/case", headers=auth)
+
+
+def test_csrf_origin_and_settings_version(client, auth):
+    evil = client.patch("/api/v1/model/settings", headers={**auth, "Origin": "https://evil.example"},
+                        json={"horizonDays": 31})
+    assert evil.status_code == 403
+    same = client.patch("/api/v1/model/settings", headers={**auth, "Origin": "http://testserver"}, json={"horizonDays": 30})
+    assert same.status_code == 200
+    version = client.get("/api/v1/model/settings", headers=auth).json()["version"]
+    stale = client.patch(f"/api/v1/model/settings?expectedVersion={version - 1}", headers=auth, json={"horizonDays": 31})
+    assert stale.status_code == 409
+
+
+def test_what_if_and_renewals(client, auth):
+    client.post("/api/v1/source/preset/extended", headers=auth)
+    scenarios = client.get("/api/v1/customers/62/what-if", headers=auth).json()
+    assert scenarios and all(s["saved"] > 0 for s in scenarios)
+    assert scenarios[0]["score"] < client.get("/api/v1/customers/62", headers=auth).json()["score"]
+    assert client.get("/api/v1/customers/9999/what-if", headers=auth).status_code == 404
+    cal = client.get("/api/v1/analytics/renewals?days=14", headers=auth).json()
+    assert cal and {"no_money", "no_autoprolong"} & {x["problem"] for x in cal}
+    detail = client.get("/api/v1/customers/62", headers=auth).json()
+    assert detail["history"] and detail["history"][-1]["score"] == detail["score"]
+    client.post("/api/v1/source/preset/case", headers=auth)

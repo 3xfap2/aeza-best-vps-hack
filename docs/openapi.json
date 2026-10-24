@@ -511,6 +511,58 @@
         ]
       }
     },
+    "/api/v1/customers/{customer_id}/what-if": {
+      "get": {
+        "tags": [
+          "Клиенты"
+        ],
+        "summary": "Что будет, если клиент пополнит счёт, включит автопродление, оплатит или включит сервер",
+        "description": "Пересчёт той же моделью на копии данных клиента; исходные данные не меняются.",
+        "operationId": "customer_what_if_api_v1_customers__customer_id__what_if_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WhatIfOut"
+                  },
+                  "title": "Response Customer What If Api V1 Customers  Customer Id  What If Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/analytics/summary": {
       "get": {
         "tags": [
@@ -563,6 +615,60 @@
         ]
       }
     },
+    "/api/v1/analytics/renewals": {
+      "get": {
+        "tags": [
+          "Аналитика"
+        ],
+        "summary": "Календарь продлений: что продлевается в ближайшие дни и что помешает (нет денег, выключено автопродление)",
+        "operationId": "renewal_calendar_api_v1_analytics_renewals_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 14,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RenewalOut"
+                  },
+                  "title": "Response Renewal Calendar Api V1 Analytics Renewals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/model/settings": {
       "get": {
         "tags": [
@@ -595,13 +701,33 @@
         "summary": "Изменение настроек модели с автоматическим пересчётом результатов",
         "description": "Тело — JSON Merge Patch (RFC 7386): передавайте только то, что меняется.",
         "operationId": "patch_settings_api_v1_model_settings_patch",
+        "parameters": [
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Версия, с которой начата правка; если настройки уже изменили — 409",
+              "title": "Expectedversion"
+            },
+            "description": "Версия, с которой начата правка; если настройки уже изменили — 409"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
                 "type": "object",
-                "title": "Patch",
+                "additionalProperties": true,
                 "examples": [
                   {
                     "features": {
@@ -614,11 +740,11 @@
                     },
                     "horizonDays": 30
                   }
-                ]
+                ],
+                "title": "Patch"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1533,6 +1659,14 @@
           "version": {
             "type": "integer",
             "title": "Version"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryPoint"
+            },
+            "type": "array",
+            "title": "History",
+            "description": "Изменения score клиента (последние 30)"
           }
         },
         "type": "object",
@@ -1880,6 +2014,55 @@
         ],
         "title": "HistoryItem"
       },
+      "HistoryPoint": {
+        "properties": {
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "no_score",
+              "churned"
+            ],
+            "title": "Level"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Asof"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recordedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "level",
+          "asOf",
+          "reason",
+          "recordedAt"
+        ],
+        "title": "HistoryPoint"
+      },
       "LevelChange": {
         "properties": {
           "id": {
@@ -2136,6 +2319,95 @@
           "changes"
         ],
         "title": "PreviewOut"
+      },
+      "RenewalOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "customerId": {
+            "type": "integer",
+            "title": "Customerid"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "serviceId": {
+            "type": "integer",
+            "title": "Serviceid"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "paymentTerm": {
+            "type": "string",
+            "title": "Paymentterm"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "autoProlong": {
+            "type": "boolean",
+            "title": "Autoprolong"
+          },
+          "funds": {
+            "type": "number",
+            "title": "Funds"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "customerId",
+          "email",
+          "serviceId",
+          "service",
+          "paymentTerm",
+          "price",
+          "autoProlong",
+          "funds",
+          "problem",
+          "level",
+          "score"
+        ],
+        "title": "RenewalOut"
       },
       "ServiceIn": {
         "properties": {
@@ -3025,6 +3297,51 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WhatIfOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "saved": {
+            "type": "number",
+            "title": "Saved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "score",
+          "level",
+          "expectedLoss",
+          "saved"
+        ],
+        "title": "WhatIfOut"
       }
     },
     "securitySchemes": {

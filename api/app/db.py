@@ -237,3 +237,28 @@ def delete_session(conn: Connection, token_hash: str) -> None:
 
 def delete_simulated_transitions(conn: Connection) -> None:
     conn.execute("DELETE FROM status_transitions WHERE source IN ('event', 'simulator')")
+
+
+# --- история score -----------------------------------------------------------
+
+def last_scores(conn: Connection) -> dict[int, tuple[int | None, str]]:
+    return {r["account_id"]: (r["score"], r["level"]) for r in conn.execute(
+        "SELECT DISTINCT ON (account_id) account_id, score, level FROM score_history ORDER BY account_id, id DESC")}
+
+
+def save_score_changes(conn: Connection, rows: list[tuple[int, int | None, str]], as_of: datetime, reason: str) -> None:
+    if not rows:
+        return
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO score_history (account_id, score, level, as_of, reason) VALUES (%s, %s, %s, %s, %s)",
+            [(a, s, lv, as_of, reason) for a, s, lv in rows],
+        )
+
+
+def score_history(conn: Connection, account_id: int, limit: int) -> list[dict]:
+    rows = list(conn.execute(
+        "SELECT score, level, as_of, reason, recorded_at FROM score_history WHERE account_id = %s ORDER BY id DESC LIMIT %s",
+        (account_id, limit),
+    ))
+    return rows[::-1]

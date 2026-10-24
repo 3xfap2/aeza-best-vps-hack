@@ -5,9 +5,12 @@ import io
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel
 
+from app import db
+from app.insights import what_if
 from app.security import current_user
-from app.views import CustomerDetail, CustomerPage, Level, customer_detail, list_item
+from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
 
 router = APIRouter(prefix="/api/v1/customers", tags=["Клиенты"], dependencies=[Depends(current_user)])
 
@@ -96,4 +99,27 @@ def get_customer(customer_id: int, request: Request) -> CustomerDetail:
     c = cur.result.by_id.get(customer_id)
     if c is None:
         raise HTTPException(404, f"Клиент #{customer_id} не найден")
-    return customer_detail(c, cur.result, cur.snapshot, cur.version)
+    detail = customer_detail(c, cur.result, cur.snapshot, cur.version)
+    with request.app.state.pool.connection() as conn:
+        detail.history = [HistoryPoint(score=r["score"], level=r["level"], asOf=r["as_of"], reason=r["reason"],
+                                       recordedAt=r["recorded_at"]) for r in db.score_history(conn, customer_id, 30)]
+    return detail
+
+
+class WhatIfOut(BaseModel):
+    key: str
+    title: str
+    score: int | None
+    level: str
+    expectedLoss: float
+    saved: float
+
+
+@router.get("/{customer_id}/what-if", response_model=list[WhatIfOut],
+            summary="Что будет, если клиент пополнит счёт, включит автопродление, оплатит или включит сервер",
+            description="Пересчёт той же моделью на копии данных клиента; исходные данные не меняются.")
+def customer_what_if(customer_id: int, request: Request) -> list[WhatIfOut]:
+    cur = request.app.state.radar.current
+    if customer_id not in cur.result.by_id:
+        raise HTTPException(404, f"Клиент #{customer_id} не найден")
+    return [WhatIfOut(**x) for x in what_if(cur.result, cur.snapshot, customer_id)]

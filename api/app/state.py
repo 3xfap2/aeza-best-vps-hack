@@ -12,8 +12,8 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable
 from datetime import datetime, timezone
+from typing import Callable
 
 from psycopg_pool import ConnectionPool
 
@@ -94,6 +94,15 @@ class AppState:
             found = db.current_settings(conn)
         return found if found else (default_settings(), 0)
 
+    def _record_history(self, previous: EngineResult | None, result: EngineResult, reason: str) -> None:
+        """Пишем в историю только клиентов, у которых изменились score или уровень."""
+        with self.pool.connection() as conn:
+            before = ({c.account.id: (c.score, c.level) for c in previous.customers} if previous
+                      else db.last_scores(conn))
+            changed = [(c.account.id, c.score, c.level) for c in result.customers
+                       if before.get(c.account.id) != (c.score, c.level)]
+            db.save_score_changes(conn, changed, result.as_of, reason)
+
     def recalculate(self, reason: str) -> Current:
         with self._lock:
             started = time.perf_counter()
@@ -104,6 +113,7 @@ class AppState:
             settings, settings_version = found if found else (default_settings(), 0)
             result = evaluate(snapshot, settings)
             previous = self._current.result if self._current else None
+            self._record_history(previous, result, reason)
             version = (self._current.version + 1) if self._current else 1
             self._current = Current(
                 version=version,

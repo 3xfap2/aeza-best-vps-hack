@@ -103,6 +103,14 @@ class Finances(BaseModel):
     renewalNeed: float = Field(description="Сколько нужно на продления всех услуг в горизонте, €")
 
 
+class HistoryPoint(BaseModel):
+    score: int | None
+    level: Level
+    asOf: datetime
+    reason: str
+    recordedAt: datetime
+
+
 class CustomerDetail(CustomerListItem):
     note: str | None
     revenueHorizon: float
@@ -116,6 +124,7 @@ class CustomerDetail(CustomerListItem):
     asOf: datetime
     horizonDays: int
     version: int
+    history: list[HistoryPoint] = Field(default_factory=list, description="Изменения score клиента (последние 30)")
 
 
 class SummaryOut(BaseModel):

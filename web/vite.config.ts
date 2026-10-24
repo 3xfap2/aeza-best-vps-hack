@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '127.0.0.1',
-    proxy: { '/api': api, '/metrics': api },
+    // xfwd: сервер видит исходный адрес сайта (X-Forwarded-Host) — нужно для проверки Origin
+    proxy: { '/api': { target: api, xfwd: true }, '/metrics': { target: api, xfwd: true } },
   },
 })

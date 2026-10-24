@@ -178,3 +178,17 @@ button.ro-link { background: none; border: 0; padding: 0; font: inherit; cursor:
   border: 1px solid var(--marker); background: var(--marker-100); color: var(--ink); }
 @media (max-width: 1100px) { .causes__grid { grid-template-columns: 1fr 1fr; } .causes__roi { grid-column: 1 / -1; } }
 @media (max-width: 860px) { .causes__grid { grid-template-columns: 1fr; } }
+
+/* --- что будет, если / история / календарь --- */
+.whatif { grid-column: span 7; padding: 24px; display: grid; gap: 12px; align-content: start; }
+.whatif ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.whatif li { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.whatif li:last-child { border-bottom: 0; }
+.whatif__saved { color: var(--risk-low); }
+.history { grid-column: span 5; padding: 24px; display: grid; gap: 12px; align-content: start; }
+.history__chart { width: 100%; height: auto; }
+.history__thr { stroke: var(--line-draft); stroke-dasharray: 4 4; }
+.history__line { fill: none; stroke: var(--risk-high); stroke-width: 2; }
+.history__dot { fill: var(--card); stroke: var(--risk-high); stroke-width: 2; }
+.renewals__empty { padding: 0 24px 20px; }
+@media (max-width: 860px) { .whatif li { grid-template-columns: 1fr auto; } }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api, type CustomerDetail } from '../api'
+import { api, LEVEL_TITLE, type CustomerDetail, type WhatIf } from '../api'
 import { useLiveData } from '../live'
 import { dateTime, ErrorBox, eur, RiskBadge, Skeleton } from '../ui'
 import { StatusLine } from './Shell'
@@ -21,6 +21,7 @@ function daysText(d: number) {
 export default function Customer() {
   const { id } = useParams()
   const { data: c, error } = useLiveData(() => api<CustomerDetail>(`/api/v1/customers/${id}`), [id])
+  const { data: whatIf } = useLiveData(() => api<WhatIf[]>(`/api/v1/customers/${id}/what-if`), [id])
   const [showTx, setShowTx] = useState(false)
   useEffect(() => { document.title = `${c?.email ?? 'Клиент'} — Радар оттока` }, [c?.email])
 
@@ -109,6 +110,24 @@ export default function Customer() {
           </section>
         )}
 
+        {whatIf && whatIf.length > 0 && (
+          <section className="ro-card whatif" aria-labelledby="wi-t">
+            <div className="ro-cardhead"><h2 id="wi-t">Что будет, если…</h2><span className="ro-small">пересчёт той же моделью на копии данных клиента</span></div>
+            <ul>
+              {whatIf.map((w) => (
+                <li key={w.key}>
+                  <b>{w.title}</b>
+                  <span className="ro-mono">score {c.score} → <b>{w.score ?? '—'}</b></span>
+                  <RiskBadge level={w.level} title={LEVEL_TITLE[w.level]} />
+                  <span className="ro-mono whatif__saved">сохраним {eur(w.saved)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {c.history.length > 1 && <HistoryCard history={c.history} />}
+
         {c.issues.length > 0 && (
           <section className="ro-card issues" aria-labelledby="iss-t" role="note">
             <div className="ro-cardhead"><h2 id="iss-t">Расхождение статуса и дат</h2></div>
@@ -169,3 +188,33 @@ export default function Customer() {
   )
 }
 
+
+const REASONS: Record<string, string> = {
+  startup: 'запуск', settings: 'настройки модели', event: 'событие биллинга', simulate: 'перемотка времени',
+  snapshot: 'новый снимок', reset: 'возврат к снимку', 'preset:case': 'данные кейса', 'preset:extended': 'расширенный набор',
+}
+
+function HistoryCard({ history }: { history: CustomerDetail['history'] }) {
+  const W = 320, H = 70
+  const pts = history.map((h, i) => [i / (history.length - 1) * W, H - (h.score ?? 0) / 100 * H] as const)
+  const last = history[history.length - 1], first = history[0]
+  return (
+    <section className="ro-card history" aria-labelledby="hist-t">
+      <div className="ro-cardhead"><h2 id="hist-t">История score</h2>
+        <span className="ro-small">{first.score ?? '—'} → {last.score ?? '—'} за {history.length - 1} изм.</span></div>
+      <svg viewBox={'-4 -4 ' + (W + 8) + ' ' + (H + 8)} className="history__chart" role="img"
+        aria-label={'Score менялся от ' + (first.score ?? 'нет') + ' до ' + (last.score ?? 'нет')}>
+        <line x1="0" x2={W} y1={H - 0.6 * H} y2={H - 0.6 * H} className="history__thr" />
+        <line x1="0" x2={W} y1={H - 0.3 * H} y2={H - 0.3 * H} className="history__thr" />
+        <polyline points={pts.map((p) => p.join(',')).join(' ')} className="history__line" />
+        {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" className="history__dot" />)}
+      </svg>
+      <ul className="log">
+        {history.slice(-5).reverse().map((h, i) => (
+          <li key={i}><span className="ro-small ro-mono">{dateTime(h.asOf)} · {REASONS[h.reason] ?? h.reason}</span>
+            score {h.score ?? '—'} · {LEVEL_TITLE[h.level].toLowerCase()}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}

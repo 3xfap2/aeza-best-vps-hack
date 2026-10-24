@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import secrets
 import threading
 import time
@@ -25,7 +27,7 @@ from app.routers.auth import start_session
 router = APIRouter(prefix="/api/v1/auth/oidc", tags=["Авторизация"])
 
 STATE_TTL = 600
-_pending: dict[str, tuple[str, float]] = {}
+_pending: dict[str, tuple[str, str, float]] = {}  # state → (nonce, code_verifier, время)
 _pending_lock = threading.Lock()
 
 
@@ -56,14 +58,17 @@ def oidc_config(request: Request) -> OidcConfigOut:
 def oidc_login(request: Request) -> RedirectResponse:
     cfg = _cfg(request)
     state, nonce = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
+    verifier = secrets.token_urlsafe(48)  # PKCE: код без verifier бесполезен, даже если его перехватят
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     now = time.monotonic()
     with _pending_lock:
-        for key in [k for k, (_, t) in _pending.items() if now - t > STATE_TTL]:
+        for key in [k for k, (_, _, t) in _pending.items() if now - t > STATE_TTL]:
             del _pending[key]
-        _pending[state] = (nonce, now)
+        _pending[state] = (nonce, verifier, now)
     query = urlencode({
         "client_id": cfg.oidc_client_id, "redirect_uri": _redirect_uri(cfg), "response_type": "code",
         "scope": "openid email profile", "state": state, "nonce": nonce,
+        "code_challenge": challenge, "code_challenge_method": "S256",
     })
     return RedirectResponse(f"{cfg.oidc_public_issuer}/auth?{query}", status_code=302)
 
@@ -76,15 +81,16 @@ def oidc_callback(request: Request, code: str | None = None, state: str | None =
         return RedirectResponse(f"/login?sso_error={error}", status_code=302)
     with _pending_lock:
         pending = _pending.pop(state or "", None)
-    if not code or not pending or time.monotonic() - pending[1] > STATE_TTL:
+    if not code or not pending or time.monotonic() - pending[2] > STATE_TTL:
         return RedirectResponse("/login?sso_error=state", status_code=302)
-    nonce = pending[0]
+    nonce, verifier = pending[0], pending[1]
 
     try:
         with httpx.Client(timeout=10) as http:
             token = http.post(
                 f"{cfg.oidc_issuer}/token",
-                data={"grant_type": "authorization_code", "code": code, "redirect_uri": _redirect_uri(cfg)},
+                data={"grant_type": "authorization_code", "code": code, "redirect_uri": _redirect_uri(cfg),
+                      "code_verifier": verifier},
                 auth=(cfg.oidc_client_id, cfg.oidc_client_secret),
             )
             token.raise_for_status()
