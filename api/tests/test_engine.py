@@ -283,6 +283,7 @@ def test_demo_history_is_consistent_with_snapshot():
 def test_partial_recalculation_matches_full():
     """Пересчёт только затронутых клиентов даёт ровно то же, что полный пересчёт."""
     from dataclasses import replace
+
     from app.scoring.engine import reevaluate
     root = Path(__file__).resolve().parents[2] / "data" / "demo"
     snap0 = SnapshotIn.model_validate(json.loads((root / "data.json").read_text(encoding="utf-8"))).to_snapshot()

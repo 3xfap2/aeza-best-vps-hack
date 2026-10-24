@@ -10,8 +10,8 @@ from dataclasses import replace
 from datetime import timedelta
 
 from app.domain import Account, Snapshot
-from app.scoring.engine import EngineResult, evaluate
 from app.money import fmt_cents
+from app.scoring.engine import EngineResult, evaluate
 from app.scoring.settings import AsOf, ModelSettings
 from app.simulator import add_term
 

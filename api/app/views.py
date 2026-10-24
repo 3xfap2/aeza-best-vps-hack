@@ -9,10 +9,16 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.money import to_euros
 from app.domain import Snapshot
+from app.money import to_euros
 from app.scoring.engine import (
-    LEVEL_TITLES, STATUS_TITLES, Contribution, CustomerResult, EngineResult, ServiceResult, TimelinePoint,
+    LEVEL_TITLES,
+    STATUS_TITLES,
+    Contribution,
+    CustomerResult,
+    EngineResult,
+    ServiceResult,
+    TimelinePoint,
 )
 
 Level = Literal["high", "medium", "low", "no_score", "churned"]

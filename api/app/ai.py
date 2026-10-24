@@ -23,9 +23,9 @@ from dataclasses import dataclass
 import httpx
 
 from app import db
-from app.money import fmt_cents, fmt_euros
 from app.domain import GRACE_PERIOD
 from app.insights import what_if
+from app.money import fmt_cents, fmt_euros
 from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES, STATUS_TITLES, EngineResult
 from app.scoring.features import FEATURES

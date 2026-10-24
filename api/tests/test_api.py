@@ -30,6 +30,7 @@ def client():
     os.environ.update(DATABASE_URL=TEST_URL, ADMIN_PASSWORD=PASSWORD, METRICS_TOKEN=METRICS_TOKEN,
                       SEED_PATH=str(CASE))
     from fastapi.testclient import TestClient
+
     from app.main import app
     with TestClient(app) as c:
         yield c
@@ -165,6 +166,7 @@ def test_telegram_bot_requires_link_code_and_alerts(client, auth):
     assert "после подключения" in bot.handle(2002, "u", "/today")
 
     from datetime import datetime
+
     from app.telegram import MSK
     bot.digest_hour = 9
     assert bot.digest(datetime(2026, 10, 24, 8, 59, tzinfo=MSK)) is None
@@ -182,6 +184,7 @@ def test_telegram_bot_requires_link_code_and_alerts(client, auth):
 
     # резкий рост реально собираемой потери: одно сообщение на один рост
     from datetime import datetime, timedelta, timezone
+
     from app.domain import Account, Service, Snapshot
     from app.scoring.engine import evaluate
     from app.scoring.settings import default_settings
@@ -568,6 +571,7 @@ def test_login_with_aeza_account(client, auth, monkeypatch):
 
 def test_demo_event_stream(client, auth):
     import random
+
     from app.demo_stream import pick_event
     client.post("/api/v1/source/preset/extended", headers=auth)
     radar = client.app.state.radar
@@ -707,6 +711,7 @@ def test_weight_sensitivity(client, auth):
 def test_events_go_to_external_systems(client, auth):
     """Отзыв и отметка работы с клиентом уходят во внешние системы (CRM) через подключаемый Sink."""
     import time
+
     from app.integrations import Publisher
 
     got = []

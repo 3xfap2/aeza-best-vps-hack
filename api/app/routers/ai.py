@@ -1,10 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
 import threading
-
-import os
-
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response

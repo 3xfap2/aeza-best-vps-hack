@@ -5,25 +5,37 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 from datetime import datetime, timezone
-
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import db, http
+from app import ai, db, demo_stream, http
 from app.config import load_config
-from app import ai, demo_stream
 from app.inbox import Inbox
 from app.integrations import Publisher, build_sinks
-from app.routers.source import snapshot_origin
 from app.routers import ai as ai_router
-from app.routers import analytics, auth, customers, feedback, fx, integrations, metrics, model, oidc, retention, source, stream, users
+from app.routers import (
+    analytics,
+    auth,
+    customers,
+    feedback,
+    fx,
+    integrations,
+    metrics,
+    model,
+    oidc,
+    retention,
+    source,
+    stream,
+    users,
+)
+from app.routers.source import snapshot_origin
 from app.scoring.settings import default_settings
 from app.security import LoginLimiter, hash_password
 from app.source import SnapshotIn
@@ -104,7 +116,7 @@ async def lifespan(app: FastAPI):
         ai_cfg = ai.config_from_panel(panel["value"], dict(os.environ))
     app.state.ai = ai.AIClient(ai_cfg) if ai_cfg else None
     app.state.ai_source = "panel" if panel else "env" if ai_cfg else "off"
-    app.state.demo_stream = demo_stream.DemoStream(radar, source.demo_sender(app.state))
+    app.state.demo_stream = demo_stream.DemoStream(radar, source.demo_sender(radar))
     if os.environ.get("DEMO_STREAM", "").lower() in ("on", "1", "true"):   # стенд «живёт» сам
         app.state.demo_stream.start(int(os.environ.get("DEMO_STREAM_INTERVAL", "10")), 0)
     if ai_cfg:

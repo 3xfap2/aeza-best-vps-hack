@@ -2,17 +2,25 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from app import ai, db, simulator
+from app import actions, ai, db
 from app.http import page_links
 from app.insights import message, what_if
+from app.money import to_euros
 from app.security import User, current_user, require
-from app.views import CustomerDetail, CustomerPage, HistoryPoint, Level, customer_detail, list_item
+from app.views import (
+    CustomerDetail,
+    CustomerPage,
+    HistoryPoint,
+    Level,
+    customer_detail,
+    list_item,
+)
 
 router = APIRouter(prefix="/api/v1/customers", tags=["Клиенты"], dependencies=[Depends(current_user)])
 
@@ -173,28 +181,11 @@ def list_actions(customer_id: int, request: Request) -> list[ActionOut]:
 @router.post("/{customer_id}/actions", response_model=ActionOut, status_code=201,
              summary="Отметить работу с клиентом: позвонили, написали, предложение, продлил, ушёл (с причиной)")
 def add_action(customer_id: int, body: ActionIn, request: Request, user: User = Depends(require("marketer"))) -> ActionOut:
-    customer = request.app.state.radar.current.result.by_id.get(customer_id)
-    if customer is None:
-        raise HTTPException(404, f"Клиент #{customer_id} не найден")
-    if body.kind == "churned" and not body.reason:
-        raise HTTPException(422, "Для «ушёл» укажите причину")
-    as_of = request.app.state.radar.current.result.as_of
-    follow_up = as_of.date() + timedelta(days=body.followUpDays) if body.followUpDays and body.kind not in ("renewed", "churned") else None
-    with request.app.state.pool.connection() as conn:
-        row = db.add_action(conn, customer_id, body.kind, body.reason if body.kind == "churned" else None, body.note, user.login,
-                            round(customer.expected_loss), follow_up, customer.score)
-    request.app.state.radar.broker.publish("action", {"customerId": customer_id, "kind": body.kind})
-    publish_action(request.app.state.radar, customer, row)
+    try:
+        row = actions.record(request.app.state.radar, customer_id, body.kind, body.reason, body.note, body.followUpDays, user.login)
+    except actions.ActionError as e:
+        raise HTTPException(e.status, str(e)) from e
     return ActionOut(**row)
-
-
-def publish_action(radar, customer, row: dict) -> None:
-    """Отметка работы с клиентом — во внешние системы (CRM): кто, что сделал и сколько было под угрозой."""
-    radar.integrations.publish("customer.action", {
-        "customerId": customer.account.id, "email": customer.account.email, "kind": row["kind"], "reason": row["reason"],
-        "note": row["note"], "author": row["author"], "followUp": row["followUp"], "score": customer.score,
-        "level": customer.level, "expectedLossEur": round(customer.expected_loss / 100, 2),
-    })
 
 
 class DeferIn(BaseModel):
@@ -218,35 +209,13 @@ class DeferOut(BaseModel):
                          "Один перенос на клиента за 30 дней. В день новой оплаты клиент вернётся в очередь «Сегодня».",
              responses={404: {"description": "Клиент не найден"}, 409: {"description": "Переносить нечего или уже переносили"}})
 def defer(customer_id: int, body: DeferIn, request: Request, user: User = Depends(require("marketer"))) -> DeferOut:
-    return apply_deferral(request.app.state, customer_id, body.days, body.note, user.login)
-
-
-def apply_deferral(state, customer_id: int, days: int, note: str | None, author: str) -> DeferOut:
-    """Общая логика для панели и Telegram-бота."""
-    radar = state.radar
-    with radar.write_lock:
-        cur = radar.current
-        before = cur.result.by_id.get(customer_id)
-        if before is None:
-            raise HTTPException(404, f"Клиент #{customer_id} не найден")
-        with state.pool.connection() as conn, conn.transaction():
-            if db.recent_action(conn, customer_id, "deferred", 30):
-                raise HTTPException(409, "Клиенту уже переносили платёж за последние 30 дней")
-            try:
-                until, names = simulator.defer_payment(conn, customer_id, days, cur.result.as_of)
-            except simulator.SimulationError as e:
-                raise HTTPException(409, str(e)) from e
-            text = f"Платёж перенесён на {days} дн.: " + ", ".join(names) + (f". {note}" if note else "")
-            row = db.add_action(conn, customer_id, "deferred", None, text, author, round(before.expected_loss),
-                                until.date(), before.score)
-            db.log_activity(conn, "event", f"Перенос платежа клиенту #{customer_id} на {days} дн.", author,
-                            {"customerId": customer_id, "days": days})
-        after = radar.recalculate("event").result.by_id[customer_id]
-    radar.broker.publish("action", {"customerId": customer_id, "kind": "deferred"})
-    publish_action(radar, before, row)
-    return DeferOut(deferredUntil=until, services=names, scoreBefore=before.score, scoreAfter=after.score,
-                    lossBefore=round(before.expected_loss / 100, 2), lossAfter=round(after.expected_loss / 100, 2),
-                    action=ActionOut(**row))
+    try:
+        d = actions.defer_payment(request.app.state.radar, customer_id, body.days, body.note, user.login)
+    except actions.ActionError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return DeferOut(deferredUntil=d.until, services=d.services, scoreBefore=d.before.score, scoreAfter=d.after.score,
+                    lossBefore=to_euros(d.before.expected_loss), lossAfter=to_euros(d.after.expected_loss),
+                    action=ActionOut(**d.action))
 
 
 class MessageOut(BaseModel):

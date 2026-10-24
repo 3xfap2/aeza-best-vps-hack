@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 
 from app import db
 from app.http import created
-from app.security import User, current_user, hash_password, require
 from app.money import to_euros
+from app.security import User, current_user, hash_password, require
 
 router = APIRouter(prefix="/api/v1/users", tags=["Команда"])
 

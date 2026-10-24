@@ -14,10 +14,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from app.domain import GRACE_PERIOD, Account, Service, Snapshot, Transaction
-
-from .features import FEATURES, ServiceContext
 from app.money import fmt_cents
 
+from .features import FEATURES, ServiceContext
 from .features.base import days_word, humanize_days
 from .settings import ModelSettings
 

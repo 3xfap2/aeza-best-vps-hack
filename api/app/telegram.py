@@ -18,15 +18,14 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import httpx
 
-from app import ai, db, fx
+from app import actions, ai, db, fx
+from app.money import fmt_cents
 from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES, CustomerResult, EngineResult
-from app.money import fmt_cents
 
 if TYPE_CHECKING:
     from app.state import AppState
@@ -274,9 +273,6 @@ class TelegramBot:
         return "\n".join(lines)
 
     def _defer(self, arg: str, username: str | None) -> str:
-        from fastapi import HTTPException
-
-        from app.routers.customers import apply_deferral
         parts = arg.replace("#", " ").split()
         if not parts or not parts[0].isdigit() or (len(parts) > 1 and not parts[1].isdigit()):
             return "Укажите клиента и дни: /defer 62 7 — перенести платёж клиенту #62 на 7 дней (1–14)."
@@ -284,13 +280,11 @@ class TelegramBot:
         if not 1 <= days <= 14:
             return "Перенести можно на 1–14 дней."
         try:
-            state = SimpleNamespace(radar=self.radar, pool=self.radar.pool)
-            out = apply_deferral(state, customer_id, days, "через Telegram", f"telegram:{username or 'бот'}")
-        except HTTPException as e:
-            return f"Не получилось: {html.escape(str(e.detail))}"
-        email = self.radar.current.result.by_id[customer_id].account.email
-        return (f"<b>Платёж перенесён: {html.escape(email)}</b>\n" + "\n".join(html.escape(s) for s in out.services) +
-                f"\nScore {out.scoreBefore} → {out.scoreAfter}, потеря {fmt_cents(out.lossBefore * 100)} → {fmt_cents(out.lossAfter * 100)}"
+            out = actions.defer_payment(self.radar, customer_id, days, "через Telegram", f"telegram:{username or 'бот'}")
+        except actions.ActionError as e:
+            return f"Не получилось: {html.escape(str(e))}"
+        return (f"<b>Платёж перенесён: {html.escape(out.before.account.email)}</b>\n" + "\n".join(html.escape(s) for s in out.services) +
+                f"\nScore {out.before.score} → {out.after.score}, потеря {fmt_cents(out.before.expected_loss)} → {fmt_cents(out.after.expected_loss)}"
                 f"\nВ день новой оплаты клиент вернётся в «Сегодня». {self.public_url}/app/customers/{customer_id}")
 
     def _ask(self, question: str) -> str:

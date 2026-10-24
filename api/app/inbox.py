@@ -14,8 +14,7 @@ import time
 import psycopg
 from pydantic import ValidationError
 
-from app import db, simulator
-from app.routers.source import affected_account, event_adapter, write_event
+from app import db, events, simulator
 
 log = logging.getLogger("radar.inbox")
 
@@ -83,9 +82,9 @@ class Inbox:
                 for r in rows:
                     try:
                         with conn.transaction():
-                            event = event_adapter.validate_python(r["payload"])
-                            summary = write_event(conn, event, at)
-                            account = affected_account(conn, event)
+                            event = events.event_adapter.validate_python(r["payload"])
+                            summary = events.write(conn, event, at)
+                            account = events.affected_account(conn, event)
                         if account:
                             affected.add(account)
                         marks.append((True, summary, r["id"]))

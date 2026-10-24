@@ -41,6 +41,7 @@ def test_message_rejects_invented_numbers():
 
 def test_cbr_rate_is_parsed_and_cached():
     import httpx
+
     from app import fx
     xml = ('<?xml version="1.0" encoding="windows-1251"?><ValCurs Date="24.10.2026" name="Foreign Currency Market">'
            '<Valute ID="R01239"><NumCode>978</NumCode><CharCode>EUR</CharCode><Nominal>1</Nominal><Name>Евро</Name>'
@@ -69,8 +70,9 @@ def test_config_from_env():
 
 
 def test_openai_requests_and_fallbacks():
-    import httpx
     import json
+
+    import httpx
     sent = []
 
     def handler(request):
@@ -98,6 +100,7 @@ def test_openai_requests_and_fallbacks():
 
 def test_aeza_profile_and_auto_role():
     import httpx
+
     from app import aeza_auth
     ok = httpx.MockTransport(lambda r: httpx.Response(200, json={"data": {"total": 1, "items": [
         {"id": 4242, "email": "Anna@Aeza.net", "name": "Анна"}]}}) if r.headers["x-api-key"] == "good-key-123" else

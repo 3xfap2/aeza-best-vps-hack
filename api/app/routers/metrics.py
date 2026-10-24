@@ -13,8 +13,8 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_l
 from prometheus_client.core import GaugeMetricFamily, HistogramMetricFamily
 
 from app import db
-from app.security import request_token, token_hash
 from app.money import to_euros
+from app.security import request_token, token_hash
 
 router = APIRouter(tags=["Метрики"])
 

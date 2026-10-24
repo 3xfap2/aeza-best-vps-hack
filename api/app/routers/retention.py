@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import db
+from app.money import to_euros
 from app.retention import BUCKETS, compare_strategies, effect, queue
 from app.security import current_user
-from app.money import to_euros
 
 STRATEGY_CALLS = 10   # если ёмкость не задана — сравниваем на 10 звонках в день
 

@@ -8,12 +8,12 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app import backtest, db, sensitivity
 from app.http import check_if_match
+from app.money import to_euros
 from app.scoring.engine import evaluate
 from app.scoring.features import FEATURES
 from app.scoring.settings import ModelSettings, diff_settings, merge_patch
 from app.security import User, current_user, require
 from app.source import SnapshotIn
-from app.money import to_euros
 
 router = APIRouter(prefix="/api/v1/model", tags=["Модель"])
 

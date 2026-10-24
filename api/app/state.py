@@ -11,15 +11,15 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from collections.abc import Callable
 
 from psycopg_pool import ConnectionPool
 
 from app import db
-from app.integrations import Publisher
 from app.domain import Snapshot
+from app.integrations import Publisher
 from app.scoring.engine import EngineResult, Transition, evaluate, reevaluate
 from app.scoring.settings import ModelSettings, default_settings
 

@@ -7,7 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app import aeza_auth, db
-from app.security import COOKIE_NAME, User, current_user, new_token, request_token, token_hash, verify_password
+from app.security import (
+    COOKIE_NAME,
+    User,
+    current_user,
+    new_token,
+    request_token,
+    token_hash,
+    verify_password,
+)
 from app.views import UserOut
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Авторизация"])

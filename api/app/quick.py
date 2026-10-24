@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 from app import backtest, db
-from app.money import fmt_cents, fmt_euros
 from app.insights import what_if
-from app.retention import compare_strategies, queue as retention_queue
+from app.money import fmt_cents, fmt_euros
+from app.retention import compare_strategies
+from app.retention import queue as retention_queue
 from app.scoring.engine import LEVEL_TITLES
 from app.source import SnapshotIn
 

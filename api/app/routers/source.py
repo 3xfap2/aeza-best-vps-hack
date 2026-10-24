@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any, Literal, Union
+from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
-from app import db, demo_stream, simulator
+from app import db, demo_stream, events, simulator
 from app.scoring.settings import AsOf, diff_settings
 from app.security import User, current_user, require
 from app.source import SnapshotIn
@@ -21,41 +21,6 @@ class LoadResult(BaseModel):
     transactions: int
     statusChanges: int = Field(description="Сколько услуг сменили статус относительно прошлого снимка")
     version: int
-
-
-class TopupEvent(BaseModel):
-    type: Literal["topup"]
-    accountId: int
-    amount: float = Field(gt=0, le=100_000, description="Сумма пополнения, €")
-
-
-class AutoprolongEvent(BaseModel):
-    type: Literal["autoprolong"]
-    serviceId: int
-    enabled: bool
-
-
-class StatusEvent(BaseModel):
-    type: Literal["service_status"]
-    serviceId: int
-    status: Literal["active", "suspended", "prolong_wait", "deleted", "blocked"]
-
-
-class PaymentEvent(BaseModel):
-    type: Literal["pay_renewal"]
-    serviceId: int
-
-
-class SignalEvent(BaseModel):
-    type: Literal["signal"]
-    name: Literal["supportTickets30d", "loadDrop", "downgraded"] = Field(
-        description="supportTickets30d — для аккаунта (targetId = id аккаунта); loadDrop, downgraded — для услуги")
-    targetId: int
-    value: float | bool
-
-
-SourceEvent = Annotated[Union[TopupEvent, AutoprolongEvent, StatusEvent, PaymentEvent, SignalEvent],
-                        Field(discriminator="type")]
 
 
 class EventResult(BaseModel):
@@ -211,34 +176,18 @@ def add_history(request: Request, snap: SnapshotIn, user: User = Depends(require
 @router.post("/events", response_model=EventResult,
              summary="Событие из системы-источника (пополнение, оплата, автопродление, смена статуса)",
              responses={404: {"description": "Аккаунт или услуга не найдены"}, 409: {"description": "Событие невозможно"}})
-def post_event(request: Request, event: SourceEvent = Body(...), user: User = Depends(require("admin"))) -> EventResult:
+def post_event(request: Request, event: events.SourceEvent = Body(...), user: User = Depends(require("admin"))) -> EventResult:
     try:
-        summary, version = apply_event(request.app.state, event, user.login, "event")
+        summary, version = events.apply(request.app.state.radar, event, user.login, "event")
     except simulator.SimulationError as e:
         code = 404 if "не найден" in str(e) else 409
         raise HTTPException(code, str(e)) from e
     return EventResult(summary=summary, version=version)
 
 
-def apply_event(state, event: Any, author: str, reason: str) -> tuple[str, int]:
-    """Событие биллинга: запись в источник, журнал, пересчёт. Общий путь для API и демо-потока."""
-    radar = state.radar
-    with radar.write_lock:
-        at = radar.current.result.as_of
-        with state.pool.connection() as conn:
-            summary = write_event(conn, event, at)
-            account = affected_account(conn, event)
-            db.log_activity(conn, "event", summary, author, event.model_dump())
-        cur = radar.recalculate(reason, accounts={account} if account else None)
-    return summary, cur.version
-
-
-event_adapter = TypeAdapter(SourceEvent)
-
-
-def demo_sender(state):
+def demo_sender(radar):
     """Для демо-потока: событие-словарь → тот же путь, что POST /source/events."""
-    return lambda event: apply_event(state, event_adapter.validate_python(event), demo_stream.AUTHOR, "demo")[0]
+    return lambda event: events.apply(radar, events.event_adapter.validate_python(event), demo_stream.AUTHOR, "demo")[0]
 
 
 class DemoStreamIn(BaseModel):
@@ -281,28 +230,6 @@ def demo_stream_set(body: DemoStreamIn, request: Request, user: User = Depends(r
             stream.stop()
             db.log_activity(conn, "settings", f"Демо-поток событий выключен, отправлено: {stream.sent}", user.login)
     return _stream_out(stream)
-
-
-def affected_account(conn, event: Any) -> int | None:
-    """Чей score меняет событие — пересчитывается только этот клиент."""
-    if isinstance(event, TopupEvent):
-        return event.accountId
-    if isinstance(event, SignalEvent):
-        return event.targetId if event.name == "supportTickets30d" else db.owner_of(conn, event.targetId)
-    return db.owner_of(conn, event.serviceId)
-
-
-def write_event(conn, event: Any, at: datetime) -> str:
-    """Записать событие биллинга в данные источника (без пересчёта)."""
-    if isinstance(event, TopupEvent):
-        return simulator.topup(conn, event.accountId, round(event.amount * 100))
-    if isinstance(event, AutoprolongEvent):
-        return simulator.set_autoprolong(conn, event.serviceId, event.enabled)
-    if isinstance(event, StatusEvent):
-        return simulator.set_status(conn, event.serviceId, event.status, at)
-    if isinstance(event, SignalEvent):
-        return simulator.set_signal(conn, event.targetId, event.name, event.value)
-    return simulator.pay_renewal(conn, event.serviceId, at)
 
 
 @router.post("/simulate", response_model=SimulateResult,
