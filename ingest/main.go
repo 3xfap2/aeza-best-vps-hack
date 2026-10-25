@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -91,33 +92,37 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) int {
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Bearer ") || subtle.ConstantTimeCompare([]byte(auth[7:]), []byte(s.token)) != 1 {
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		return reply(w, http.StatusUnauthorized, detail("Нужен Bearer-токен сервиса приёма (INGEST_TOKEN)"))
+		return problem(w, http.StatusUnauthorized, "Нужен Bearer-токен сервиса приёма (INGEST_TOKEN)")
 	}
 	var raw []json.RawMessage
 	body := http.MaxBytesReader(w, r.Body, maxBody)
 	if err := json.NewDecoder(body).Decode(&raw); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
-			return reply(w, http.StatusRequestEntityTooLarge, detail(fmt.Sprintf("Тело больше %d МБ — разбейте пачку", maxBody>>20)))
+			return problem(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Тело больше %d МБ — разбейте пачку", maxBody>>20))
 		}
-		return reply(w, http.StatusUnprocessableEntity, detail("Ожидается JSON-массив событий"))
+		return problem(w, http.StatusUnprocessableEntity, "Ожидается JSON-массив событий")
 	}
 	if len(raw) == 0 || len(raw) > maxEvents {
-		return reply(w, http.StatusUnprocessableEntity, detail(fmt.Sprintf("В пачке должно быть от 1 до %d событий", maxEvents)))
+		return problem(w, http.StatusUnprocessableEntity, fmt.Sprintf("В пачке должно быть от 1 до %d событий", maxEvents))
 	}
 	ids := make([]*string, len(raw))
 	payloads := make([]string, len(raw))
 	for i, item := range raw {
 		id, err := validate(item)
 		if err != nil {
-			return reply(w, http.StatusUnprocessableEntity, detail(fmt.Sprintf("events[%d]: %s", i, err)))
+			return problem(w, http.StatusUnprocessableEntity, fmt.Sprintf("events[%d]: %s", i, err))
 		}
 		ids[i], payloads[i] = id, string(item)
 	}
 	added, err := s.store.Insert(r.Context(), ids, payloads)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "22") { // данные, а не база: повтор не поможет
+			return problem(w, http.StatusUnprocessableEntity, "База не приняла данные пачки: "+pgErr.Message)
+		}
 		slog.Error("очередь недоступна", "err", err)
-		return reply(w, http.StatusServiceUnavailable, detail("Очередь событий недоступна, повторите позже"))
+		return problem(w, http.StatusServiceUnavailable, "Очередь событий недоступна, повторите позже")
 	}
 	s.metrics.events(added, len(raw)-added)
 	return reply(w, http.StatusAccepted, accepted{Accepted: added, Duplicates: len(raw) - added})
@@ -133,7 +138,14 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	reply(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func detail(msg string) map[string]string { return map[string]string{"detail": msg} }
+// problem — ошибка в формате RFC 9457 (application/problem+json), как у API на Python.
+func problem(w http.ResponseWriter, code int, msg string) int {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": http.StatusText(code), "status": code, "detail": msg})
+	return code
+}
 
 func reply(w http.ResponseWriter, code int, v any) int {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

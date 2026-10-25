@@ -7,14 +7,20 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type fakeStore struct {
 	ids  map[string]bool
 	fail bool
+	err  error // ошибка базы, которую вернёт Insert
 }
 
 func (f *fakeStore) Insert(_ context.Context, ids []*string, _ []string) (int, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
 	if f.fail {
 		return 0, errors.New("down")
 	}
@@ -80,6 +86,15 @@ func TestEvents(t *testing.T) {
 	if rec := post(t, h, "Bearer "+token, big); rec.Code != 422 {
 		t.Errorf("пачка больше %d: код %d", maxEvents, rec.Code)
 	}
+	if rec := post(t, h, "", batch); rec.Header().Get("Content-Type") != "application/problem+json" ||
+		!strings.Contains(rec.Body.String(), `"status":401`) {
+		t.Errorf("ошибка не в формате problem+json: %s %s", rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	store.err = &pgconn.PgError{Code: "22P05", Message: "unsupported Unicode escape sequence"}
+	if rec := post(t, h, "Bearer "+token, batch); rec.Code != 422 {
+		t.Errorf("данные, которые база не приняла: код %d, ждали 422 — повтор не поможет", rec.Code)
+	}
+	store.err = nil
 	store.fail = true
 	if rec := post(t, h, "Bearer "+token, batch); rec.Code != 503 {
 		t.Errorf("очередь недоступна: код %d", rec.Code)
