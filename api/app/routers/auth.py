@@ -11,6 +11,7 @@ from app.security import (
     COOKIE_NAME,
     User,
     current_user,
+    hash_password,
     new_token,
     request_token,
     token_hash,
@@ -19,6 +20,7 @@ from app.security import (
 from app.views import UserOut
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Авторизация"])
+DUMMY_HASH = hash_password(new_token()[0])
 
 
 class LoginIn(BaseModel):
@@ -60,7 +62,8 @@ def login(body: LoginIn, request: Request, response: Response) -> LoginOut:
                             headers={"Retry-After": str(wait)})
     with request.app.state.pool.connection() as conn:
         row = db.user_by_login(conn, body.login)
-    if not row or not verify_password(body.password, row["password_hash"]) or row["role"] == "pending":
+    # хеш считается и для несуществующего логина — по времени ответа не узнать, есть ли такой пользователь
+    if not verify_password(body.password, row["password_hash"] if row else DUMMY_HASH) or not row or row["role"] == "pending":
         limiter.fail(key)
         audit.write(request, "login.failed", body.login.lower(), details={"method": "password"})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")

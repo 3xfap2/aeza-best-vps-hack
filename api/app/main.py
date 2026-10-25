@@ -242,8 +242,9 @@ def ready(request: Request):
             checks["inboxPending"] = db.inbox_counts(conn)["pending"]
         checks["database"] = "ok"
         checks["calculationVersion"] = request.app.state.radar.current.version
-    except Exception as e:  # база недоступна или расчёт ещё не выполнен
-        return http.problem(request, 503, f"Не готов: {e}"[:300])
+    except Exception:  # база недоступна или расчёт ещё не выполнен; подробности — в журнал, не наружу
+        log.exception("Проверка готовности не прошла")
+        return http.problem(request, 503, "Не готов: база недоступна или расчёт ещё не выполнен")
     return {"status": "ready", **checks}
 
 

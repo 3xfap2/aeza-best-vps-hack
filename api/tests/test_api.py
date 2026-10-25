@@ -807,7 +807,7 @@ def test_rate_limit(client, auth):
         assert r.status_code == 429 and r.headers["Retry-After"] == "50"
         assert r.headers["content-type"].startswith("application/problem+json") and "3 в минуту" in r.json()["detail"]
         other = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer other"})
-        assert other.status_code == 401                                   # другой вызывающий — свой счёт
+        assert other.status_code == 429            # новый токен от того же адреса не даёт свежую квоту
         assert client.get("/health/live").status_code == 200              # вне /api лимита нет
     finally:
         client.app.state.rate_limiter = old
@@ -859,6 +859,12 @@ def test_events_resource(client, auth):
     assert client.get("/api/v1/events/inbox-0", headers=auth).status_code == 404
     paged = client.get("/api/v1/events?pageSize=1", headers=auth)
     assert 'rel="next"' in paged.headers["Link"] and len(paged.json()["items"]) == 1
+
+
+def test_csv_cells_are_not_formulas():
+    from app.http import csv_cell
+    assert [csv_cell(v) for v in ("=HYPERLINK(1)", "+1", "-x", "@a", "user@x.test", -5, 3.5)] == \
+           ["'=HYPERLINK(1)", "'+1", "'-x", "'@a", "user@x.test", -5, 3.5]   # числа не трогаем
 
 
 def test_calculation_headers(client, auth):

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from http import HTTPStatus
 
 from fastapi import FastAPI, Request, Response
@@ -19,6 +20,7 @@ from starlette.exceptions import HTTPException
 from app.observability import request_id
 
 PROBLEM = "application/problem+json"
+log = logging.getLogger("radar.http")
 
 
 def problem(request: Request, status: int, detail: str, errors: list[dict] | None = None,
@@ -47,6 +49,11 @@ def install(app: FastAPI) -> None:
             return problem(request, exc.status_code, _as_text(errors), errors, exc.headers)
         return problem(request, exc.status_code, str(exc.detail), headers=exc.headers)
 
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        log.exception("Необработанная ошибка: %s %s", request.method, request.url.path)
+        return problem(request, 500, "Внутренняя ошибка сервера. Номер запроса — в requestId, по нему ошибка есть в журнале.")
+
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         errors = _validation_errors(exc.errors())
@@ -66,6 +73,11 @@ def install(app: FastAPI) -> None:
         if tag in (request.headers.get("if-none-match") or ""):
             return Response(status_code=304, headers={"ETag": tag, "Cache-Control": headers.get("cache-control", "no-store")})
         return Response(body, status_code=200, headers=headers, media_type=response.media_type)
+
+
+def csv_cell(value):
+    """Ячейка CSV без формулы: текст, начинающийся с = + - @, Excel выполнил бы как формулу (CSV-инъекция)."""
+    return "'" + value if isinstance(value, str) and value[:1] in ("=", "+", "-", "@") else value
 
 
 def created(response: Response, location: str) -> None:

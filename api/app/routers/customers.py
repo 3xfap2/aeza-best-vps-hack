@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import actions, ai, audit, db
-from app.http import page_links
+from app.http import csv_cell, page_links
 from app.insights import message, what_if
 from app.money import to_euros
 from app.security import User, current_user, require
@@ -79,10 +79,11 @@ def export_csv(
                ["баланс_eur", "пополнено_eur", "score", "уровень", "потеря_30д_eur", "причина", "что_сделать", "работа"])
     for c in rows:
         item = list_item(c)
-        w.writerow([item.id] + ([item.email] if includeEmail else []) +
-                   [item.balance, item.totalReplenished, item.score if item.score is not None else "",
-                    item.levelTitle, item.expectedLoss, item.topReason or "", (c.actions or [""])[0],
-                    last.get(item.id, {}).get("kind", "")])
+        w.writerow([csv_cell(v) for v in
+                    [item.id] + ([item.email] if includeEmail else []) +
+                    [item.balance, item.totalReplenished, item.score if item.score is not None else "",
+                     item.levelTitle, item.expectedLoss, item.topReason or "", (c.actions or [""])[0],
+                     last.get(item.id, {}).get("kind", "")]])
     name = f"radar-clients-{cur.result.as_of:%Y%m%d}.csv"
     # BOM — чтобы Excel открыл кириллицу без выбора кодировки
     return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8",

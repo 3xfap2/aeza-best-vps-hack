@@ -69,7 +69,11 @@ def install(app: FastAPI) -> None:
                 return problem(request, 409, "Запрос с этим Idempotency-Key ещё выполняется — повторите позже")
             return Response(bytes(saved["response_body"]), status_code=saved["status_code"],
                             media_type=saved["content_type"], headers={"Idempotent-Replayed": "true"})
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:   # сбой до ответа — освободить ключ, иначе повторы сутки получали бы 409
+            await run_in_threadpool(_save, pool, scope, key, 500, b"", None)
+            raise
         content = b"".join([chunk async for chunk in response.body_iterator])
         await run_in_threadpool(_save, pool, scope, key, response.status_code, content,
                                 response.headers.get("content-type"))

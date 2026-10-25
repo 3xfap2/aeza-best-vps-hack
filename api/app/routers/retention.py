@@ -8,10 +8,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from app import db
+from app import audit, db
+from app.http import csv_cell
 from app.money import to_euros
 from app.retention import BUCKETS, compare_strategies, effect, queue
-from app.security import current_user
+from app.security import User, current_user
 
 STRATEGY_CALLS = 10   # если ёмкость не задана — сравниваем на 10 звонках в день
 
@@ -167,17 +168,22 @@ CHANNEL_TITLE = {"call": "звонок", "email": "письмо"}
 @router.get("/queue.csv", response_class=Response, responses={200: {"content": {"text/csv": {}}}},
             summary="Очередь удержания в CSV для обзвона и рассылки")
 def retention_csv(request: Request, saveRate: float = SaveRate, callCost: float = CallCost,
-                  includeEmail: bool = Query(False, description="Добавить email (персональные данные)")) -> Response:
+                  includeEmail: bool = Query(False, description="Добавить email (персональные данные)"),
+                  user: User = Depends(current_user)) -> Response:
     cur, _, _, items, _ = _queue(request, saveRate, callCost)
+    if includeEmail:   # персональные данные ушли из системы — фиксируем кто и сколько
+        with request.app.state.pool.connection() as conn:
+            audit.record(conn, request, "export.emails", user.login, "retention/queue.csv", {"customers": len(items)})
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["когда", "срок", "вид_срока", "id"] + (["email"] if includeEmail else []) +
                ["канал", "причина", "что_сделать", "потеря_eur", "реально_eur", "сохраним_eur", "статус"])
     for x in items:
-        w.writerow([BUCKET_TITLE[x["bucket"]], f"{x['deadline']:%d.%m.%Y %H:%M}", DEADLINE_TITLE[x["deadlineKind"]], x["customerId"]] +
-                   ([x["email"]] if includeEmail else []) +
-                   [CHANNEL_TITLE[x["channel"]], x["causeTitle"] or "", x["action"] or "", x["expectedLoss"],
-                    x["expectedLossPaid"], x["expectedSaved"], x["lastAction"] or ""])
+        w.writerow([csv_cell(v) for v in
+                    [BUCKET_TITLE[x["bucket"]], f"{x['deadline']:%d.%m.%Y %H:%M}", DEADLINE_TITLE[x["deadlineKind"]], x["customerId"]] +
+                    ([x["email"]] if includeEmail else []) +
+                    [CHANNEL_TITLE[x["channel"]], x["causeTitle"] or "", x["action"] or "", x["expectedLoss"],
+                     x["expectedLossPaid"], x["expectedSaved"], x["lastAction"] or ""]])
     name = f"radar-retention-{cur.result.as_of:%Y%m%d}.csv"
     return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})

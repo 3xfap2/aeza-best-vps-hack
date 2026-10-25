@@ -96,7 +96,7 @@ def oidc_callback(request: Request, code: str | None = None, state: str | None =
                   error: str | None = None) -> Response:
     cfg = _cfg(request)
     if error:
-        return RedirectResponse(f"/login?sso_error={error}", status_code=302)
+        return RedirectResponse(f"/login?{urlencode({'sso_error': error})}", status_code=302)
     with _pending_lock:
         pending = _pending.pop(state or "", None)
     if not code or not pending or time.monotonic() - pending[2] > STATE_TTL:

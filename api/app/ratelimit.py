@@ -1,6 +1,6 @@
 """Общий лимит запросов к API: 429 + Retry-After и заголовки RateLimit (черновик IETF httpapi-ratelimit-headers).
 
-- лимит на вызывающего: токен или сессия, без входа — IP; по умолчанию 600 запросов в минуту (RATE_LIMIT_PER_MINUTE);
+- лимит на адрес клиента: по умолчанию 600 запросов в минуту (RATE_LIMIT_PER_MINUTE);
 - каждый ответ API несёт RateLimit-Policy: "default";q=600;w=60 и RateLimit: "default";r=<осталось>;t=<секунд до сброса>;
 - сверх лимита — 429 problem+json с Retry-After, запрос не выполняется;
 - поток SSE и Swagger не ограничиваются, /metrics и /health — вне /api.
@@ -9,7 +9,6 @@
 """
 from __future__ import annotations
 
-import hashlib
 import time
 from collections.abc import Callable
 
@@ -26,13 +25,15 @@ class RateLimiter:
         self.quota = per_minute
         self.clock = clock
         self._windows: dict[str, tuple[int, int]] = {}   # вызывающий → (начало окна, запросов в окне)
+        self._cleaned = 0
 
     def hit(self, caller: str) -> tuple[int, int]:
         """Учесть запрос. Возвращает (сколько осталось, секунд до сброса); осталось < 0 — лимит превышен."""
         now = int(self.clock())
         start = now - now % WINDOW
-        if len(self._windows) > 10_000:   # окна прошлых минут не копятся
+        if start != self._cleaned:   # раз в окно: счётчики прошлых минут не копятся
             self._windows = {k: v for k, v in self._windows.items() if v[0] == start}
+            self._cleaned = start
         begun, count = self._windows.get(caller, (start, 0))
         count = count + 1 if begun == start else 1
         self._windows[caller] = (start, count)
@@ -40,11 +41,10 @@ class RateLimiter:
 
 
 def _caller(request: Request) -> str:
-    """Кто вызывает: хеш токена или cookie сессии (сам токен не храним), без входа — IP."""
-    token = request.headers.get("authorization") or request.cookies.get("radar_session")
-    if token:
-        return "token:" + hashlib.sha256(token.encode()).hexdigest()[:32]
-    return "ip:" + (request.client.host if request.client else "-")
+    """Кто вызывает — адрес клиента. Не заголовок Authorization: его значение придумывает сам клиент,
+    и подставляя каждый раз новый токен, он получал бы свежую квоту. На сервере адрес выставляет Caddy
+    (заголовок X-Forwarded-For от клиента он отбрасывает), за ним nginx и uvicorn с --proxy-headers."""
+    return request.client.host if request.client else "-"
 
 
 def install(app: FastAPI) -> None:
