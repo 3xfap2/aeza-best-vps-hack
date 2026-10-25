@@ -26,7 +26,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from app import db
+from app import audit, db
 from app.routers.auth import start_session
 
 router = APIRouter(prefix="/api/v1/auth/oidc", tags=["Авторизация"])
@@ -131,6 +131,7 @@ def oidc_callback(request: Request, code: str | None = None, state: str | None =
     role = role_from_claims(dict(claims), cfg.oidc_role_claim, cfg.oidc_role_map)
     with request.app.state.pool.connection() as conn:
         user = db.upsert_oidc_user(conn, claims["sub"], email, name, role or cfg.oidc_default_role, sync_role=role is not None)
+        audit.record(conn, request, "login", user["login"], details={"method": "sso"})
     response = RedirectResponse("/app", status_code=302)
     start_session(request, response, user["id"])
     return response

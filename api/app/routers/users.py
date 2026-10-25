@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app import db
+from app import audit, db
 from app.http import created
 from app.money import to_euros
 from app.security import User, current_user, hash_password, require
@@ -71,6 +71,7 @@ def add_member(body: MemberIn, request: Request, response: Response, user: User 
         if row is None:
             raise HTTPException(409, f"Логин «{body.login}» уже занят")
         db.log_activity(conn, "team", f"Добавлен сотрудник {body.login} ({body.role})", user.login)
+        audit.record(conn, request, "user.created", user.login, body.login, {"role": body.role})
         created(response, f"/api/v1/users/{row['id']}")
         return next(m for m in _members(conn) if m.id == row["id"])
 
@@ -91,6 +92,8 @@ def edit_member(user_id: int, body: MemberPatch, request: Request, user: User = 
         changed = [k for k in ("displayName", "role", "password") if getattr(body, k)]
         if changed:
             db.log_activity(conn, "team", f"Изменён сотрудник {target['login']}: {', '.join(changed)}", user.login)
+            audit.record(conn, request, "user.updated", user.login, target["login"],
+                         {"changed": changed, **({"role": body.role} if body.role else {})})
         return next(m for m in _members(conn) if m.id == user_id)
 
 
@@ -106,4 +109,5 @@ def remove_member(user_id: int, request: Request, user: User = Depends(require("
             raise HTTPException(409, "Нельзя удалить последнего администратора")
         db.delete_user(conn, user_id)
         db.log_activity(conn, "team", f"Удалён сотрудник {target['login']}", user.login)
+        audit.record(conn, request, "user.deleted", user.login, target["login"])
     return Response(status_code=204)

@@ -813,6 +813,32 @@ def test_rate_limit(client, auth):
         client.app.state.rate_limiter = old
 
 
+def test_audit_log(client, auth):
+    """Журнал безопасности: неудачный и удачный вход, отказ по правам, смена роли, выгрузка email; читает только админ."""
+    assert client.post("/api/v1/auth/login", json={"login": "admin", "password": "wrong"}).status_code == 401
+    r = client.post("/api/v1/users", headers=auth, json={"login": "auditee", "password": "auditee-pass-2026",
+                                                         "displayName": "Проверка аудита", "role": "viewer"})
+    assert r.status_code == 201
+    viewer = client.post("/api/v1/auth/login", json={"login": "auditee", "password": "auditee-pass-2026"}).json()["token"]
+    as_viewer = {"Authorization": f"Bearer {viewer}"}
+    assert client.get("/api/v1/audit", headers=as_viewer).status_code == 403      # журнал — только администратору
+    client.patch(f"/api/v1/users/{r.json()['id']}", headers=auth, json={"role": "marketer"})
+    client.get("/api/v1/customers/export.csv?includeEmail=true", headers=auth)
+
+    log = client.get("/api/v1/audit?limit=20", headers=auth).json()
+    by_action = {}
+    for e in log:
+        by_action.setdefault(e["action"], e)
+    assert by_action["login.failed"]["actor"] == "admin" and by_action["login.failed"]["requestId"]
+    assert by_action["login"]["actor"] == "auditee" and by_action["login"]["details"]["method"] == "password"
+    assert by_action["forbidden"]["target"] == "GET /api/v1/audit" and by_action["forbidden"]["details"]["role"] == "viewer"
+    assert by_action["user.updated"]["target"] == "auditee" and by_action["user.updated"]["details"]["role"] == "marketer"
+    assert by_action["export.emails"]["details"]["customers"] > 0
+    assert "auditee-pass-2026" not in json.dumps(log) and viewer not in json.dumps(log)   # ни паролей, ни токенов
+    only = client.get("/api/v1/audit?action=login.failed", headers=auth).json()
+    assert only and {e["action"] for e in only} == {"login.failed"}
+
+
 def test_calculation_headers(client, auth):
     r = client.get("/api/v1/analytics/summary", headers=auth)
     assert int(r.headers["X-Calculation-Version"]) >= 1 and int(r.headers["X-Data-Age"]) >= 0

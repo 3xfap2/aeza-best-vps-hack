@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from app import actions, ai, db
+from app import actions, ai, audit, db
 from app.http import page_links
 from app.insights import message, what_if
 from app.money import to_euros
@@ -66,10 +66,13 @@ def export_csv(
     hasIssues: bool | None = Query(None),
     cause: str | None = Query(None, max_length=64),
     includeEmail: bool = Query(False, description="Добавить email (персональные данные) — по умолчанию выгрузка только с ID"),
+    user: User = Depends(current_user),
 ) -> Response:
     cur, rows = _filtered(request, sort, order, level, q, hasIssues, cause)
     with request.app.state.pool.connection() as conn:
         last = db.last_actions(conn)
+        if includeEmail:   # персональные данные ушли из системы — фиксируем кто и сколько
+            audit.record(conn, request, "export.emails", user.login, details={"customers": len(rows)})
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["id"] + (["email"] if includeEmail else []) +

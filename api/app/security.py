@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException, Request, status
 
-from app import db
+from app import audit, db
 
 COOKIE_NAME = "radar_session"
 _SCRYPT = {"n": 2**14, "r": 8, "p": 1}
@@ -86,6 +86,8 @@ def require(role: str):
     def check(request: Request) -> User:
         user = current_user(request)
         if not user.can(role):
+            audit.write(request, "forbidden", user.login, f"{request.method} {request.url.path}",
+                        {"role": user.role, "needed": role})
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Недостаточно прав: нужна роль «{ROLE_TITLES[role]}»")
         return user
     return check

@@ -22,6 +22,7 @@ from app.integrations import Outbox, build_sinks
 from app.routers import ai as ai_router
 from app.routers import (
     analytics,
+    audit,
     auth,
     customers,
     feedback,
@@ -161,7 +162,8 @@ idempotency.install(app)   # Idempotency-Key для POST — см. app/idempoten
 ratelimit.install(app)   # 429 + RateLimit-заголовки, снаружи идемпотентности — см. app/ratelimit.py
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
-          users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):
+          users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, audit.router,
+          metrics.router):
     app.include_router(r)
 
 

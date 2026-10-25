@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import aeza_auth, db
+from app import aeza_auth, audit, db
 from app.security import (
     COOKIE_NAME,
     User,
@@ -62,8 +62,10 @@ def login(body: LoginIn, request: Request, response: Response) -> LoginOut:
         row = db.user_by_login(conn, body.login)
     if not row or not verify_password(body.password, row["password_hash"]) or row["role"] == "pending":
         limiter.fail(key)
+        audit.write(request, "login.failed", body.login.lower(), details={"method": "password"})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")
     limiter.reset(key)
+    audit.write(request, "login", row["login"], details={"method": "password"})
     token, expires = start_session(request, response, row["id"])
     user = User(row["id"], row["login"], row["display_name"], False, row["role"])
     return LoginOut(user=user_out(user), token=token, expiresAt=expires)
@@ -95,6 +97,7 @@ def aeza_login(body: AezaLoginIn, request: Request, response: Response) -> AezaL
         profile = aeza_auth.fetch_profile(body.apiKey.strip())
     except aeza_auth.AezaAuthError as e:
         limiter.fail(key)
+        audit.write(request, "login.failed", "aeza", details={"method": "aeza", "reason": str(e)[:200]})
         code = status.HTTP_502_BAD_GATEWAY if "недоступно" in str(e) or "ответило" in str(e) else status.HTTP_401_UNAUTHORIZED
         raise HTTPException(code, str(e)) from e
     limiter.reset(key)
@@ -105,6 +108,7 @@ def aeza_login(body: AezaLoginIn, request: Request, response: Response) -> AezaL
     if row["role"] == "pending":
         return AezaLoginOut(status="pending", message=f"{profile['name']}, заявка на доступ отправлена — администратор Радара "
                                                       "выдаст роль в разделе «Команда». После этого войдите снова.")
+    audit.write(request, "login", row["login"], details={"method": "aeza"})
     start_session(request, response, row["id"])
     return AezaLoginOut(status="ok", message="Вход выполнен",
                         user=user_out(User(row["id"], row["login"], row["display_name"], False, row["role"])))
@@ -121,6 +125,7 @@ def logout(request: Request, response: Response, user: User = Depends(current_us
     if token:
         with request.app.state.pool.connection() as conn:
             db.delete_session(conn, token_hash(token))
+            audit.record(conn, request, "logout", user.login)
     response.status_code = 204
     response.delete_cookie(COOKIE_NAME, path="/")
     return response

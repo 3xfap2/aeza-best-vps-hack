@@ -6,7 +6,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, ValidationError
 
-from app import backtest, db, sensitivity
+from app import audit, backtest, db, sensitivity
 from app.http import check_if_match
 from app.money import to_euros
 from app.scoring.engine import evaluate
@@ -212,6 +212,7 @@ def patch_settings(
             with request.app.state.pool.connection() as conn:
                 db.save_settings(conn, new, changes, user.login)
                 db.log_activity(conn, "settings", "; ".join(changes), user.login)
+                audit.record(conn, request, "settings.changed", user.login, "model.settings", {"changes": changes})
         cur = radar.recalculate("settings") if changes else radar.current
     response.headers["ETag"] = settings_etag(cur.settings_version)
     return _settings_out(cur.result.settings, cur.settings_version, cur.result.as_of)
