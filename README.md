@@ -2,6 +2,8 @@
 
 [![ci](https://github.com/3xfap2/aeza-best-vps-hack/actions/workflows/ci.yml/badge.svg)](https://github.com/3xfap2/aeza-best-vps-hack/actions/workflows/ci.yml)
 
+**Стенд:** http://193.233.247.164 · вход через SSO: `marketing@radar.example` / `radar-sso-2026` · Swagger: http://193.233.247.164/api/v1/docs
+
 Аналитическая система для маркетологов хостинга: показывает, **кому из клиентов нужно внимание**, **почему возник риск** и **сколько денег бизнес может потерять** за ближайшие 30 дней.
 
 - Объяснимая модель: score 0–100 = сумма баллов по признакам, у каждого балла — причина простыми словами.
