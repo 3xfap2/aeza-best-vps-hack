@@ -11,6 +11,34 @@
 - Коэффициенты меняются в панели с предпросмотром до сохранения; результат пересчитывается сразу и виден без перезагрузки.
 - `/metrics` для Prometheus, Swagger, вход по паролю или через SSO (OIDC), запуск одной командой.
 
+[![Обзор: сколько денег под угрозой за 30 дней и кто рискует](docs/img/overview.png)](docs/img/overview.png)
+
+| Кому звонить сегодня и окупится ли звонок | Почему у клиента такой риск и что сделать |
+|---|---|
+| [![Удержание](docs/img/retention.png)](docs/img/retention.png) | [![Карточка клиента](docs/img/customer.png)](docs/img/customer.png) |
+| **Модель проверяет себя на прошлых снимках** | **Как устроен механизм** |
+| [![Сверка с исходами](docs/img/backtest.png)](docs/img/backtest.png) | [![Механизм](docs/img/mechanism.png)](docs/img/mechanism.png) |
+
+---
+
+## Требования кейса — где смотреть
+
+| Требование | Где сделано |
+|---|---|
+| Рейтинг клиентов, сортировка по ID, email, балансу, пополнениям в обе стороны | страница «Клиенты» ([web/src/pages/Customers.tsx](web/src/pages/Customers.tsx)), `GET /api/v1/customers?sort=…&order=…` ([api/app/routers/customers.py](api/app/routers/customers.py)) |
+| Score 0–100, уровень риска и причина простыми словами | один файл на признак — [api/app/scoring/features/](api/app/scoring/features/), сборка score — [api/app/scoring/engine.py](api/app/scoring/engine.py); карточка клиента — вклад каждого признака |
+| Денежная оценка | ожидаемая потеря за 30 дней по прайсу и реально собираемая — [engine.py](api/app/scoring/engine.py), раздел [«Денежная оценка»](#денежная-оценка), [docs/MODEL.md](docs/MODEL.md) |
+| Коэффициенты в панели с сохранением | страница «Модель» с предпросмотром, `PATCH /api/v1/model/settings` ([api/app/routers/model.py](api/app/routers/model.py)); версии в PostgreSQL, переживают перезапуск, чужая правка — `412`/`409` |
+| Обновление без перезагрузки | SSE `GET /api/v1/stream` ([api/app/routers/stream.py](api/app/routers/stream.py)): после пересчёта все открытые экраны обновляются сами |
+| Факт и прогноз оттока | график «Отток по дням» на обзоре, `GET /api/v1/analytics/churn-timeline` ([api/app/routers/analytics.py](api/app/routers/analytics.py)) |
+| `/metrics` для Prometheus | [api/app/routers/metrics.py](api/app/routers/metrics.py), закрыт токеном; правила алертов с юнит-тестами — [prometheus/](prometheus/), дашборд Grafana |
+| Вход по логину и паролю, SSO | [api/app/routers/auth.py](api/app/routers/auth.py), OIDC Code + PKCE через Dex — [api/app/routers/oidc.py](api/app/routers/oidc.py); роли проверяет сервер |
+| Запуск через Docker Compose | [compose.yaml](compose.yaml), одна команда без `.env` |
+| Документация API | Swagger `/api/v1/docs`, спецификация [docs/openapi.json](docs/openapi.json) — CI сверяет её с кодом |
+| Описание модели и архитектуры | [docs/MODEL.md](docs/MODEL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), решения — [docs/adr/](docs/adr/) |
+| Как добавить признак | раздел [«Как добавить новый признак»](#как-добавить-новый-признак) — один новый файл, реестр находит его сам |
+| Проверка по ТЗ | `node tools/acceptance.mjs` — 36 проверок на работающем стенде; 80 автотестов API и тесты Go в CI |
+
 ---
 
 ## Быстрый запуск
