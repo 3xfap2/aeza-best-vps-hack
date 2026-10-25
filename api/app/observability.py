@@ -55,7 +55,12 @@ def install(app: FastAPI) -> None:
         token = request_id.set(rid)
         started = time.perf_counter()
         try:
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except Exception:   # здесь requestId ещё задан — по нему ошибка находится в журнале
+                log.exception("Необработанная ошибка: %s %s", request.method, request.url.path)
+                from app.http import problem  # http импортирует этот модуль — поэтому здесь
+                response = problem(request, 500, "Внутренняя ошибка сервера. По requestId ошибка есть в журнале.")
             response.headers["X-Request-ID"] = rid
             if request.url.path not in ("/health", "/health/live", "/metrics"):   # пробы и сборщик не засоряют журнал
                 log.info("request", extra={"method": request.method, "path": request.url.path,

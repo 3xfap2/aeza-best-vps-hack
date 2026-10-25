@@ -63,7 +63,7 @@ def login(body: LoginIn, request: Request, response: Response) -> LoginOut:
     with request.app.state.pool.connection() as conn:
         row = db.user_by_login(conn, body.login)
     # хеш считается и для несуществующего логина — по времени ответа не узнать, есть ли такой пользователь
-    if not verify_password(body.password, row["password_hash"] if row else DUMMY_HASH) or not row or row["role"] == "pending":
+    if not verify_password(body.password, (row["password_hash"] if row else None) or DUMMY_HASH) or not row or row["role"] == "pending":
         limiter.fail(key)
         audit.write(request, "login.failed", body.login.lower(), details={"method": "password"})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")

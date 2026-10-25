@@ -861,6 +861,15 @@ def test_events_resource(client, auth):
     assert 'rel="next"' in paged.headers["Link"] and len(paged.json()["items"]) == 1
 
 
+def test_unexpected_error_is_problem_with_request_id(client):
+    def boom():
+        raise RuntimeError("проверка")
+    client.app.add_api_route("/api/v1/_boom", boom)
+    r = client.get("/api/v1/_boom", headers={"X-Request-ID": "boom-req-1"})
+    assert r.status_code == 500 and r.headers["content-type"].startswith("application/problem+json")
+    assert r.json()["requestId"] == "boom-req-1" == r.headers["X-Request-ID"]
+
+
 def test_csv_cells_are_not_formulas():
     from app.http import csv_cell
     assert [csv_cell(v) for v in ("=HYPERLINK(1)", "+1", "-x", "@a", "user@x.test", -5, 3.5)] == \
