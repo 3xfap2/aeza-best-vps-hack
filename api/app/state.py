@@ -132,7 +132,7 @@ class AppState:
             previous = self._current.result if self._current else None
             self._record_history(previous, result, reason)
             version = (self._current.version + 1) if self._current else 1
-            self._current = Current(
+            new = Current(
                 version=version,
                 reason=reason,
                 computed_at=datetime.now(timezone.utc),
@@ -142,12 +142,13 @@ class AppState:
                 result=result,
                 transitions=transitions,
             )
+            self._current = new   # дальше — только new: после выхода из lock _current может смениться
             self.recalculations += 1
         s = result.summary
         self.broker.publish("recalculated", {
             "version": version,
             "reason": reason,
-            "computedAt": self._current.computed_at.isoformat(),
+            "computedAt": new.computed_at.isoformat(),
             "asOf": s.as_of.isoformat(),
             "expectedLossEur": round(s.expected_loss / 100, 2),
             "levels": s.levels,
@@ -157,4 +158,4 @@ class AppState:
                 listener(previous, result, reason)
             except Exception:  # уведомления не должны ломать пересчёт
                 logging.getLogger("radar").exception("Ошибка обработчика пересчёта")
-        return self._current
+        return new
