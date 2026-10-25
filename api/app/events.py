@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, TypeAdapter
 
 from app import db, simulator
+from app.demo_stream import AUTHOR as DEMO_AUTHOR
 
 
 class TopupEvent(BaseModel):
@@ -70,6 +71,36 @@ def affected_account(conn, event: SourceEvent) -> int | None:
     if isinstance(event, SignalEvent):
         return event.targetId if event.name == "supportTickets30d" else db.owner_of(conn, event.targetId)
     return db.owner_of(conn, event.serviceId)
+
+
+# Все события в одном списке — откуда пришли и чем закончились:
+# channel api — POST /api/v1/source/events, demo — живой демо-поток, stream — поток от биллинга через сервис на Go
+# (очередь event_inbox: pending — ждёт, applied — применено, rejected — отклонено с причиной в result).
+_HISTORY = """
+WITH ev AS (
+    SELECT 'activity-' || a.id AS id, CASE WHEN a.author = %(demo)s THEN 'demo' ELSE 'api' END AS channel,
+           a.payload->>'type' AS type, 'applied' AS status, a.created_at AS received_at, a.created_at AS processed_at,
+           a.summary AS result, a.author, NULL::text AS event_id, a.payload
+    FROM activity_log a WHERE a.kind = 'event' AND a.payload ? 'type'
+    UNION ALL
+    SELECT 'inbox-' || i.id, 'stream', i.payload->>'type',
+           CASE WHEN i.processed_at IS NULL THEN 'pending' WHEN i.ok THEN 'applied' ELSE 'rejected' END,
+           i.received_at, i.processed_at, i.result, 'billing', i.event_id, i.payload
+    FROM event_inbox i
+)
+SELECT *, count(*) OVER () AS total FROM ev
+WHERE (%(id)s::text IS NULL OR id = %(id)s) AND (%(channel)s::text IS NULL OR channel = %(channel)s)
+  AND (%(status)s::text IS NULL OR status = %(status)s) AND (%(type)s::text IS NULL OR type = %(type)s)
+ORDER BY received_at DESC, id DESC LIMIT %(limit)s OFFSET %(offset)s
+"""
+
+
+def history(conn, *, channel: str | None = None, status: str | None = None, type_: str | None = None,
+            event_ref: str | None = None, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+    """События новые сверху с фильтрами; второе значение — сколько всего подходит под фильтр."""
+    rows = conn.execute(_HISTORY, {"demo": DEMO_AUTHOR, "id": event_ref, "channel": channel, "status": status, "type": type_,
+                                   "limit": limit, "offset": offset}).fetchall()
+    return rows, rows[0]["total"] if rows else 0
 
 
 def apply(radar, event: SourceEvent, author: str, reason: str) -> tuple[str, int]:

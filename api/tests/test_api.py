@@ -839,6 +839,28 @@ def test_audit_log(client, auth):
     assert only and {e["action"] for e in only} == {"login.failed"}
 
 
+def test_events_resource(client, auth):
+    """GET /api/v1/events: куда пришли события и чем закончились — API, демо-поток и поток биллинга через Go."""
+    assert client.post("/api/v1/source/events", headers=auth,
+                       json={"type": "topup", "accountId": 2, "amount": 5}).status_code == 200
+    with psycopg.connect(TEST_URL, autocommit=True) as conn:   # как будто сервис на Go положил в очередь
+        conn.execute("INSERT INTO event_inbox (event_id, payload, processed_at, ok, result) VALUES "
+                     "('bill-1', '{\"type\": \"topup\", \"accountId\": 3, \"amount\": 1}', now(), true, 'применено'), "
+                     "('bill-2', '{\"type\": \"pay_renewal\", \"serviceId\": 999999}', now(), false, 'нет услуги 999999')")
+    page = client.get("/api/v1/events?pageSize=200", headers=auth).json()
+    channels = {e["channel"] for e in page["items"]}
+    assert {"api", "stream"} <= channels and page["total"] >= 3
+    rejected = client.get("/api/v1/events?status=rejected", headers=auth).json()["items"]
+    assert rejected[0]["eventId"] == "bill-2" and "999999" in rejected[0]["result"]
+    api = client.get("/api/v1/events?channel=api&type=topup", headers=auth).json()["items"][0]
+    assert api["status"] == "applied" and api["payload"]["accountId"] == 2 and api["author"] == "admin"
+    one = client.get(f"/api/v1/events/{api['id']}", headers=auth)
+    assert one.status_code == 200 and one.json() == api
+    assert client.get("/api/v1/events/inbox-0", headers=auth).status_code == 404
+    paged = client.get("/api/v1/events?pageSize=1", headers=auth)
+    assert 'rel="next"' in paged.headers["Link"] and len(paged.json()["items"]) == 1
+
+
 def test_calculation_headers(client, auth):
     r = client.get("/api/v1/analytics/summary", headers=auth)
     assert int(r.headers["X-Calculation-Version"]) >= 1 and int(r.headers["X-Data-Age"]) >= 0

@@ -97,6 +97,8 @@ docker compose up -d --build
 
 **Данные в реальном времени** — `POST /api/v1/source/events`: пополнение баланса, оплата продления, включение/выключение автопродления, смена статуса услуги. Любое изменение данных или настроек вызывает пересчёт, а панели получают событие через SSE.
 
+**Куда пришло событие и чем закончилось** — `GET /api/v1/events` (новые сверху, фильтры `channel`, `status`, `type`, страницы с `Link`) и `GET /api/v1/events/{id}`. Канал: `api` — `POST /source/events`, `demo` — живой демо-поток, `stream` — поток биллинга через сервис на Go. Статус: `pending` — ждёт в очереди, `applied` — применено (в `result` — что изменилось), `rejected` — отклонено с причиной. Путь любого события: запись в базу → пересчёт только затронутого клиента → SSE в открытые панели → журнал изменений → уведомление в Telegram, если клиент стал высоким риском.
+
 Результат всегда вычисляется из данных: замените снимок — изменятся score, уровни, суммы и метрики.
 
 ---
@@ -168,7 +170,28 @@ score клиента  = максимум по действующим услуг�
 
 Проще всего — вебхук: `INTEGRATION_WEBHOOK_URL=https://crm.example/hooks/radar` в `.env`. Каждое событие уходит POST-запросом с телом `{"type": "...", "data": {...}, "at": "..."}`, заголовком `X-Radar-Event` и, если задан `INTEGRATION_WEBHOOK_SECRET`, подписью по [Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 от "id.timestamp.тело">`. Время входит в подпись, поэтому перехваченный запрос нельзя отправить позже; проверить подпись можно готовой библиотекой Standard Webhooks (секрет в формате `whsec_…`) или вручную. Для совместимости остаётся `X-Radar-Signature: sha256=<HMAC тела>`.
 
-Подключить CRM напрямую — один класс в [api/app/integrations.py](api/app/integrations.py): атрибут `name`, метод `send(event)` (образец — `WebhookSink`) и строка в `build_sinks()`.
+Подключить свою CRM напрямую (например, внутреннюю CRM Aéza) — один класс и одна строка в [api/app/integrations.py](api/app/integrations.py), остальной код не трогается:
+
+```python
+class AezaCrmSink:
+    name = "aeza-crm"   # под этим именем события лежат в outbox и видны в журнале доставок
+
+    def __init__(self, url: str, token: str) -> None:
+        self.url, self.token = url, token
+
+    def send(self, event: Event) -> None:   # исключение = не доставлено, outbox повторит позже
+        httpx.post(f"{self.url}/radar-events", json={"type": event.type, "data": event.data},
+                   headers={"Authorization": f"Bearer {self.token}", "Idempotency-Key": str(event.id)},
+                   timeout=5).raise_for_status()
+
+
+def build_sinks(env: dict) -> list[Sink]:
+    ...
+    if env.get("AEZA_CRM_URL"):   # включается переменной окружения
+        sinks.append(AezaCrmSink(env["AEZA_CRM_URL"], env["AEZA_CRM_TOKEN"]))
+```
+
+Надёжность, повторы, журнал доставок, повторная отправка через API и метрики для нового получателя работают сразу — их даёт outbox, а не получатель. Получателей может быть несколько: каждое событие уходит в каждую систему отдельно.
 
 Доставка надёжная — transactional outbox: событие пишется в таблицу `outbox` в той же транзакции, что и действие (отметка, отзыв), поэтому не теряется, если CRM недоступна или Радар перезапустился. Фоновый поток доставляет с повторами: пауза 5 с, 10 с, 20 с… до часа; после 10 неудачных попыток событие остаётся в `outbox` с `last_error`. Каждая доставка несёт `X-Radar-Delivery` — номер события, по нему получатель отбрасывает повтор. Метрика `churn_radar_outbox_events{state="pending|delivered|failed"}`.
 
@@ -252,6 +275,7 @@ class WithdrawableBalance(Feature):
 | GET | `/api/v1/model/backtest` | сверка модели с исходами на прошлых снимках (обратная связь) |
 | GET | `/api/v1/model/settings/history` | журнал изменений настроек |
 | POST | `/api/v1/source/events` | событие биллинга |
+| GET | `/api/v1/events`, `/api/v1/events/{id}` | история событий: откуда пришли (API, демо-поток, поток через Go), статус и результат |
 | POST | `/api/v1/source/simulate` | перемотка времени (правила жизненного цикла услуг) |
 | GET, PUT | `/api/v1/source/demo-stream` | живой поток событий (демо): Радар сам присылает события биллинга раз в N секунд тем же путём, что `/source/events` (администратор); `DEMO_STREAM=on` — включить при запуске |
 | POST | `/api/v1/source/reset` | вернуть данные к последнему снимку |

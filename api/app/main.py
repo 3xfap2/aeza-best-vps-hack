@@ -25,6 +25,7 @@ from app.routers import (
     audit,
     auth,
     customers,
+    events,
     feedback,
     fx,
     integrations,
@@ -163,7 +164,7 @@ ratelimit.install(app)   # 429 + RateLimit-заголовки, снаружи и
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
           users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, audit.router,
-          metrics.router):
+          events.router, metrics.router):
     app.include_router(r)
 
 
