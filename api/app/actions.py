@@ -56,7 +56,7 @@ def defer_payment(radar, customer_id: int, days: int, note: str | None, author: 
             try:
                 until, names = simulator.defer_payment(conn, customer_id, days, radar.current.result.as_of)
             except simulator.SimulationError as e:
-                raise ActionError(409, str(e)) from e
+                raise ActionError(e.status, str(e)) from e
             text = f"Платёж перенесён на {days} дн.: " + ", ".join(names) + (f". {note}" if note else "")
             row = db.add_action(conn, customer_id, "deferred", None, text, author, round(before.expected_loss),
                                 until.date(), before.score)

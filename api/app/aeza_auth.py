@@ -18,7 +18,13 @@ DEFAULT_API = "https://core.aeza.net/api"
 
 
 class AezaAuthError(RuntimeError):
-    pass
+    """Ключ не подошёл; status — HTTP-код ответа API."""
+    status = 401
+
+
+class AezaUnavailableError(AezaAuthError):
+    """API Aéza недоступно или ответило не так, как ожидалось."""
+    status = 502
 
 
 def api_url() -> str:
@@ -32,21 +38,21 @@ def fetch_profile(api_key: str, transport: httpx.BaseTransport | None = None) ->
             r = http.get(f"{api_url()}/accounts", params={"current": 1, "extra": 1},
                          headers={"X-API-Key": api_key, "Accept": "application/json"})
     except httpx.HTTPError as e:
-        raise AezaAuthError(f"API Aéza недоступно: {type(e).__name__}") from e
+        raise AezaUnavailableError(f"API Aéza недоступно: {type(e).__name__}") from e
     try:
         body = r.json()
     except ValueError as e:
-        raise AezaAuthError(f"API Aéza ответило {r.status_code} не в формате JSON") from e
+        raise AezaUnavailableError(f"API Aéza ответило {r.status_code} не в формате JSON") from e
     error = body.get("error") if isinstance(body, dict) else None
     if r.status_code in (401, 403) or error:
         raise AezaAuthError("Ключ API Aéza не подошёл" + (f": {error.get('message')}" if isinstance(error, dict) and error.get("message") else ""))
     if r.status_code != 200:
-        raise AezaAuthError(f"API Aéza ответило {r.status_code}")
+        raise AezaUnavailableError(f"API Aéza ответило {r.status_code}")
     data = body.get("data", body)
     items = data.get("items") if isinstance(data, dict) else None
     acc = items[0] if items else data if isinstance(data, dict) and data.get("id") is not None else None
     if not acc or acc.get("id") is None:
-        raise AezaAuthError("API Aéza не вернуло профиль аккаунта")
+        raise AezaUnavailableError("API Aéza не вернуло профиль аккаунта")
     email = str(acc.get("email") or "").strip().lower()
     name = acc.get("name") or acc.get("username") or acc.get("login") or email or f"Аккаунт Aéza {acc['id']}"
     return {"id": str(acc["id"]), "email": email, "name": str(name)}

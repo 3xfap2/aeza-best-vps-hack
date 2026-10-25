@@ -682,6 +682,9 @@
               }
             }
           },
+          "404": {
+            "description": "Клиент не найден"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -7182,9 +7185,9 @@
           "amount": {
             "type": "number",
             "maximum": 100000.0,
-            "exclusiveMinimum": 0.0,
+            "minimum": 0.01,
             "title": "Amount",
-            "description": "Сумма пополнения, €"
+            "description": "Сумма пополнения, € (от 1 цента)"
           }
         },
         "type": "object",

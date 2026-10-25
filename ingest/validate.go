@@ -42,8 +42,8 @@ func validate(raw json.RawMessage) (*string, error) {
 			return nil, err
 		}
 		amount, ok := e["amount"].(float64)
-		if !ok || amount <= 0 || amount > 100000 {
-			return nil, errors.New("amount — сумма пополнения в евро, больше 0 и не больше 100 000")
+		if !ok || amount < 0.01 || amount > 100000 {
+			return nil, errors.New("amount — сумма пополнения в евро, от 0,01 до 100 000")
 		}
 	case "autoprolong":
 		if err := positiveInt(e, "serviceId"); err != nil {

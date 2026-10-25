@@ -18,7 +18,7 @@ from app.demo_stream import AUTHOR as DEMO_AUTHOR
 class TopupEvent(BaseModel):
     type: Literal["topup"]
     accountId: int
-    amount: float = Field(gt=0, le=100_000, description="Сумма пополнения, €")
+    amount: float = Field(ge=0.01, le=100_000, description="Сумма пополнения, € (от 1 цента)")
 
 
 class AutoprolongEvent(BaseModel):

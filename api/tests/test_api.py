@@ -870,6 +870,15 @@ def test_unexpected_error_is_problem_with_request_id(client):
     assert r.json()["requestId"] == "boom-req-1" == r.headers["X-Request-ID"]
 
 
+def test_typed_error_statuses(client, auth):
+    """Код ответа задаёт тип ошибки, а не текст сообщения."""
+    def post(event):
+        return client.post("/api/v1/source/events", headers=auth, json=event).status_code
+    assert post({"type": "topup", "accountId": 999999, "amount": 5}) == 404
+    assert post({"type": "topup", "accountId": 1, "amount": 0.004}) == 422     # меньше цента — не пополнение
+    assert client.get("/api/v1/customers/999999/actions", headers=auth).status_code == 404
+
+
 def test_csv_cells_are_not_formulas():
     from app.http import csv_cell
     assert [csv_cell(v) for v in ("=HYPERLINK(1)", "+1", "-x", "@a", "user@x.test", -5, 3.5)] == \

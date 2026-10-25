@@ -23,7 +23,16 @@ MONTHS = {"month": 1, "quarter_year": 3, "half_year": 6, "year": 12}
 
 
 class SimulationError(ValueError):
-    pass
+    """Событие невозможно на текущих данных; status — HTTP-код ответа API."""
+    status = 409
+
+
+class NotFoundError(SimulationError):
+    status = 404
+
+
+class InvalidInputError(SimulationError):
+    status = 422
 
 
 def add_term(value: datetime, term: str) -> datetime:
@@ -39,14 +48,14 @@ def add_term(value: datetime, term: str) -> datetime:
 def _service(conn: Connection, service_id: int) -> dict:
     row = conn.execute('SELECT * FROM services WHERE id = %s FOR UPDATE', (service_id,)).fetchone()
     if not row:
-        raise SimulationError(f"Услуга {service_id} не найдена")
+        raise NotFoundError(f"Услуга {service_id} не найдена")
     return row
 
 
 def _account(conn: Connection, account_id: int) -> dict:
     row = conn.execute("SELECT * FROM accounts WHERE id = %s FOR UPDATE", (account_id,)).fetchone()
     if not row:
-        raise SimulationError(f"Аккаунт {account_id} не найден")
+        raise NotFoundError(f"Аккаунт {account_id} не найден")
     return row
 
 
@@ -86,7 +95,7 @@ def set_signal(conn: Connection, target_id: int, name: str, value: float | bool)
     table = "accounts" if SIGNAL_TARGETS.get(name) == "account" else "services"
     row = conn.execute(f"SELECT * FROM {table} WHERE id = %s FOR UPDATE", (target_id,)).fetchone()
     if not row:
-        raise SimulationError(f"{'Аккаунт' if table == 'accounts' else 'Услуга'} {target_id} не найден")
+        raise NotFoundError(f"{'Аккаунт' if table == 'accounts' else 'Услуга'} {target_id} не найден")
     conn.execute(f"UPDATE {table} SET signals = signals || jsonb_build_object(%s::text, %s::jsonb) WHERE id = %s",
                  (name, Jsonb(value), target_id))
     who = row["email"] if table == "accounts" else row["name"]
@@ -101,7 +110,7 @@ def set_signal(conn: Connection, target_id: int, name: str, value: float | bool)
 
 def topup(conn: Connection, account_id: int, amount_cents: int) -> str:
     if amount_cents <= 0:
-        raise SimulationError("Сумма пополнения должна быть больше нуля")
+        raise InvalidInputError("Сумма пополнения должна быть больше нуля")
     account = _account(conn, account_id)
     conn.execute(
         'UPDATE accounts SET balance = balance + %s, "totalReplenished" = "totalReplenished" + %s WHERE id = %s',

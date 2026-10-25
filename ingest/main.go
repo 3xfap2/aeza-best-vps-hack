@@ -175,7 +175,9 @@ func main() {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 	}
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -186,6 +188,7 @@ func main() {
 		slog.Error("сервер", "err", err)
 		os.Exit(1)
 	}
+	<-done // дождаться, пока начатые пачки ответят 202, — иначе биллинг повторит уже записанную
 }
 
 func env(key, fallback string) string {

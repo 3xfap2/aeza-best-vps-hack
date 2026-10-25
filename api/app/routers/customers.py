@@ -180,8 +180,11 @@ class ActionOut(BaseModel):
     followUp: date | None = None
 
 
-@router.get("/{customer_id}/actions", response_model=list[ActionOut], summary="Журнал работы с клиентом")
+@router.get("/{customer_id}/actions", response_model=list[ActionOut], summary="Журнал работы с клиентом",
+            responses={404: {"description": "Клиент не найден"}})
 def list_actions(customer_id: int, request: Request) -> list[ActionOut]:
+    if customer_id not in request.app.state.radar.current.result.by_id:
+        raise HTTPException(404, f"Клиент #{customer_id} не найден")
     with request.app.state.pool.connection() as conn:
         return [ActionOut(**r) for r in db.actions_for(conn, customer_id)]
 

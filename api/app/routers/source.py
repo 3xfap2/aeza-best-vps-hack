@@ -180,8 +180,7 @@ def post_event(request: Request, event: events.SourceEvent = Body(...), user: Us
     try:
         summary, version = events.apply(request.app.state.radar, event, user.login, "event")
     except simulator.SimulationError as e:
-        code = 404 if "не найден" in str(e) else 409
-        raise HTTPException(code, str(e)) from e
+        raise HTTPException(e.status, str(e)) from e
     return EventResult(summary=summary, version=version)
 
 

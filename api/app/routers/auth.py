@@ -101,8 +101,7 @@ def aeza_login(body: AezaLoginIn, request: Request, response: Response) -> AezaL
     except aeza_auth.AezaAuthError as e:
         limiter.fail(key)
         audit.write(request, "login.failed", "aeza", details={"method": "aeza", "reason": str(e)[:200]})
-        code = status.HTTP_502_BAD_GATEWAY if "недоступно" in str(e) or "ответило" in str(e) else status.HTTP_401_UNAUTHORIZED
-        raise HTTPException(code, str(e)) from e
+        raise HTTPException(e.status, str(e)) from e
     limiter.reset(key)
     with request.app.state.pool.connection() as conn:
         row = db.upsert_aeza_user(conn, profile["id"], profile["email"], profile["name"], aeza_auth.auto_role(profile["email"]))
