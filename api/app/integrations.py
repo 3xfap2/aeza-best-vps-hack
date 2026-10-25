@@ -37,6 +37,7 @@ log = logging.getLogger("radar.integrations")
 
 MAX_ATTEMPTS = 10
 BATCH = 50
+LEASE = timedelta(minutes=5)   # пачка «арендована» на время отправки: другой процесс её не возьмёт
 
 
 @dataclass(frozen=True)
@@ -110,30 +111,38 @@ class Outbox:
             conn.execute("INSERT INTO outbox (sink, type, payload) VALUES (%s, %s, %s)", (name, type_, Jsonb(data, dumps=_dumps)))
 
     def deliver_due(self) -> int:
-        """Доставить события, у которых подошло время попытки. Возвращает число успешных доставок."""
+        """Доставить события, у которых подошло время попытки. Возвращает число успешных доставок.
+
+        Пачка сначала «арендуется» короткой транзакцией (next_attempt_at сдвигается на LEASE), а отправка идёт
+        вне транзакции: медленная CRM не держит блокировки, обрыв связи с базой не откатывает уже доставленное.
+        Если процесс упал посреди пачки, аренда истечёт и событие уйдёт ещё раз — получатель узнает повтор по webhook-id.
+        """
         if not self.sinks:
             return 0
-        delivered = 0
-        with self.pool.connection() as conn, conn.transaction():
+        with self.pool.connection() as conn:
             rows = conn.execute(
-                "SELECT id, sink, type, payload, created_at, attempts FROM outbox "
-                "WHERE delivered_at IS NULL AND attempts < %s AND next_attempt_at <= now() "
-                "ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED", (MAX_ATTEMPTS, BATCH)).fetchall()
-            for r in rows:
-                sink = self.sinks.get(r["sink"])
-                try:
-                    if sink is None:
-                        raise RuntimeError(f"Система «{r['sink']}» больше не подключена")
-                    sink.send(Event(r["id"], r["type"], r["payload"], r["created_at"]))
-                except Exception as e:  # внешняя система недоступна — повторим позже
-                    attempts = r["attempts"] + 1
+                "UPDATE outbox SET next_attempt_at = now() + %s WHERE id IN ("
+                "  SELECT id FROM outbox WHERE delivered_at IS NULL AND attempts < %s AND next_attempt_at <= now() "
+                "  ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED) "
+                "RETURNING id, sink, type, payload, created_at, attempts", (LEASE, MAX_ATTEMPTS, BATCH)).fetchall()
+        delivered = 0
+        for r in sorted(rows, key=lambda x: x["id"]):
+            sink = self.sinks.get(r["sink"])
+            try:
+                if sink is None:
+                    raise RuntimeError(f"Система «{r['sink']}» больше не подключена")
+                sink.send(Event(r["id"], r["type"], r["payload"], r["created_at"]))
+            except Exception as e:  # внешняя система недоступна — повторим позже
+                attempts = r["attempts"] + 1
+                with self.pool.connection() as conn:
                     conn.execute("UPDATE outbox SET attempts = %s, next_attempt_at = %s, last_error = %s WHERE id = %s",
                                  (attempts, datetime.now(timezone.utc) + backoff(attempts), str(e)[:500], r["id"]))
-                    log.warning("Событие %s → %s не доставлено (попытка %s): %s", r["type"], r["sink"], attempts, e)
-                    continue
+                log.warning("Событие %s → %s не доставлено (попытка %s): %s", r["type"], r["sink"], attempts, e)
+                continue
+            with self.pool.connection() as conn:
                 conn.execute("UPDATE outbox SET delivered_at = now(), attempts = attempts + 1, last_error = NULL "
                              "WHERE id = %s", (r["id"],))
-                delivered += 1
+            delivered += 1
         return delivered
 
     def start(self, interval: float = 2.0) -> None:
