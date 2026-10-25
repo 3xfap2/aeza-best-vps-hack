@@ -15,7 +15,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import ai, db, demo_stream, http, idempotency, observability
+from app import ai, db, demo_stream, http, idempotency, observability, ratelimit
 from app.config import load_config
 from app.inbox import Inbox
 from app.integrations import Outbox, build_sinks
@@ -111,6 +111,7 @@ async def lifespan(app: FastAPI):
     app.state.pool = pool
     app.state.radar = radar
     app.state.login_limiter = LoginLimiter()
+    app.state.rate_limiter = ratelimit.RateLimiter(int(os.environ.get("RATE_LIMIT_PER_MINUTE", "600")))
     ai_cfg = ai.config_from_env(dict(os.environ))
     with pool.connection() as conn:
         panel = db.get_config(conn, "ai")
@@ -157,6 +158,7 @@ app = FastAPI(
 
 http.install(app)   # ошибки problem+json, ETag/304 — см. app/http.py
 idempotency.install(app)   # Idempotency-Key для POST — см. app/idempotency.py
+ratelimit.install(app)   # 429 + RateLimit-заголовки, снаружи идемпотентности — см. app/ratelimit.py
 
 for r in (auth.router, oidc.router, customers.router, retention.router, analytics.router, model.router, source.router,
           users.router, feedback.router, ai_router.router, fx.router, stream.router, integrations.router, metrics.router):
@@ -189,6 +191,18 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("Content-Security-Policy", DOCS_CSP if request.url.path.startswith("/api/v1/docs") else API_CSP)
     if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/v1/docs"):
         response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
+@app.middleware("http")
+async def calculation_headers(request: Request, call_next):
+    """Какой расчёт отдан и сколько ему секунд — клиент видит, не устарели ли данные."""
+    response = await call_next(request)
+    radar = getattr(request.app.state, "radar", None)
+    if radar is not None and request.url.path.startswith("/api/v1/"):
+        cur = radar.current
+        response.headers.setdefault("X-Calculation-Version", str(cur.version))
+        response.headers.setdefault("X-Data-Age", str(int((datetime.now(timezone.utc) - cur.computed_at).total_seconds())))
     return response
 
 

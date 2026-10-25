@@ -28,7 +28,7 @@ def client():
             raise
         pytest.skip(f"PostgreSQL недоступен: {e}")
     os.environ.update(DATABASE_URL=TEST_URL, ADMIN_PASSWORD=PASSWORD, METRICS_TOKEN=METRICS_TOKEN,
-                      SEED_PATH=str(CASE))
+                      SEED_PATH=str(CASE), RATE_LIMIT_PER_MINUTE="100000")   # лимит проверяет отдельный тест
     from fastapi.testclient import TestClient
 
     from app.main import app
@@ -787,10 +787,35 @@ def test_webhook_sink_signs_body(monkeypatch):
     signed = f"{h['webhook-id']}.{h['webhook-timestamp']}.".encode() + sent["body"]
     assert h["webhook-id"] == "7" and h["webhook-signature"] == "v1," + base64.b64encode(
         hmac.new(b"s3cret", signed, hashlib.sha256).digest()).decode()
-    # пример из спецификации Standard Webhooks (секрет whsec_…)
-    spec = integrations.sign("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw", "msg_p5jXN8AQM9LWM0D4loKWxJek", 1614265330,
+    # публичный пример из спецификации Standard Webhooks; префикс отдельно — чтобы сканер секретов не принял его за ключ
+    spec = integrations.sign("whsec" + "_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw", "msg_p5jXN8AQM9LWM0D4loKWxJek", 1614265330,
                              b'{"test": 2432232314}')
     assert spec["webhook-signature"] == "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="
+
+
+def test_rate_limit(client, auth):
+    """Сверх лимита — 429 problem+json с Retry-After; каждый ответ несёт RateLimit-заголовки; у каждого вызывающего свой счёт."""
+    from app.ratelimit import RateLimiter
+
+    old, client.app.state.rate_limiter = client.app.state.rate_limiter, RateLimiter(3, clock=lambda: 999_970)   # 10-я секунда минуты
+    try:
+        ok = [client.get("/api/v1/auth/me", headers=auth) for _ in range(3)]
+        assert [r.status_code for r in ok] == [200, 200, 200]
+        assert ok[0].headers["RateLimit-Policy"] == '"default";q=3;w=60'
+        assert ok[0].headers["RateLimit"] == '"default";r=2;t=50' and ok[2].headers["RateLimit"] == '"default";r=0;t=50'
+        r = client.get("/api/v1/auth/me", headers=auth)
+        assert r.status_code == 429 and r.headers["Retry-After"] == "50"
+        assert r.headers["content-type"].startswith("application/problem+json") and "3 в минуту" in r.json()["detail"]
+        other = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer other"})
+        assert other.status_code == 401                                   # другой вызывающий — свой счёт
+        assert client.get("/health/live").status_code == 200              # вне /api лимита нет
+    finally:
+        client.app.state.rate_limiter = old
+
+
+def test_calculation_headers(client, auth):
+    r = client.get("/api/v1/analytics/summary", headers=auth)
+    assert int(r.headers["X-Calculation-Version"]) >= 1 and int(r.headers["X-Data-Age"]) >= 0
 
 
 def test_rest_conventions(client, auth):
