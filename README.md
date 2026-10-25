@@ -138,11 +138,15 @@ score клиента  = максимум по действующим услуг�
 | `feedback.created` | сотрудник оставил отзыв о Радаре | id, автор, тип (идея / проблема / другое), текст, экран |
 | `customer.action` | маркетолог отметил работу с клиентом или перенёс платёж | id и email клиента, что сделали, причина ухода, заметка, автор, «перезвонить», score, уровень, потеря, € |
 
-Проще всего — вебхук: `INTEGRATION_WEBHOOK_URL=https://crm.example/hooks/radar` в `.env`. Каждое событие уходит POST-запросом с телом `{"type": "...", "data": {...}, "at": "..."}`, заголовком `X-Radar-Event` и, если задан `INTEGRATION_WEBHOOK_SECRET`, подписью `X-Radar-Signature: sha256=<HMAC тела>`.
+Проще всего — вебхук: `INTEGRATION_WEBHOOK_URL=https://crm.example/hooks/radar` в `.env`. Каждое событие уходит POST-запросом с телом `{"type": "...", "data": {...}, "at": "..."}`, заголовком `X-Radar-Event` и, если задан `INTEGRATION_WEBHOOK_SECRET`, подписью по [Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 от "id.timestamp.тело">`. Время входит в подпись, поэтому перехваченный запрос нельзя отправить позже; проверить подпись можно готовой библиотекой Standard Webhooks (секрет в формате `whsec_…`) или вручную. Для совместимости остаётся `X-Radar-Signature: sha256=<HMAC тела>`.
 
 Подключить CRM напрямую — один класс в [api/app/integrations.py](api/app/integrations.py): атрибут `name`, метод `send(event)` (образец — `WebhookSink`) и строка в `build_sinks()`.
 
 Доставка надёжная — transactional outbox: событие пишется в таблицу `outbox` в той же транзакции, что и действие (отметка, отзыв), поэтому не теряется, если CRM недоступна или Радар перезапустился. Фоновый поток доставляет с повторами: пауза 5 с, 10 с, 20 с… до часа; после 10 неудачных попыток событие остаётся в `outbox` с `last_error`. Каждая доставка несёт `X-Radar-Delivery` — номер события, по нему получатель отбрасывает повтор. Метрика `churn_radar_outbox_events{state="pending|delivered|failed"}`.
+
+Журнал доставок — для интегратора, без доступа к базе (администратор):
+- `GET /api/v1/integrations/deliveries?status=failed` — что не дошло, сколько было попыток, последняя ошибка;
+- `POST /api/v1/integrations/deliveries/{id}/redeliver` — `202`, событие уходит заново сразу и с полным запасом попыток (например, после того как CRM снова доступна).
 
 ---
 
@@ -399,9 +403,13 @@ Prometheus из `compose.yaml` собирает их каждые 15 секун�
 
 ## CI
 
-На каждый пуш в `main` и пулл-реквест — три проверки: тесты API на настоящем PostgreSQL (без базы они падают, а не пропускаются — `REQUIRE_DB=1`), `go vet` и тесты сервиса приёма, сборка сайта с проверкой типов TypeScript.
+На каждый пуш в `main` и пулл-реквест — четыре проверки:
+- тесты API на настоящем PostgreSQL (без базы они падают, а не пропускаются — `REQUIRE_DB=1`); среди них `test_openapi_file_matches_code` — спецификация [docs/openapi.json](docs/openapi.json) совпадает с тем, что отдаёт код, поэтому разойтись с API не может;
+- линтер `ruff check api` ([api/ruff.toml](api/ruff.toml)) и `promtool`: проверка правил алертов и их юнит-тесты [prometheus/alerts_test.yml](prometheus/alerts_test.yml) — на искусственных рядах алерты срабатывают, когда должны, и молчат, когда не должны;
+- `go vet` и тесты сервиса приёма;
+- сборка сайта с проверкой типов TypeScript.
 
-- SourceCraft: [.sourcecraft/ci.yaml](.sourcecraft/ci.yaml) — workflow `ci`, кубики `api-tests`, `ingest-go`, `web-build`;
+- SourceCraft: [.sourcecraft/ci.yaml](.sourcecraft/ci.yaml) — workflow `ci`, кубики `api-tests`, `lint`, `ingest-go`, `web-build`;
 - GitHub: [.github/workflows/ci.yml](.github/workflows/ci.yml) — то же самое для зеркала.
 
 Каждый кубик проверен локально в том же образе на чистом клоне репозитория. Приёмка по ТЗ на работающем стенде — `node tools/acceptance.mjs` (36 проверок).

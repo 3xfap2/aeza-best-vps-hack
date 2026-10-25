@@ -1,5 +1,6 @@
 # CI в SourceCraft: на каждый пуш в main и пулл-реквест в main — тесты API на настоящем PostgreSQL,
-# проверки и тесты сервиса приёма на Go, сборка сайта с проверкой типов TypeScript.
+# линтер ruff и юнит-тесты алертов Prometheus (promtool), проверки и тесты сервиса приёма на Go,
+# сборка сайта с проверкой типов TypeScript.
 # Формат: https://sourcecraft.dev/portal/docs/ru/sourcecraft/ci-cd-ref/
 on:
   push:
@@ -27,6 +28,13 @@ workflows:
               - service postgresql start
               - su postgres -c "psql -q -c \"CREATE ROLE radar LOGIN SUPERUSER PASSWORD 'radar'\""
               - cd api && pip install -q -r requirements-dev.txt && python -m pytest
+
+          - name: lint
+            image: python:3.12-bookworm
+            script:
+              - pip install -q ruff==0.17.2 && ruff check api
+              - curl -sSL https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-amd64.tar.gz | tar xz --strip-components=1 -C /usr/local/bin prometheus-3.5.0.linux-amd64/promtool
+              - cd prometheus && promtool check rules alerts.yml && promtool test rules alerts_test.yml
 
           - name: ingest-go
             image: golang:1.24-alpine

@@ -1,0 +1,6 @@
+# Линтер в CI: ruff check api
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]   # длину строк держим по смыслу, а не по счётчику

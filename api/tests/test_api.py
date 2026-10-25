@@ -61,6 +61,12 @@ def test_docs_and_openapi_available(client):
         assert p in paths, p
 
 
+def test_openapi_file_matches_code(client):
+    """docs/openapi.json не расходится с кодом: поменяли API — перевыгрузите (python export_openapi.py)."""
+    spec = json.loads((Path(__file__).resolve().parents[2] / "docs" / "openapi.json").read_text(encoding="utf-8"))
+    assert spec == client.get("/api/v1/openapi.json").json()
+
+
 def test_cookie_login_me_logout(client):
     r = client.post("/api/v1/auth/login", json={"login": "ADMIN", "password": PASSWORD})
     assert r.status_code == 200 and "radar_session" in r.cookies
@@ -732,8 +738,16 @@ def test_events_go_to_external_systems(client, auth):
             rows = conn.execute("SELECT attempts, last_error, delivered_at FROM outbox WHERE sink = 'crm'").fetchall()
             assert len(rows) == 2 and all(r[0] == 1 and "недоступна" in r[1] and r[2] is None for r in rows)
             conn.execute("UPDATE outbox SET next_attempt_at = now() WHERE sink = 'crm'")   # не ждём паузу
+        log = client.get("/api/v1/integrations/deliveries?status=pending", headers=auth).json()
+        assert [d["sink"] for d in log] == ["crm", "crm"] and "недоступна" in log[0]["lastError"]
         fail["on"] = False
         assert radar.integrations.deliver_due() == 2 and radar.integrations.deliver_due() == 0
+        done = client.get("/api/v1/integrations/deliveries?status=delivered", headers=auth).json()
+        assert {d["id"] for d in log} <= {d["id"] for d in done}
+        r = client.post(f"/api/v1/integrations/deliveries/{log[0]['id']}/redeliver", headers=auth)
+        assert r.status_code == 202 and r.json()["status"] == "pending" and r.json()["attempts"] == 0
+        assert radar.integrations.deliver_due() == 1 and len(got) == 3            # CRM получила событие ещё раз
+        assert client.post("/api/v1/integrations/deliveries/999999/redeliver", headers=auth).status_code == 404
     finally:
         radar.integrations = old
     by_type = {e.type: e for e in got}
@@ -744,6 +758,7 @@ def test_events_go_to_external_systems(client, auth):
 
 
 def test_webhook_sink_signs_body(monkeypatch):
+    import base64
     import hashlib
     import hmac
 
@@ -767,6 +782,15 @@ def test_webhook_sink_signs_body(monkeypatch):
     assert sent["headers"]["X-Radar-Signature"] == expected and sent["headers"]["X-Radar-Event"] == "feedback.created"
     assert sent["headers"]["X-Radar-Delivery"] == "7" and integrations.backoff(1).seconds == 5 and integrations.backoff(30).seconds == 3600
     assert integrations.build_sinks({}) == [] and len(integrations.build_sinks({"INTEGRATION_WEBHOOK_URL": "https://x.example"})) == 1
+    # Standard Webhooks: подпись покрывает id и время, поэтому перехваченный запрос нельзя отправить позже
+    h = sent["headers"]
+    signed = f"{h['webhook-id']}.{h['webhook-timestamp']}.".encode() + sent["body"]
+    assert h["webhook-id"] == "7" and h["webhook-signature"] == "v1," + base64.b64encode(
+        hmac.new(b"s3cret", signed, hashlib.sha256).digest()).decode()
+    # пример из спецификации Standard Webhooks (секрет whsec_…)
+    spec = integrations.sign("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw", "msg_p5jXN8AQM9LWM0D4loKWxJek", 1614265330,
+                             b'{"test": 2432232314}')
+    assert spec["webhook-signature"] == "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="
 
 
 def test_rest_conventions(client, auth):

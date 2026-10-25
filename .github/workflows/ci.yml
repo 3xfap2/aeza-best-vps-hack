@@ -30,6 +30,16 @@ jobs:
       - run: python -m pytest
         working-directory: api
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx run ruff==0.17.2 check api
+      - name: promtool — правила и юнит-тесты алертов
+        run: >-
+          docker run --rm -v "$PWD/prometheus:/p" -w /p --entrypoint sh prom/prometheus:v3.5.0
+          -c "promtool check rules alerts.yml && promtool test rules alerts_test.yml"
+
   ingest-go:
     runs-on: ubuntu-latest
     steps:

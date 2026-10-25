@@ -9,17 +9,23 @@
 доставляет его с повторами (пауза 5 с, 10 с, 20 с… до часа; после 10 попыток событие остаётся
 в outbox с last_error — его видно в метриках). Получатель отличает повтор по X-Radar-Delivery.
 
-Из коробки — вебхук: INTEGRATION_WEBHOOK_URL, событие уходит JSON-ом POST-запросом с подписью
-X-Radar-Signature: sha256=HMAC(INTEGRATION_WEBHOOK_SECRET, тело), если секрет задан.
+Из коробки — вебхук: INTEGRATION_WEBHOOK_URL, событие уходит JSON-ом POST-запросом. Если задан
+INTEGRATION_WEBHOOK_SECRET, запрос подписан по Standard Webhooks (https://www.standardwebhooks.com/):
+webhook-id, webhook-timestamp, webhook-signature: v1,base64(HMAC-SHA256(секрет, "id.timestamp.тело")) —
+отметка времени в подписи не даёт отправить перехваченный запрос повторно. Для совместимости остаётся
+X-Radar-Signature: sha256=HMAC(секрет, тело).
 Подключить CRM напрямую — класс с атрибутом name и методом send(event), как WebhookSink, и строка в build_sinks().
+Что доставлено, что ждёт и что сдалось — GET /api/v1/integrations/deliveries; переотправить — .../redeliver.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
@@ -62,8 +68,17 @@ class WebhookSink:
         body = event.to_json()
         headers = {"Content-Type": "application/json", "X-Radar-Event": event.type, "X-Radar-Delivery": str(event.id)}
         if self.secret:
+            headers.update(sign(self.secret, str(event.id), int(time.time()), body))
             headers["X-Radar-Signature"] = "sha256=" + hmac.new(self.secret.encode(), body, hashlib.sha256).hexdigest()
         httpx.post(self.url, content=body, headers=headers, timeout=self.timeout).raise_for_status()
+
+
+def sign(secret: str, msg_id: str, timestamp: int, body: bytes) -> dict[str, str]:
+    """Заголовки подписи Standard Webhooks. Секрет вида whsec_<base64> — как у Svix, иначе ключ — байты строки."""
+    key = base64.b64decode(secret.removeprefix("whsec_")) if secret.startswith("whsec_") else secret.encode()
+    digest = hmac.new(key, f"{msg_id}.{timestamp}.".encode() + body, hashlib.sha256).digest()
+    return {"webhook-id": msg_id, "webhook-timestamp": str(timestamp),
+            "webhook-signature": "v1," + base64.b64encode(digest).decode()}
 
 
 def build_sinks(env: dict) -> list[Sink]:
@@ -144,3 +159,24 @@ def outbox_counts(conn) -> dict[str, int]:
         "count(*) FILTER (WHERE delivered_at IS NULL AND attempts >= %s) AS failed FROM outbox",
         (MAX_ATTEMPTS, MAX_ATTEMPTS)).fetchone()
     return dict(r)
+
+
+_DELIVERY = ("SELECT id, sink, type, payload, created_at, attempts, next_attempt_at, delivered_at, last_error, "
+             "CASE WHEN delivered_at IS NOT NULL THEN 'delivered' WHEN attempts >= %(max)s THEN 'failed' "
+             "ELSE 'pending' END AS status FROM outbox")
+
+
+def list_deliveries(conn, status: str | None, limit: int) -> list[dict]:
+    """Журнал доставок, новые сверху; status — delivered, pending или failed (сдалось после MAX_ATTEMPTS)."""
+    return conn.execute(f"SELECT * FROM ({_DELIVERY}) d WHERE %(status)s::text IS NULL OR status = %(status)s "
+                        "ORDER BY id DESC LIMIT %(limit)s",
+                        {"max": MAX_ATTEMPTS, "status": status, "limit": limit}).fetchall()
+
+
+def redeliver(conn, delivery_id: int) -> dict | None:
+    """Поставить событие на отправку заново — сразу и с полным запасом попыток (доставленное тоже)."""
+    found = conn.execute("UPDATE outbox SET attempts = 0, next_attempt_at = now(), delivered_at = NULL, "
+                         "last_error = NULL WHERE id = %s RETURNING id", (delivery_id,)).fetchone()
+    if found is None:
+        return None
+    return conn.execute(f"{_DELIVERY} WHERE id = %(id)s", {"max": MAX_ATTEMPTS, "id": delivery_id}).fetchone()

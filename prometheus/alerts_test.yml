@@ -1,0 +1,50 @@
+# Юнит-тесты алертов: promtool test rules prometheus/alerts_test.yml (запускается в CI)
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # потеря 100 € час, затем скачок до 200 €
+      - series: churn_radar_expected_loss_paid_eur
+        values: "100x60 200x20"
+      # очередь событий выросла до 1500 и не разбирается
+      - series: 'churn_radar_inbox_events{state="pending"}'
+        values: "0 1500x10"
+      # Prometheus не достаёт /metrics
+      - series: 'up{job="churn-radar", instance="api:8000"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ChurnLossGrowing
+        exp_alerts: []
+      - eval_time: 75m
+        alertname: ChurnLossGrowing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Реально собираемая потеря выросла больше чем на 20 % за час"
+              description: "Сейчас € 200. Откройте «Удержание» — кому звонить сегодня."
+      - eval_time: 3m
+        alertname: ChurnInboxBacklog
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: ChurnInboxBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              state: pending
+            exp_annotations:
+              summary: "Очередь событий биллинга не разбирается: ждут 1500"
+              description: "Сервис приёма принимает события, а API не успевает их применить. Проверьте сервис api."
+      - eval_time: 5m
+        alertname: ChurnRadarDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: churn-radar
+              instance: api:8000
+            exp_annotations:
+              summary: "Prometheus не может забрать /metrics Радара оттока"
