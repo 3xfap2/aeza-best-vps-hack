@@ -8,3 +8,4 @@ dist/
 .vite/
 *.log
 defense/
+dex/config.server.yaml
