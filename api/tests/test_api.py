@@ -930,6 +930,10 @@ def test_idempotency_key(client, auth):
     assert round(client.get("/api/v1/customers/3", headers=auth).json()["balance"] - before, 2) == 10
     other = client.post("/api/v1/source/events", headers=hdr, json={"type": "topup", "accountId": 3, "amount": 99})
     assert other.status_code == 422 and other.headers["content-type"].startswith("application/problem+json")
+    fb = {**auth, "Idempotency-Key": "feedback-0001"}
+    made = client.post("/api/v1/feedback", headers=fb, json={"kind": "idea", "text": "Повтор с Location"})
+    replay = client.post("/api/v1/feedback", headers=fb, json={"kind": "idea", "text": "Повтор с Location"})
+    assert made.status_code == replay.status_code == 201 and replay.headers["Location"] == made.headers["Location"]
     plain = client.post("/api/v1/source/events", headers=auth, json={"type": "topup", "accountId": 3, "amount": 1})
     assert plain.status_code == 200 and "Idempotent-Replayed" not in plain.headers
     client.post("/api/v1/source/preset/case", headers=auth)

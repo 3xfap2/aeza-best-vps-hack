@@ -36,17 +36,18 @@ def _claim(pool, scope: str, key: str, request_hash: str) -> dict | None:
             (scope, key, request_hash)).fetchone()
         if inserted:
             return None
-        return conn.execute("SELECT request_hash, status_code, response_body, content_type FROM idempotency_keys "
+        return conn.execute("SELECT request_hash, status_code, response_body, content_type, location FROM idempotency_keys "
                             "WHERE scope = %s AND key = %s", (scope, key)).fetchone()
 
 
-def _save(pool, scope: str, key: str, status: int, body: bytes, content_type: str | None) -> None:
+def _save(pool, scope: str, key: str, status: int, body: bytes, content_type: str | None,
+          location: str | None = None) -> None:
     with pool.connection() as conn:
         if status >= 500:   # сбой сервера — освободить ключ, клиент повторит
             conn.execute("DELETE FROM idempotency_keys WHERE scope = %s AND key = %s", (scope, key))
         else:
-            conn.execute("UPDATE idempotency_keys SET status_code = %s, response_body = %s, content_type = %s "
-                         "WHERE scope = %s AND key = %s", (status, body, content_type, scope, key))
+            conn.execute("UPDATE idempotency_keys SET status_code = %s, response_body = %s, content_type = %s, location = %s "
+                         "WHERE scope = %s AND key = %s", (status, body, content_type, location, scope, key))
 
 
 def install(app: FastAPI) -> None:
@@ -67,8 +68,9 @@ def install(app: FastAPI) -> None:
                 return problem(request, 422, "Этот Idempotency-Key уже использован для другого запроса")
             if saved["status_code"] is None:
                 return problem(request, 409, "Запрос с этим Idempotency-Key ещё выполняется — повторите позже")
+            replay = {"Idempotent-Replayed": "true"} | ({"Location": saved["location"]} if saved["location"] else {})
             return Response(bytes(saved["response_body"]), status_code=saved["status_code"],
-                            media_type=saved["content_type"], headers={"Idempotent-Replayed": "true"})
+                            media_type=saved["content_type"], headers=replay)
         try:
             response = await call_next(request)
         except Exception:   # сбой до ответа — освободить ключ, иначе повторы сутки получали бы 409
@@ -76,6 +78,6 @@ def install(app: FastAPI) -> None:
             raise
         content = b"".join([chunk async for chunk in response.body_iterator])
         await run_in_threadpool(_save, pool, scope, key, response.status_code, content,
-                                response.headers.get("content-type"))
+                                response.headers.get("content-type"), response.headers.get("location"))
         headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
         return Response(content, status_code=response.status_code, headers=headers, media_type=response.media_type)

@@ -274,7 +274,9 @@ def delete_user(conn: Connection, user_id: int) -> None:
 
 
 def count_admins(conn: Connection) -> int:
-    return conn.execute("SELECT count(*) AS n FROM app_users WHERE role = 'admin'").fetchone()["n"]
+    """Сколько администраторов; строки блокируются до конца транзакции — два админа не снимут роль друг с друга
+    одновременно и не оставят Радар без администратора."""
+    return len(conn.execute("SELECT id FROM app_users WHERE role = 'admin' FOR UPDATE").fetchall())
 
 
 def workload(conn: Connection, days: int) -> dict[str, dict]:
