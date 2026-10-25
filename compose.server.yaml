@@ -1,20 +1,38 @@
 # Дополнение для сервера: docker compose -f compose.yaml -f compose.server.yaml up -d
 # Готовит его deploy/server.sh. Отличия от локального запуска:
-# - сайт на порту 80, Prometheus — только внутри сервера (Grafana и SSO открыты: дашборд без персональных данных);
-# - адреса панели и SSO — из .env (PUBLIC_URL, OIDC_PUBLIC_ISSUER), конфиг Dex — сгенерированный под адрес сервера.
+# - снаружи только Caddy на 80/443: HTTPS с сертификатом Let's Encrypt, панель и SSO на одном домене (deploy/Caddyfile);
+# - Prometheus — только внутри сервера, Grafana открыта на :3000 (дашборд без персональных данных);
+# - адреса панели и SSO — из .env (PUBLIC_HOST, PUBLIC_URL, OIDC_PUBLIC_ISSUER), конфиг Dex — сгенерированный под домен.
 services:
+  caddy:
+    image: caddy:2.10.0-alpine
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, dex]
+    restart: always
+
   api:
     environment:
       PUBLIC_URL: ${PUBLIC_URL}
       OIDC_PUBLIC_ISSUER: ${OIDC_PUBLIC_ISSUER}
+      COOKIE_SECURE: "true"
     restart: always
 
   ingest:
     restart: always
 
   web:
-    ports: !override
-      - "80:8080"
+    ports: !reset []
     restart: always
 
   db:
@@ -29,6 +47,11 @@ services:
     restart: always
 
   dex:
+    ports: !reset []
     volumes: !override
       - ./dex/config.server.yaml:/etc/dex/config.yaml:ro
     restart: always
+
+volumes:
+  caddy_data:
+  caddy_config:

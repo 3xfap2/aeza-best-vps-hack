@@ -1,0 +1,57 @@
+# Выкатка стенда на сервер по кнопке (Actions → deploy → Run workflow).
+# Нужен секрет DEPLOY_SSH_KEY — закрытый SSH-ключ с доступом root@SERVER. Код копируется rsync-ом
+# (доступ сервера к репозиторию не нужен), .env и секреты на сервере не трогаются.
+name: deploy
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: Домен стенда (sslip.io — без своего домена)
+        default: 193-233-247-164.sslip.io
+      unban_ip:
+        description: IP, который защита от подбора пароля заблокировала по ошибке (необязательно)
+        default: ""
+
+concurrency: deploy
+
+env:
+  SERVER: 193.233.247.164
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH-ключ
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts
+      - name: Порт 443 и разблокировка IP
+        run: |
+          ssh "root@$SERVER" 'IP="${{ inputs.unban_ip }}"
+            if command -v ufw >/dev/null && ufw status | grep -q active; then ufw allow 443/tcp; fi
+            if [ -n "$IP" ] && command -v fail2ban-client >/dev/null; then
+              fail2ban-client unban "$IP" || true
+              fail2ban-client set sshd addignoreip "$IP" || true
+            fi
+            if [ -n "$IP" ] && command -v sshguard >/dev/null; then echo "$IP" >> /etc/sshguard/whitelist; systemctl restart sshguard; fi
+            for t in fail2ban sshguard ufw; do command -v $t >/dev/null && echo "есть: $t"; done; true'
+      - name: Код на сервер
+        run: rsync -az --delete --exclude .git --exclude .env --exclude dex/config.server.yaml ./ "root@$SERVER:/opt/radar/"
+      - name: Сборка и запуск
+        run: ssh "root@$SERVER" "cd /opt/radar && PUBLIC_HOST=${{ inputs.host }} ./deploy/server.sh"
+      - name: Стенд отвечает по HTTPS
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf "https://${{ inputs.host }}/health/ready"; then exit 0; fi
+            sleep 5
+          done
+          ssh "root@$SERVER" "cd /opt/radar && docker compose -f compose.yaml -f compose.server.yaml logs --tail 40 caddy api"
+          exit 1
+      - name: Вход через SSO отдаёт форму Dex
+        run: |
+          url=$(curl -s -o /dev/null -w '%{redirect_url}' "https://${{ inputs.host }}/api/v1/auth/oidc/login")
+          echo "$url"
+          curl -sfL -o /dev/null "$url"

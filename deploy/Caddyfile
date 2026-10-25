@@ -1,0 +1,13 @@
+# HTTPS для сервера: Caddy сам получает и продлевает сертификат Let's Encrypt для PUBLIC_HOST.
+# Панель, API и SSO — на одном домене: /dex/* уходит в Dex, остальное — в nginx (web).
+{$PUBLIC_HOST} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy /dex/* dex:5556
+	reverse_proxy web:8080
+}
+
+# Старые ссылки по IP и по http — на https-адрес
+http:// {
+	redir https://{$PUBLIC_HOST}{uri} permanent
+}
